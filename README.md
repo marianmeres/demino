@@ -49,7 +49,7 @@ a Deno's _serve handler_ which has it's own _route handlers_.
 
 ### Route handler
 
-Route handlers are where the stuff happens. 
+Route handlers are where the stuff happens. The route handler signature is:
 
 <!-- Route handlers are almost identical to `Deno.serve` handlers. In fact,
 any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) 
@@ -59,14 +59,12 @@ The difference is that in `demino` app the route handler receives one
 additional `DeminoContext` parameter, and unlike with `Deno.serve`, it may return anything, 
 not just the `Response` instance. -->
 
-The route handler signature is:
-
 ```typescript
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
 Typically, the route handler returns a `Response` instance, but it may, in fact, return
-`any` value which will be converted to a `Response` instance automatically.
+`any` value, which will be converted to a `Response` instance automatically.
 
 ### Midlewares
 
@@ -77,6 +75,8 @@ If any of the middleware returns anything other than `undefined`, the execution 
 be terminated and a `Response` is sent immediately.
 
 Middlewares can be passed globaly to the app instance, or individually to each route handler.
+
+Todo: example
 
 ### Context
 
@@ -116,14 +116,14 @@ app.get('/fixed/path', ...);
 app.get('/named/[segment]/etc', ...);
 app.get('/named/and/regexed/[segment([0-9]+)]', ...);
 app.get('/optional/[segment]?', ...);
-app.get('/may-contain-slashes/[...segment]', ...);
+app.get('/[...segment]/etc', ...); // multiple "rest" segments
 ```
 
 The route named segments and query params are parsed and collected together and are all 
 visible under the `params` context key. 
 
 Side note: the route named segments have priority over the query params. So, the `/named/[segment]` route, 
-when requested as `/named/foo?bar=baz&segment=bat` will be visible as:
+when requested as `/named/foo?bar=baz&segment=bat` will be parsed as:
 
 ```typescript
 // context
