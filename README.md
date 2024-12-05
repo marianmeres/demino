@@ -62,7 +62,7 @@ Middleware is a function, sync or async, which accepts one `DeminoContext` param
 
 Each middleware can throw or return `any`. If it returns anything other than `undefined`, the middlewares execution chain will be terminated and the returned value will be converted (if needed) to a `Response` immediately.
 
-Middlewares can be passed globaly to app instance, or individually to each route handler.
+Middlewares can be passed globaly to app the instance, or individually to each route handler.
 
 ## Context
 
@@ -93,7 +93,7 @@ app.get('/optional/[segment]?', ...);
 app.get('/may-contain-slashes/[...segment]', ...);
 ```
 
-The http query params are evaluated by the router as well, but the named segments have priority over the query params. So, the `/named/[segment]` route, when requested as `/named/foo?bar=baz&segment=bat-ignored` will be parsed and available in the context params as:
+The http query params are evaluated by the router as well. The named segments have priority over the query params. So, the `/named/[segment]` route, when requested as `/named/foo?bar=baz&segment=ignored` will be parsed and available in the context params as:
 ```ts
 // context
 {
@@ -115,6 +115,7 @@ import { demino, deminoCompose } from "@marianmeres/demino";
 // landing page example
 const home = demino();
 home.get("/", () => "Hello");
+home.get('/[slug]', (req, info, ctx) => Marketing.find(ctx.params.slug));
 
 // api example using some auth middleware
 const api = denimo('/api');
