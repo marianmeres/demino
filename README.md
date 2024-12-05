@@ -1,7 +1,7 @@
 # @marianmeres/demino
 
 "demino" (deno minimal) is a minimalistic framework built on top of the 
-Deno's built-in HTTP server. `demino` app instance is a `Deno.serve` handler.
+Deno's built-in HTTP server. `demino` app is a `Deno.serve` handler.
 
 It is a tiny layer providing 
 [routing](https://github.com/marianmeres/simple-router), 
@@ -24,7 +24,7 @@ import { demino } from "@marianmeres/demino";
 const app = demino();
 app.get("/", () => "Hello, World!");
 
-// `demino` app instance is a `Deno.serve` handler
+// `demino` app is a `Deno.serve` handler
 Deno.serve(app);
 ```
 ```sh
@@ -44,7 +44,7 @@ Not Found
 ## Documentation
 
 First, the vocabulary. Deno's built in HTTP server uses one _serve handler_ while the
-`demino` app uses many _route handlers_. In other words, the `demino` app instance is 
+`demino` app uses many _route handlers_. In other words, the `demino` app is 
 a Deno's _serve handler_ which has it's own _route handlers_.
 
 ### Route handler
@@ -74,7 +74,7 @@ Middlewares are executed in series _before_ the final route handler.
 If any of the middleware returns anything other than `undefined`, the execution chain will 
 be terminated and a `Response` is sent immediately.
 
-Middlewares can be passed globaly to the app instance, or individually to each route handler.
+Middlewares can be passed to the `demino` app globaly, or individually to each route handler.
 
 Todo: example
 
@@ -97,7 +97,7 @@ Todo: example
 
 ### Routes and mount path prefix
 
-Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). 
+Every `demino` app can be "mounted" to a specific route prefix (called the `mountPath`). 
 Default `mountPath` is an empty string (the server root). The final route endpoint is evaluated 
 as `mountPath + route`.
 
@@ -151,7 +151,7 @@ home.get("/", () => "Hello");
 home.get('/[slug]', (req, info, ctx) => Marketing.find(ctx.params.slug));
 
 // api example (using some auth middleware for illustration)
-const api = denimo('/api');
+const api = demino('/api');
 api.use((ctx) => {
     if (!hasValidToken(ctx.request.headers)) {
         throw new Error('Boo');
@@ -160,7 +160,7 @@ api.use((ctx) => {
 api.get("/some", () => getSome());
 
 // etc...
-const blog = denimo('/blog');
+const blog = demino('/blog');
 api.get('/[slug]', (req, info, ctx) => Blog.find(ctx.params.slug));
 
 // compose all together, and serve as a one handler
