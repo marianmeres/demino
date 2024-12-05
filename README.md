@@ -115,7 +115,7 @@ home.get('/[slug]', (req, info, ctx) => Marketing.find(ctx.params.slug));
 // api example (using some auth middleware for illustration)
 const api = denimo('/api');
 api.use((ctx) => {
-    if (!hasValidToken(cts.request.headers)) {
+    if (!hasValidToken(ctx.request.headers)) {
         throw new Error('Boo');
     }
 })
