@@ -44,7 +44,7 @@ Not Found
 
 Any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) is a valid `demino` app route handler. In `demino` app, this handler receives one additional `DeminoContext` parameter, so it's signature is:
 
-```ts
+```typescript
 (req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext) => any;
 ```
 
@@ -72,14 +72,14 @@ If an error is thrown anywhere (either during middlewares execution chain or in 
 
 Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). Default mount path is an empty string. The final route endpoint is evaluated as `mountPath + route`, so in the example below it will be `/api/users/[userId]`.
 
-```ts
+```typescript
 const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId))
 ```
 
 Every final route (that is `mountPath + route`) must begin with a slash `/`. For the router details see [@marianmeres/simple-router](https://github.com/marianmeres/simple-router), but you get the idea here:
 
-```ts
+```typescript
 app.get('/fixed/path', ...);
 app.get('/named/[segment]/etc', ...);
 app.get('/named/and/regexed/[segment([0-9]+)]', ...);
@@ -88,7 +88,7 @@ app.get('/may-contain-slashes/[...segment]', ...);
 ```
 
 The http query params are evaluated by the router as well. The named segments have priority over the query params. So, the `/named/[segment]` route, when requested as `/named/foo?bar=baz&segment=ignored` will be parsed and available in the context params as:
-```ts
+```typescript
 // context
 {
     ...
@@ -103,7 +103,7 @@ The http query params are evaluated by the router as well. The named segments ha
 
 Multipe `demino` apps mounted on different mount paths can be composed into a single handler. For example:
 
-```ts
+```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
 
 // landing page example
