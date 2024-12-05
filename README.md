@@ -1,10 +1,12 @@
 # @marianmeres/demino
 
-"demino" (deno minimal) - a tiny layer on top of `Deno.ServeHandler` providing 
+"demino" (deno minimal) is a minimalistic framework built on top of the 
+Deno's built-in HTTP server. `demino` app instance is a `Deno.serve` handler.
+
+It is a tiny layer providing 
 [routing](https://github.com/marianmeres/simple-router), 
 [middleware support](https://github.com/marianmeres/midware),
-error handling 
-and express-like semantics.
+error handling and express-like semantics.
 
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
@@ -20,8 +22,9 @@ deno add jsr:@marianmeres/demino
 import { demino } from "@marianmeres/demino";
 
 const app = demino();
-app.get("/", () => "Hello, World!\n");
+app.get("/", () => "Hello, World!");
 
+// `demino` app instance is a `Deno.serve` handler
 Deno.serve(app);
 ```
 ```sh
@@ -40,37 +43,63 @@ Not Found
 
 ## Documentation
 
+First, the vocabulary. Deno's built in HTTP server uses one _serve handler_ while the
+`demino` app uses many _route handlers_. In other words, the `demino` app instance is 
+a Deno's _serve handler_ which has it's own _route handlers_.
+
 ### Route handler
 
-Any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) is a valid `demino` app route handler. In `demino` app, this handler receives one additional `DeminoContext` parameter, so it's signature is:
+Route handlers are where the stuff happens. 
+
+<!-- Route handlers are almost identical to `Deno.serve` handlers. In fact,
+any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) 
+is technically a valid `demino` route handler. It doesn't work the other way around.
+
+The difference is that in `demino` app the route handler receives one 
+additional `DeminoContext` parameter, and unlike with `Deno.serve`, it may return anything, 
+not just the `Response` instance. -->
+
+The route handler signature is:
 
 ```typescript
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
-As a convenience, unlike for `Deno.serve`, the handler may return anything, not just the `Response` instance. If needed, it will be converted to a `Response` automatically.
+Typically, the route handler returns a `Response` instance, but it may, in fact, return
+`any` value which will be converted to a `Response` instance automatically.
 
 ### Midlewares
 
-Middleware is a function, sync or async, which accepts one `DeminoContext` parameter. Middlewares is a collection of these functions which are executed in series before executing the final route handler.
+Middleware is a function, sync or async, which accepts one `DeminoContext` parameter. 
+Middlewares are executed in series _before_ the final route handler.
 
-Each middleware can throw or return `any`. If it returns anything other than `undefined`, the middlewares execution chain will be terminated and the returned value will be converted (if needed) to a `Response` immediately.
+If any of the middleware returns anything other than `undefined`, the execution chain will 
+be terminated and a `Response` is sent immediately.
 
 Middlewares can be passed globaly to the app instance, or individually to each route handler.
 
 ### Context
 
-Context (`DeminoContext`) is a plain object which scope and lifetime is limited to the scope and lifetime of the request handler and which is passed as a reference to each middleware _and_ to the final route handler. 
+Context (`DeminoContext`) is a plain object which visibility and lifetime is limited to the scope 
+and lifetime of the request handler. It is passed to each middleware _and_ to the final 
+route handler. 
 
-It has few readonly "system" props (eg reference to the initial `request`, and parsed route named `params`) as well as the writable `locals` prop where each middleware can write arbitrary data to.
+It has few readonly "system" props (eg reference to the initial `request`, and parsed route 
+named `params`) as well as the writable `locals` prop where each middleware can read and 
+write arbitrary data.
 
 ### Error handling
 
-If an error is thrown anywhere (either during middlewares execution chain or in the final route handler), it is caught and passed to the error handler (either built-in or custom, if provided). The error handler's returned value is converted (if needed) to a `Response` immediately.
+Every error thrown anywhere (either during middlewares execution chain or in the final route handler), 
+is caught and passed to the error handler. The built-in error handler can be customized.
+
+Todo: example
 
 ### Routes and mount path prefix
 
-Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). Default mount path is an empty string. The final route endpoint is evaluated as `mountPath + route`.
+Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). 
+Default `mountPath` is an empty string (the server root). The final route endpoint is evaluated 
+as `mountPath + route`.
 
 ```typescript
 // in the example below the final route endpoint will be `/api/users/[userId]`
@@ -78,7 +107,9 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId))
 ```
 
-Every final route endpoint (that is `mountPath + route`) must begin with a slash `/`. For the router details see [@marianmeres/simple-router](https://github.com/marianmeres/simple-router), but you get the idea here:
+Every final route endpoint (that is `mountPath + route`) must begin with a slash `/`. For 
+the router details see [@marianmeres/simple-router](https://github.com/marianmeres/simple-router), 
+but you get the idea here:
 
 ```typescript
 app.get('/fixed/path', ...);
@@ -88,7 +119,12 @@ app.get('/optional/[segment]?', ...);
 app.get('/may-contain-slashes/[...segment]', ...);
 ```
 
-The http query params are evaluated by the router as well. The named segments have priority over the query params. So, the `/named/[segment]` route, when requested as `/named/foo?bar=baz&segment=ignored` will be parsed and available in the context params as:
+The route named segments and query params are parsed and collected together and are all 
+visible under the `params` context key. 
+
+Side note: the route named segments have priority over the query params. So, the `/named/[segment]` route, 
+when requested as `/named/foo?bar=baz&segment=bat` will be visible as:
+
 ```typescript
 // context
 {
@@ -102,7 +138,9 @@ The http query params are evaluated by the router as well. The named segments ha
 
 ### Composition of multipe `demino` apps
 
-Multipe `demino` apps mounted on different mount paths can be composed into a single handler. For example:
+Multiple `demino` apps can be composed into a single app. 
+This is mainly useful if you want to logically group certain mount paths with same middlewares
+(or error handlers). For example:
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
