@@ -38,7 +38,9 @@ HTTP/1.1 404 Not Found
 Not Found
 ```
 
-## Route handler
+## Documentation
+
+### Route handler
 
 Any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) is a valid `demino` app route handler. In `demino` app, this handler receives one additional `DeminoContext` parameter, so it's signature is:
 
@@ -48,34 +50,35 @@ Any valid `Deno.serve` handler as [described in the manual](https://docs.deno.co
 
 As a convenience, unlike for `Deno.serve`, the handler may return anything, not just the `Response` instance. If needed, it will be converted to a `Response` automatically.
 
-## Midlewares
+### Midlewares
 
 Middleware is a function, sync or async, which accepts one `DeminoContext` parameter. Middlewares is a collection of these functions which are executed in series before executing the final route handler.
 
 Each middleware can throw or return `any`. If it returns anything other than `undefined`, the middlewares execution chain will be terminated and the returned value will be converted (if needed) to a `Response` immediately.
 
-Middlewares can be passed globaly to app the instance, or individually to each route handler.
+Middlewares can be passed globaly to the app instance, or individually to each route handler.
 
-## Context
+### Context
 
 Context (`DeminoContext`) is a plain object which scope and lifetime is limited to the scope and lifetime of the request handler and which is passed as a reference to each middleware _and_ to the final route handler. 
 
 It has few readonly "system" props (eg reference to the initial `request`, and parsed route named `params`) as well as the writable `locals` prop where each middleware can write arbitrary data to.
 
-## Error handling
+### Error handling
 
 If an error is thrown anywhere (either during middlewares execution chain or in the final route handler), it is caught and passed to the error handler (either built-in or custom, if provided). The error handler's returned value is converted (if needed) to a `Response` immediately.
 
-## Routes and mount path prefix
+### Routes and mount path prefix
 
-Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). Default mount path is an empty string. The final route endpoint is evaluated as `mountPath + route`, so in the example below it will be `/api/users/[userId]`.
+Every `demino` app instance can be "mounted" to a specific route prefix (called the `mountPath`). Default mount path is an empty string. The final route endpoint is evaluated as `mountPath + route`.
 
 ```typescript
+// in the example below the final route endpoint will be `/api/users/[userId]`
 const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId))
 ```
 
-Every final route (that is `mountPath + route`) must begin with a slash `/`. For the router details see [@marianmeres/simple-router](https://github.com/marianmeres/simple-router), but you get the idea here:
+Every final route endpoint (that is `mountPath + route`) must begin with a slash `/`. For the router details see [@marianmeres/simple-router](https://github.com/marianmeres/simple-router), but you get the idea here:
 
 ```typescript
 app.get('/fixed/path', ...);
@@ -97,7 +100,7 @@ The http query params are evaluated by the router as well. The named segments ha
 }
 ```
 
-## Composition of multipe demino apps
+### Composition of multipe `demino` apps
 
 Multipe `demino` apps mounted on different mount paths can be composed into a single handler. For example:
 
@@ -109,14 +112,14 @@ const home = demino();
 home.get("/", () => "Hello");
 home.get('/[slug]', (req, info, ctx) => Marketing.find(ctx.params.slug));
 
-// api example using some auth middleware
+// api example (using some auth middleware for illustration)
 const api = denimo('/api');
 api.use((ctx) => {
     if (!hasValidToken(cts.request.headers)) {
-        throw new Unauthorized('Boo');
+        throw new Error('Boo');
     }
 })
-api.get("/version", () => "1.0.0");
+api.get("/some", () => getSome());
 
 // etc...
 const blog = denimo('/blog');
