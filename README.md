@@ -139,7 +139,7 @@ when requested as `/named/foo?bar=baz&segment=bat` will be parsed as:
 ### Composition of multipe `demino` apps
 
 Multiple `demino` apps can be composed into a single app. 
-This is mainly useful if you want to logically group certain mount paths with same middlewares
+This is mainly useful if you want to logically group certain mount paths with the same middlewares
 (or error handlers). For example:
 
 ```typescript
