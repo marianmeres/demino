@@ -45,7 +45,7 @@ Not Found
 Any valid `Deno.serve` handler as [described in the manual](https://docs.deno.com/runtime/fundamentals/http_server/) is a valid `demino` app route handler. In `demino` app, this handler receives one additional `DeminoContext` parameter, so it's signature is:
 
 ```typescript
-(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext) => any;
+function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
 As a convenience, unlike for `Deno.serve`, the handler may return anything, not just the `Response` instance. If needed, it will be converted to a `Response` automatically.
