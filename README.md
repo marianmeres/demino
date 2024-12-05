@@ -27,22 +27,16 @@ Deno.serve(app);
 ```sh
 $ curl -i localhost:8000
 HTTP/1.1 200 OK
-...
-
 Hello, World!
 ```
 ```sh
 $ curl -i -X POST localhost:8000
 HTTP/1.1 404 Not Found
-...
-
 Not Found
 ```
 ```sh
 $ curl -i localhost:8000/foo
 HTTP/1.1 404 Not Found
-...
-
 Not Found
 ```
 
