@@ -5,45 +5,95 @@ import {
 	getErrorMessage,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
-import { Midware, type MidwareUseFn } from "@marianmeres/midware";
+import { Midware } from "@marianmeres/midware";
 import { SimpleRouter } from "@marianmeres/simple-router";
 import { green, red } from "@std/fmt/colors";
 
+/** Object passed as a last (3rd) parameter to middleware fns AND route handlers */
 export interface DeminoContext {
-	request: Request;
-	info: Deno.ServeHandlerInfo;
+	/** route's parsed params (merged path named segments AND query vars) */
 	params: Record<string, string>;
+	/** userland read/write key-value map */
 	locals: Record<string, any>;
+	/** custom userland response (!) headers to be used in the final output */
+	headers: Headers;
+	/** internal: timestamp of the incoming request */
 	__start: Date;
 }
 
-// prettier-ignore
-// deno-fmt-ignore
-export type ServeHandler = (req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext) => Response | Promise<Response> | any;
-export type MidsOrHandler = MidwareUseFn<DeminoContext>[] | ServeHandler;
+/** Demino route handler AND middlware fn (both are of the same type) */
+export type DeminoHandler = (
+	req: Request,
+	info: Deno.ServeHandlerInfo,
+	context: DeminoContext
+) => any;
 
-// prettier-ignore
-// deno-fmt-ignore
-export interface Demino {
-	(req: Request, info: Deno.ServeHandlerInfo): Response | Promise<Response>;
-	get:    (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	head:   (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	put:    (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	delete: (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	post:   (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	patch:  (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	all:    (route: string, midwaresOrHandler: MidsOrHandler, handler?: ServeHandler) => void;
-	error:  (handler: (req: Request, info: Deno.ServeHandlerInfo, error: any) => Response | Promise<Response> | any) => void;
-	use:    (middleware: MidwareUseFn<DeminoContext>) => void;
+/** Express-like route handler definition */
+export type DeminoRouteFn = (
+	route: string,
+	...args: (DeminoHandler | DeminoHandler[])[]
+) => void;
+
+/** Error handler */
+export type DeminoErrorHandler = (
+	req: Request,
+	info: Deno.ServeHandlerInfo,
+	error: any,
+	/** the headers to use in Response */
+	headers: Headers
+) => any;
+
+/** Demino app */
+export interface Demino extends Deno.ServeHandler {
+	/** HTTP GET route handler definition */
+	get: DeminoRouteFn;
+	/** HTTP HEAD route handler definition */
+	head: DeminoRouteFn;
+	/** HTTP PUT route handler definition */
+	put: DeminoRouteFn;
+	/** HTTP DELETE route handler definition */
+	delete: DeminoRouteFn;
+	/** HTTP POST route handler definition */
+	post: DeminoRouteFn;
+	/** HTTP PATCH route handler definition */
+	patch: DeminoRouteFn;
+	/** Special case _every_ HTTP method route handler definition */
+	all: DeminoRouteFn;
+	/** Custom error handler definition */
+	error: (handler: DeminoErrorHandler) => void;
+	/** Global middleware addon */
+	use: (middleware: DeminoHandler | DeminoHandler[]) => void;
+	/** Return which path is the current app mounted on */
 	mountPath: () => string;
 }
 
+/** Supported methods */
 type Method = "GET" | "HEAD" | "PUT" | "DELETE" | "POST" | "PATCH";
 
-// helper
-const _isFn = (v: any): boolean => typeof v === "function";
+/** For the possible future console alternatives... */
+export interface DeminoLogger {
+	error: (...args: any[]) => void;
+	warn: (...args: any[]) => void;
+	log: (...args: any[]) => void;
+	debug: (...args: any[]) => void;
+}
 
-// helper
+/** Internal helper */
+function _isFn(v: any): boolean {
+	return typeof v === "function";
+}
+
+/** Internal helper */
+function _isPlainObject(v: any): boolean {
+	return Object.prototype.toString.call(v) === "[object Object]";
+}
+
+/** Internal helper */
+function _isValidDate(v: any) {
+	return v instanceof Date && !isNaN(v.getTime());
+}
+
+/** Asserts that route meets internal validation criteria */
 function _assertValidRoute(v: string) {
 	v = `${v}`.trim();
 	if (v !== "" && (!v.startsWith("/") || v.includes("//"))) {
@@ -54,56 +104,78 @@ function _assertValidRoute(v: string) {
 	return v;
 }
 
+/** Creates Response based on body type */
+function _createResponseFrom(body: any, headers: Headers = new Headers()) {
+	let status = HTTP_STATUS.OK;
+
+	// make no assumptions - empty body is technically valid
+	if (body === undefined) {
+		body = null;
+		status = HTTP_STATUS.NO_CONTENT;
+	}
+	// json if plain object or toJSON aware (but ignoring json valid primitives, except for NULL)
+	else if (body === null || _isPlainObject(body) || _isFn(body?.toJSON)) {
+		body = JSON.stringify(body);
+		headers.set("Content-Type", "application/json; charset=utf-8");
+	}
+	// todo: maybe anything else here?
+	// else if (...) {}
+	// otherwise not much to guess anymore, simply cast to string
+	else {
+		body = `${body}`;
+	}
+
+	return new Response(body, { status, headers });
+}
+
+/** Internal helper */
+function _createContext(params: Record<string, string>): DeminoContext {
+	return Object.freeze({
+		params: Object.freeze(params),
+		locals: {},
+		headers: new Headers(),
+		__start: new Date(),
+	});
+}
+
 /**
- * Main API.
+ * Creates the Demino app, which is a valid `Deno.serve` handler function.
  */
 export function demino(
 	mountPath: string = "",
-	midwares: MidwareUseFn<DeminoContext>[] = [],
+	middleware: DeminoHandler | DeminoHandler[] = [],
 	options: Partial<{
 		verbose: boolean;
+		logger: DeminoLogger;
+		noXPoweredBy: boolean;
+		noXResponseTime: boolean;
 	}> = {}
 ): Demino {
-	//
+	// initialize and normalize...
+	let _middlewares = Array.isArray(middleware) ? middleware : [middleware];
+	const log = options?.logger ?? console;
 	const _router = new SimpleRouter();
-	let _errHandler: any;
+	let _errorHandler: DeminoErrorHandler;
 
-	// prettier-ignore
-	// deno-fmt-ignore
-	const _errorResponse = async (req: Request, info: Deno.ServeHandlerInfo, e: any) => {
-		let r;
-		let wasFn = false;
-		if (_isFn(_errHandler)) {
-			wasFn = true;
-			r = await _errHandler(req, info, e);
-			// allow non Response err handler results which will get converted to string
-			if (r !== undefined && !(r instanceof Response)) {
-				r = new Response(`${r}`, { status: HTTP_STATUS.INTERNAL_SERVER_ERROR });
-			}
-		}
+	//
+	const _createErrorResponse = async (
+		req: Request,
+		info: Deno.ServeHandlerInfo,
+		e: any,
+		headers: Headers = new Headers()
+	) => {
+		let r = await _errorHandler?.(req, info, e, headers);
 		if (!(r instanceof Response)) {
-			wasFn && console.error(red(` --> [${req.method} ${req.url}] Error handler did not return a Response instance`));
-			r = new Response(getErrorMessage(e) + "\n", { status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR });
+			r = new Response(getErrorMessage(e), {
+				status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
+				headers,
+			});
 		}
 		return r;
 	};
 
-	const _createContext = (
-		request: Request,
-		info: Deno.ServeHandlerInfo,
-		params: Record<string, string>
-	): DeminoContext =>
-		Object.freeze({
-			request,
-			info,
-			params: Object.freeze(params),
-			__start: new Date(),
-			// userland write space
-			locals: {},
-		});
-
 	//
-	const _app = async (req: Request, info: Deno.ServeHandlerInfo) => {
+	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
 		const method = req.method;
 		const url = new URL(req.url);
 
@@ -111,127 +183,156 @@ export function demino(
 			const matched = _router.exec(url.pathname + url.search);
 			if (matched && [method, "ALL"].includes(matched.method)) {
 				try {
-					const context = _createContext(req, info, matched.params);
-					const _mid = new Midware<DeminoContext>([
-						...(midwares || []),
-						...matched.midwares,
-					]);
-					// execute middlewares
-					let result = await _mid.execute(context);
+					const context = _createContext(matched.params);
+					const _mid = new Midware<
+						[Request, Deno.ServeHandlerInfo, DeminoContext]
+					>([...(_middlewares || []), ...matched.midwares]);
 
-					// if any of the middlewares returned anything defined (and broke
-					// the middlewares execution chain by doing so), keep it
-					// without even executing the handler
-					if (result === undefined) {
-						// note that the handler may not be defined
-						result = await matched.handler?.(req, info, context);
-					}
+					// The core Demino business - execute all middlewares...
+					// The intended convenient practice is actually NOT to return the Response
+					// instance directly (unlike with Deno.ServeHandler)
+					let result = await _mid.execute([req, info, context]);
 
-					// if we have something other than Response, use it as a string body
-					if (result !== undefined && !(result instanceof Response)) {
-						result = new Response(`${result}`); // toString conversion
-					}
+					//
+					const headers = context?.headers || new Headers();
 
-					// still no Response?
+					// maybe some x-headers (this will work only if the result is not
+					// a Response instance, otherwise we would need to clone it...)
 					if (!(result instanceof Response)) {
-						const msg = `Undefined handler result`;
-						console.error(red(` --> [${req.method} ${req.url}] ${msg}`));
-						throw TypeError(msg);
+						if (!options.noXPoweredBy) {
+							headers.set("X-Powered-By", `Demino`);
+						}
+
+						if (!options.noXResponseTime && _isValidDate(context?.__start)) {
+							headers.set(
+								"X-Response-Time",
+								`${new Date().valueOf() - context.__start.valueOf()}ms`
+							);
+						}
+					}
+
+					// middleware returned error instead of throwing? Weird, but possible...
+					if (result instanceof Error) {
+						result = _createErrorResponse(req, info, result, headers);
+					}
+					// we need Response instance eventually...
+					else if (!(result instanceof Response)) {
+						// this is the intended practice to build the Response automatically
+						result = _createResponseFrom(result, headers);
 					}
 
 					return result;
-				} catch (e) {
-					// prettier-ignore
-					// deno-fmt-ignore
-					throw createHttpError((e as any)?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR, null, null, e);
+				} catch (e: any) {
+					const status = e.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+					throw createHttpError(status, null, null, e);
 				}
 			} else {
 				throw createHttpError(HTTP_STATUS.NOT_FOUND);
 			}
 		} catch (e) {
-			return _errorResponse(req, info, e);
+			return _createErrorResponse(req, info, e);
 		}
 	};
 
 	//
-	const _createHandler =
-		(method: "ALL" | Method) =>
-		(
-			route: string,
-			midwaresOrHandler: MidsOrHandler,
-			handler?: ServeHandler
-		) => {
-			let midwares: MidwareUseFn<DeminoContext>[] = [];
-			if (typeof midwaresOrHandler === "function") {
-				handler = midwaresOrHandler;
-			} else if (Array.isArray(midwaresOrHandler)) {
-				midwares = midwaresOrHandler;
-			}
+	const _createRouteFn =
+		(method: "ALL" | Method): DeminoRouteFn =>
+		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): void => {
+			// everything is a middleware...
+			const midwares = [..._middlewares, ...args].flat().filter(Boolean);
+
 			try {
-				// at least one middleware or handler is considered formally OK (still no
-				// guarantee that the actual request will be processed)
-				if (!midwares.length && !_isFn(handler)) {
-					throw new TypeError(`Neither middlewares nor handler specified`);
+				// this is likely a bug (while technically ok)
+				if (!midwares.length) {
+					throw new TypeError(`No DeminoHandler found`);
 				}
+
 				_router.on(
 					_assertValidRoute(mountPath + route),
-					(params: Record<string, string>) => ({
-						params,
-						handler,
-						method,
-						midwares,
-					})
+					(params: Record<string, string>) => ({ params, method, midwares })
 				);
-				options?.verbose &&
-					console.log(green(` ✔ ${method} ${mountPath + route}`));
+
+				if (options?.verbose) {
+					log.debug(green(` ✔ ${method} ${mountPath + route}`));
+				}
 			} catch (e) {
-				// this is not considered fatal (all other routes may work fine), just letting know
-				console.log(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
+				// this is a friendly warning not a fatal condition (other routes may work
+				// fine, no need to die here)
+				log.warn(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
 			}
 		};
 
-	// userland api
-	_app.get = _createHandler("GET");
-	_app.head = _createHandler("HEAD");
-	_app.put = _createHandler("PUT");
-	_app.delete = _createHandler("DELETE");
-	_app.post = _createHandler("POST");
-	_app.patch = _createHandler("PATCH");
-	_app.all = _createHandler("ALL");
-	//
-	_app.error = (handler: ServeHandler) => (_errHandler = handler);
+	// userland method apis
+	_app.get = _createRouteFn("GET");
+	_app.head = _createRouteFn("HEAD");
+	_app.put = _createRouteFn("PUT");
+	_app.delete = _createRouteFn("DELETE");
+	_app.post = _createRouteFn("POST");
+	_app.patch = _createRouteFn("PATCH");
+	_app.all = _createRouteFn("ALL");
+
+	// other
+	_app.error = (handler: DeminoErrorHandler) => (_errorHandler = handler);
 	_app.mountPath = () => mountPath;
-	_app.use = (middleware: MidwareUseFn<DeminoContext>) => {
-		midwares.push(middleware);
+	_app.use = (middleware: DeminoHandler | DeminoHandler[]) => {
+		_middlewares = [
+			..._middlewares,
+			...(Array.isArray(middleware) ? middleware : [middleware]),
+		];
 	};
 
 	return _app;
 }
 
 /**
- * Allows to compose multiple demino apps into a single serve handler.
+ * Allows to compose multiple demino apps into a single one.
  */
-export function deminoCompose(apps: Demino[]): Deno.ServeHandler {
+export function deminoCompose(
+	apps: Demino[],
+	notFoundHandler?: (
+		req: Request,
+		info: Deno.ServeHandlerInfo
+	) => Response | Promise<Response>
+): Deno.ServeHandler {
+	// helper to normalize paths as "/di/r/s/"
+	const _slashed = (s: string) => {
+		if (!s.startsWith("/")) s = "/" + s;
+		if (!s.endsWith("/")) s += "/";
+		return s;
+	};
+
+	// in case of the same mountPaths, the later wins
+	const mounts = apps.reduce(
+		(m, a) => ({ ...m, [_slashed(a.mountPath() || "/")]: a }),
+		{} as Record<string, Demino>
+	);
+	// console.log(Object.keys(mounts));
+
+	notFoundHandler ??= () => new Response("Not Found...", { status: 404 });
+
+	// return composed Deno.ServeHandler
 	return (req: Request, info: Deno.ServeHandlerInfo) => {
-		let rootMount;
+		const url = new URL(req.url);
 
-		for (const app of apps) {
-			const url = new URL(req.url);
-			const mountPath = app.mountPath();
-			// mounted to topmost root empty string (first wins)
-			if (!mountPath) {
-				rootMount ??= app;
-			} else if (url.pathname.startsWith(app.mountPath())) {
-				return app(req, info);
-			}
+		// root special case
+		if ("/" === url.pathname) {
+			return mounts["/"]?.(req, info) ?? notFoundHandler(req, info);
 		}
 
-		// was there any topmost mount?
-		if (rootMount) {
-			return rootMount(req, info);
+		// now start cutting off path segments from the right, and try to match
+		// against the mapped mount paths. This may not be 100% perfect in wild
+		// route and mount path scenarios, but is extremely cheap and should just get the
+		// job done in most cases.
+		let pathname = url.pathname;
+		let pos = pathname.lastIndexOf("/");
+		while (pos > 0) {
+			pathname = pathname.slice(0, pos);
+			pos = pathname.lastIndexOf("/");
+			const key = _slashed(pathname);
+			if (mounts[key]) return mounts[key](req, info);
 		}
 
-		// this will not be handled by any of the custom handlers
-		return new Response("Not found", { status: HTTP_STATUS.NOT_FOUND });
+		// fallback to root mount (if available)...
+		return mounts["/"]?.(req, info) ?? notFoundHandler(req, info);
 	};
 }
