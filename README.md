@@ -6,8 +6,8 @@
 Deno's built-in HTTP server, providing:
 
 - [routing](https://github.com/marianmeres/simple-router), 
-- [middlewares](https://github.com/marianmeres/midware),
-- error handling,
+- [middlewares support](https://github.com/marianmeres/midware),
+- unified error handling,
 - express-like semantics.
 
 ## Installation
@@ -51,7 +51,7 @@ app.get('/[...segment]/etc', ...); // multiple "rest" segments
 ## Route handlers and middlewares
 
 The stuff happens in route handlers. Or in middlewares. Or in both. In fact, 
-they are technically the same thing - the route handler is just the final middleware in the middlewares collection.
+they are technically the same thing - the route handler is just the final middleware in the middlewares collection (which is executed serially).
 
 Having said that, they are still expected to behave a little differently. Middlewares 
 typically _do_ something (eg validate), while route handlers typically _return_ something (eg html string or json objects).
@@ -72,6 +72,13 @@ Signature of the route handler/middleware is:
 ```typescript
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
+
+Middlewares can be registered globally per app (via `use`), or locally per route handler as in the example below:
+
+```typescript
+app.get("/secret", authCheckMiddleware, handler);
+```
+
 
 ## Context
 
@@ -107,16 +114,12 @@ app.error((_req, _info, error, headers) => {
     headers.set("Content-Type", "application/json");
     return new Response(
         JSON.stringify({ ok: false, message: error.message }),
-        {
-            status: error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
-            headers,
-        }
+        { status: error?.status || 500, headers }
     );
 });
 ```
 
-
-### Composition of multipe Demino apps
+## Composition of Demino apps
 
 Multiple Demino apps can be composed into a single app. 
 This is mainly useful if you want to logically group certain mount paths with the same middlewares. For example:
