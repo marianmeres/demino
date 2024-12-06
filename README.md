@@ -82,8 +82,7 @@ app.get("/secret", authCheckMiddleware, handler);
 
 ## Context
 
-As shown above, each middleware receives a `context` parameter, which is just a plain object which visibility and lifetime is limited to the scope 
-and lifetime of the Deno's request handler. 
+Each middleware receives a `context` object which visibility and lifetime is limited to the scope and lifetime of the Deno's request handler. 
 
 It has few "system" props (eg `params` and `headers`) as well as the `locals` prop where each middleware can read and write arbitrary data.
 
