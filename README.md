@@ -99,7 +99,8 @@ app.use(async (_req, _info, ctx) => {
     }
 })
 
-// and route handler just rendering the html...
+// and route handler just rendering the html. This handler will not be reached
+// if article is not found
 app.get("/[articleId]", (_req, _info, ctx) => render(ctx.locals.article));
 ```
 
