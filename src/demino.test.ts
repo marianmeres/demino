@@ -256,13 +256,14 @@ Deno.test("custom error handler", async () => {
 		assertMatch(await resp.text(), /not found/i);
 
 		// now register custom error handler which will talk always in json
-		app.error((_req, _info, e, headers) => {
-			headers.set("Content-Type", "application/json; charset=utf-8");
+		app.error((_req, _info, ctx) => {
+			ctx.headers.set("Content-Type", "application/json; charset=utf-8");
+			const e = ctx.error;
 			return new Response(
 				JSON.stringify({ ok: false, message: getErrorMessage(e) }),
 				{
 					status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
-					headers,
+					headers: ctx.headers,
 				}
 			);
 		});

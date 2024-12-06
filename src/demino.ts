@@ -19,6 +19,8 @@ export interface DeminoContext {
 	headers: Headers;
 	/** internal: timestamp of the incoming request */
 	__start: Date;
+	/** internal */
+	error: any;
 }
 
 /** Demino route handler AND middlware fn (both are of the same type) */
@@ -33,15 +35,6 @@ export type DeminoRouteFn = (
 	route: string,
 	...args: (DeminoHandler | DeminoHandler[])[]
 ) => void;
-
-/** Error handler */
-export type DeminoErrorHandler = (
-	req: Request,
-	info: Deno.ServeHandlerInfo,
-	error: any,
-	/** the headers to use in Response */
-	headers: Headers
-) => any;
 
 /** Demino app */
 export interface Demino extends Deno.ServeHandler {
@@ -60,7 +53,7 @@ export interface Demino extends Deno.ServeHandler {
 	/** Special case _every_ HTTP method route handler definition */
 	all: DeminoRouteFn;
 	/** Custom error handler definition */
-	error: (handler: DeminoErrorHandler) => void;
+	error: (handler: DeminoHandler) => void;
 	/** Global middleware addon */
 	use: (middleware: DeminoHandler | DeminoHandler[]) => void;
 	/** Return which path is the current app mounted on */
@@ -130,10 +123,11 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 
 /** Internal helper */
 function _createContext(params: Record<string, string>): DeminoContext {
-	return Object.freeze({
+	return Object.seal({
 		params: Object.freeze(params),
 		locals: {},
 		headers: new Headers(),
+		error: null,
 		__start: new Date(),
 	});
 }
@@ -155,20 +149,20 @@ export function demino(
 	let _middlewares = Array.isArray(middleware) ? middleware : [middleware];
 	const log = options?.logger ?? console;
 	const _router = new SimpleRouter();
-	let _errorHandler: DeminoErrorHandler;
+	let _errorHandler: DeminoHandler;
 
 	//
 	const _createErrorResponse = async (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		e: any,
-		headers: Headers = new Headers()
+		context: DeminoContext
 	) => {
-		let r = await _errorHandler?.(req, info, e, headers);
+		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
+			const e = context.error;
 			r = new Response(getErrorMessage(e), {
 				status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
-				headers,
+				headers: context.headers,
 			});
 		}
 		return r;
@@ -178,12 +172,13 @@ export function demino(
 	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
 		const method = req.method;
 		const url = new URL(req.url);
+		let context = _createContext({});
 
 		try {
 			const matched = _router.exec(url.pathname + url.search);
 			if (matched && [method, "ALL"].includes(matched.method)) {
 				try {
-					const context = _createContext(matched.params);
+					context = _createContext(matched.params);
 					const _mid = new Midware<
 						[Request, Deno.ServeHandlerInfo, DeminoContext]
 					>([...(_middlewares || []), ...matched.midwares]);
@@ -213,7 +208,8 @@ export function demino(
 
 					// middleware returned error instead of throwing? Weird, but possible...
 					if (result instanceof Error) {
-						result = _createErrorResponse(req, info, result, headers);
+						context.error = result;
+						result = _createErrorResponse(req, info, context);
 					}
 					// we need Response instance eventually...
 					else if (!(result instanceof Response)) {
@@ -229,8 +225,9 @@ export function demino(
 			} else {
 				throw createHttpError(HTTP_STATUS.NOT_FOUND);
 			}
-		} catch (e) {
-			return _createErrorResponse(req, info, e);
+		} catch (e: any) {
+			context.error = e;
+			return _createErrorResponse(req, info, context);
 		}
 	};
 
@@ -272,7 +269,7 @@ export function demino(
 	_app.all = _createRouteFn("ALL");
 
 	// other
-	_app.error = (handler: DeminoErrorHandler) => (_errorHandler = handler);
+	_app.error = (handler: DeminoHandler) => (_errorHandler = handler);
 	_app.mountPath = () => mountPath;
 	_app.use = (middleware: DeminoHandler | DeminoHandler[]) => {
 		_middlewares = [

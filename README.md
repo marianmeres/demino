@@ -110,8 +110,9 @@ Every error thrown anywhere is caught and passed to the error handler. The built
 
 ```typescript
 // customized json reponse error handler 
-app.error((_req, _info, error, headers) => {
+app.error((_req, _info, ctx) => {
     headers.set("Content-Type", "application/json");
+    const error = ctx.error;
     return new Response(
         JSON.stringify({ ok: false, message: error.message }),
         { status: error?.status || 500, headers }
