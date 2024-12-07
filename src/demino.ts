@@ -30,28 +30,28 @@ export type DeminoHandler = (
 	context: DeminoContext
 ) => any;
 
-/** Express-like route handler definition */
-export type DeminoRouteFn = (
+/** Route handler signature */
+export type DeminoRouteHandler = (
 	route: string,
 	...args: (DeminoHandler | DeminoHandler[])[]
 ) => void;
 
-/** Demino app */
+/** The Demino app public interface */
 export interface Demino extends Deno.ServeHandler {
 	/** HTTP GET route handler */
-	get: DeminoRouteFn;
+	get: DeminoRouteHandler;
 	/** HTTP HEAD route handler */
-	head: DeminoRouteFn;
+	head: DeminoRouteHandler;
 	/** HTTP PUT route handler */
-	put: DeminoRouteFn;
+	put: DeminoRouteHandler;
 	/** HTTP DELETE route handler */
-	delete: DeminoRouteFn;
+	delete: DeminoRouteHandler;
 	/** HTTP POST route handler */
-	post: DeminoRouteFn;
+	post: DeminoRouteHandler;
 	/** HTTP PATCH route handler */
-	patch: DeminoRouteFn;
+	patch: DeminoRouteHandler;
 	/** Special case _every_ HTTP method route handler. */
-	all: DeminoRouteFn;
+	all: DeminoRouteHandler;
 	/** Fn to register custom error handler. */
 	error: (handler: DeminoHandler) => void;
 	/** Fn to register global middlewares. */
@@ -60,20 +60,20 @@ export interface Demino extends Deno.ServeHandler {
 	mountPath: () => string;
 }
 
-/** Supported methods */
-const _supportedMethods = {
-	DELETE: "DELETE",
-	GET: "GET",
-	HEAD: "HEAD",
-	PATCH: "PATCH",
-	POST: "POST",
-	PUT: "PUT",
-};
+/** Denimo supported method */
+export type DeminoMethod = "DELETE" | "GET" | "HEAD" | "PATCH" | "POST" | "PUT";
 
-/** Supported methods */
-export type DeminoMethod = keyof typeof _supportedMethods;
+/** Internal list of supported methods */
+const _supportedMethods: DeminoMethod[] = [
+	"DELETE",
+	"GET",
+	"HEAD",
+	"PATCH",
+	"POST",
+	"PUT",
+];
 
-/** For the possible future console alternatives... */
+/** Internal logger inteface (experimental)... */
 export interface DeminoLogger {
 	error: (...args: any[]) => void;
 	warn: (...args: any[]) => void;
@@ -155,7 +155,14 @@ function _createContext(params: Record<string, string>): DeminoContext {
 }
 
 /**
- * Creates the Demino app, which is a valid `Deno.serve` handler function.
+ * Creates the Demino app.
+ *
+ * Demino app is a valid `Deno.serve` handler function.
+ *
+ * @example
+ * ```ts
+ * Deno.serve(demino()); // this will return 404 for every request
+ * ```
  */
 export function demino(
 	mountPath: string = "",
@@ -173,7 +180,7 @@ export function demino(
 	let _errorHandler: DeminoHandler;
 
 	// prepare routers for each method individually
-	const _routers = ["ALL", ...Object.keys(_supportedMethods)].reduce(
+	const _routers = ["ALL", ..._supportedMethods].reduce(
 		(m, k) => ({ ...m, [k]: new SimpleRouter() }),
 		{} as Record<"ALL" | DeminoMethod, SimpleRouter>
 	);
@@ -271,7 +278,7 @@ export function demino(
 
 	//
 	const _createRouteFn =
-		(method: "ALL" | DeminoMethod): DeminoRouteFn =>
+		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
 		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): void => {
 			// everything is a middleware...
 			const midwares = [..._middlewares, ...args].flat().filter(Boolean);
