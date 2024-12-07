@@ -37,9 +37,7 @@ Deno.serve(app);
 
 Route is a string representing the pathname segment of the url of the incoming request.
 
-Every Demino app can be mounted to a specific route prefix (called the `mountPath`). Default `mountPath` is an empty string (the server root). The final route endpoint is evaluated as a `mountPath + route`.
-
-The usage is `app[httpMethodVerb](route, [middlewares,] handler)`.
+Every Demino app can be mounted to a specific route prefix, called the `mountPath` (which is an empty string by default). The final route endpoint is evaluated as a `mountPath + route`.
 
 ```typescript
 // create a Demino with a `/api` mount path
