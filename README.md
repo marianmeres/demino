@@ -118,7 +118,7 @@ class MyRenderer {
 api.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
 
 // but not for this route, here we have a full manual control
-api.get('/manual', () => Response('I have a full control'))
+api.get('/manual', () => new Response('I have a full control'))
 ```
 
 The route handler/middleware has the following signature:
@@ -185,6 +185,7 @@ replaced via the `app.error(handler)` interface.
 ```typescript
 // example: customized json response error handler 
 app.error((_req, _info, ctx) => {
+    const headers = ctx.headers || new Headers();
     headers.set("Content-Type", "application/json");
     const error = ctx.error;
     return new Response(

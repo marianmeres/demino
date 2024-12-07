@@ -9,17 +9,17 @@ import { Midware } from "@marianmeres/midware";
 import { SimpleRouter } from "@marianmeres/simple-router";
 import { green, red } from "@std/fmt/colors";
 
-/** Object passed as a last (3rd) parameter to middleware fns AND route handlers */
+/** Well known object passed to middlewares */
 export interface DeminoContext {
-	/** route's parsed params (merged path named segments AND query vars) */
+	/** Route's parsed params (merged path named segments AND query vars). */
 	params: Record<string, string>;
-	/** userland read/write key-value map */
+	/** Userland read/write key-value map. */
 	locals: Record<string, any>;
-	/** custom userland response (!) headers to be used in the final output */
+	/** Custom userland response (!) headers to be used in the final output. */
 	headers: Headers;
-	/** internal: timestamp of the incoming request */
+	/** Internal: timestamp of the incoming request. */
 	__start: Date;
-	/** internal */
+	/** Internal: error ref for the error handler */
 	error: any;
 }
 
@@ -38,25 +38,25 @@ export type DeminoRouteFn = (
 
 /** Demino app */
 export interface Demino extends Deno.ServeHandler {
-	/** HTTP GET route handler definition */
+	/** HTTP GET route handler */
 	get: DeminoRouteFn;
-	/** HTTP HEAD route handler definition */
+	/** HTTP HEAD route handler */
 	head: DeminoRouteFn;
-	/** HTTP PUT route handler definition */
+	/** HTTP PUT route handler */
 	put: DeminoRouteFn;
-	/** HTTP DELETE route handler definition */
+	/** HTTP DELETE route handler */
 	delete: DeminoRouteFn;
-	/** HTTP POST route handler definition */
+	/** HTTP POST route handler */
 	post: DeminoRouteFn;
-	/** HTTP PATCH route handler definition */
+	/** HTTP PATCH route handler */
 	patch: DeminoRouteFn;
-	/** Special case _every_ HTTP method route handler definition */
+	/** Special case _every_ HTTP method route handler. */
 	all: DeminoRouteFn;
-	/** Custom error handler definition */
+	/** Fn to register custom error handler. */
 	error: (handler: DeminoHandler) => void;
-	/** Global middleware addon */
+	/** Fn to register global middlewares. */
 	use: (middleware: DeminoHandler | DeminoHandler[]) => void;
-	/** Return which path is the current app mounted on */
+	/** Returns which path is the current app mounted on. */
 	mountPath: () => string;
 }
 
