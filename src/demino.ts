@@ -89,7 +89,7 @@ function _isValidDate(v: any) {
 /** Asserts that route meets internal validation criteria */
 function _assertValidRoute(v: string) {
 	v = `${v}`.trim();
-	if (v !== "" && (!v.startsWith("/") || v.includes("//"))) {
+	if (!["", "*"].includes(v) && (!v.startsWith("/") || v.includes("//"))) {
 		throw new TypeError(
 			`Route must be either empty, or start with a slash and must not contain double slashes.`
 		);
@@ -305,7 +305,7 @@ export function deminoCompose(
 	);
 	// console.log(Object.keys(mounts));
 
-	notFoundHandler ??= () => new Response("Not Found...", { status: 404 });
+	notFoundHandler ??= () => new Response("Not Found", { status: 404 });
 
 	// return composed Deno.ServeHandler
 	return (req: Request, info: Deno.ServeHandlerInfo) => {
@@ -318,7 +318,7 @@ export function deminoCompose(
 
 		// now start cutting off the path segments from the right, and try to match
 		// against the mapped mount paths. This may not be 100% perfect in a wild
-		// route and mount path scenarios, but is extremely cheap and should just
+		// route and mount path scenarios, but is cheap and should just
 		// get the job done in most cases most of the time.
 		let pathname = url.pathname;
 		let pos = pathname.lastIndexOf("/");

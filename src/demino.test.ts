@@ -348,3 +348,30 @@ Deno.test("composition", async () => {
 
 	return srv?.server?.finished;
 });
+
+Deno.test("catch all fallback route", async () => {
+	let srv: Srv | null = null;
+	let resp: Response;
+
+	const app = demino();
+	app.get("/", () => "index");
+	// this is a fallback if no other route was matched
+	app.all("*", () => "hey");
+
+	try {
+		srv = await startServer(app);
+		resp = await fetch(srv.base);
+		assertEquals(resp.status, 200);
+		assertMatch(await resp.text(), /index/i);
+
+		resp = await fetch(`${srv.base}/${Math.random()}`, { method: "POST" });
+		assertEquals(resp.status, 200);
+		assertMatch(await resp.text(), /hey/i);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});

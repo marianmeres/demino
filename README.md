@@ -60,6 +60,16 @@ app.get('/[...segment]/etc', ...); // multiple "rest" segments
 If multiple routes of the same method and endpoint are registered, the first one
 always wins.
 
+There is also a special wildcard `*` route available.
+```typescript
+const app = demino();
+
+// add route handlers as needed...
+
+// and have a wilcard fallback
+app.all("*", () => "My server does not like 404");
+```
+
 ## Route handlers and middlewares
 
 The stuff happens in route handlers. Or in middlewares. Or in both. In fact, 
