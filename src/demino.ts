@@ -60,7 +60,7 @@ export interface Demino extends Deno.ServeHandler {
 	mountPath: () => string;
 }
 
-/** Denimo supported method */
+/** Demino supported method */
 export type DeminoMethod = "DELETE" | "GET" | "HEAD" | "PATCH" | "POST" | "PUT";
 
 /** Internal list of supported methods */
