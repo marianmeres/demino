@@ -252,12 +252,20 @@ Deno.test("custom error handler", async () => {
 
 	const app = demino();
 
+	// return, not throw
+	app.get("/err", () => new Error("Boo"));
+
 	try {
 		srv = await startServer(app);
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 404);
 		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
 		assertMatch(await resp.text(), /not found/i);
+
+		// err
+		resp = await fetch(`${srv.base}/err`);
+		assertEquals(resp.status, 500);
+		assertEquals(await resp.text(), "Boo");
 
 		// now register custom error handler which will talk always in json
 		app.error((_req, _info, ctx) => {
@@ -278,6 +286,14 @@ Deno.test("custom error handler", async () => {
 		assertEquals(JSON.parse(await resp.text()), {
 			ok: false,
 			message: "Not Found",
+		});
+
+		// err
+		resp = await fetch(`${srv.base}/err`);
+		assertEquals(resp.status, 500);
+		assertEquals(JSON.parse(await resp.text()), {
+			ok: false,
+			message: "Boo",
 		});
 	} catch (e) {
 		throw e;
