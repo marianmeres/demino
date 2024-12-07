@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-explicit-any
+
 import {
 	getErrorMessage,
 	HTTP_ERROR,
@@ -367,6 +369,33 @@ Deno.test("catch all fallback route", async () => {
 		resp = await fetch(`${srv.base}/${Math.random()}`, { method: "POST" });
 		assertEquals(resp.status, 200);
 		assertMatch(await resp.text(), /hey/i);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("same route different method", async () => {
+	let srv: Srv | null = null;
+	let resp: Response;
+
+	const methods = ["get", "post", "patch", "put", "delete"];
+	const app = demino();
+	for (const method of methods) {
+		(app as any)[method]("/", () => method);
+	}
+
+	try {
+		srv = await startServer(app);
+
+		for (const method of methods) {
+			resp = await fetch(srv.base, { method });
+			assertEquals(resp.status, 200);
+			assertEquals(await resp.text(), method, method);
+		}
 	} catch (e) {
 		throw e;
 	} finally {

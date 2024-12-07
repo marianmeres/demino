@@ -61,7 +61,17 @@ export interface Demino extends Deno.ServeHandler {
 }
 
 /** Supported methods */
-type Method = "GET" | "HEAD" | "PUT" | "DELETE" | "POST" | "PATCH";
+const _supportedMethods = {
+	DELETE: "DELETE",
+	GET: "GET",
+	HEAD: "HEAD",
+	PATCH: "PATCH",
+	POST: "POST",
+	PUT: "PUT",
+};
+
+/** Supported methods */
+export type DeminoMethod = keyof typeof _supportedMethods;
 
 /** For the possible future console alternatives... */
 export interface DeminoLogger {
@@ -160,8 +170,13 @@ export function demino(
 	// initialize and normalize...
 	let _middlewares = Array.isArray(middleware) ? middleware : [middleware];
 	const log = options?.logger ?? console;
-	const _router = new SimpleRouter();
 	let _errorHandler: DeminoHandler;
+
+	// prepare routers for each method individually
+	const _routers = ["ALL", ...Object.keys(_supportedMethods)].reduce(
+		(m, k) => ({ ...m, [k]: new SimpleRouter() }),
+		{} as Record<"ALL" | DeminoMethod, SimpleRouter>
+	);
 
 	//
 	const _createErrorResponse = async (
@@ -182,13 +197,24 @@ export function demino(
 
 	//
 	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
-		const method = req.method;
+		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
 		let context = _createContext({});
 
 		try {
-			const matched = _router.exec(url.pathname + url.search);
-			if (matched && [method, "ALL"].includes(matched.method)) {
+			if (!_routers[method]) {
+				throw createHttpError(HTTP_STATUS.NOT_IMPLEMENTED);
+			}
+
+			const route = url.pathname + url.search;
+			let matched = _routers[method].exec(route);
+
+			// if not matched, try ALL as a second attempt
+			if (!matched && method !== "ALL") {
+				matched = _routers.ALL.exec(route);
+			}
+
+			if (matched) {
 				try {
 					context = _createContext(matched.params);
 					const _mid = new Midware<
@@ -245,7 +271,7 @@ export function demino(
 
 	//
 	const _createRouteFn =
-		(method: "ALL" | Method): DeminoRouteFn =>
+		(method: "ALL" | DeminoMethod): DeminoRouteFn =>
 		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): void => {
 			// everything is a middleware...
 			const midwares = [..._middlewares, ...args].flat().filter(Boolean);
@@ -256,7 +282,7 @@ export function demino(
 					throw new TypeError(`No DeminoHandler found`);
 				}
 
-				_router.on(
+				_routers[method].on(
 					_assertValidRoute(mountPath + route),
 					(params: Record<string, string>) => ({ params, method, midwares })
 				);
