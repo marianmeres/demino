@@ -29,7 +29,7 @@ const app = demino();
 // register method and route handlers...
 app.get("/", () => "Hello, World!");
 
-// serve (`demino` app is a `Deno.serve` handler)
+// serve (Demino app is a `Deno.serve` handler)
 Deno.serve(app);
 ```
 
@@ -37,7 +37,9 @@ Deno.serve(app);
 
 Route is a string representing the pathname segment of the url of the incoming request.
 
-Every Demino app can be mounted to a specific route prefix, called the `mountPath` (which is an empty string by default). The final route endpoint is evaluated as a `mountPath + route`.
+Every Demino app can be mounted to a specific route prefix, called the `mountPath` 
+(which is an empty string by default). The final route endpoint is evaluated as a 
+`mountPath + route`.
 
 ```typescript
 // create a Demino with a `/api` mount path
@@ -47,7 +49,8 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 ```
 
-For more router details see [the router docs](https://github.com/marianmeres/simple-router), but you get the idea here:
+For more router details see [the router docs](https://github.com/marianmeres/simple-router), 
+but you get the idea here:
 
 ```typescript
 app.get('/fixed/path', ...);
@@ -66,17 +69,19 @@ const app = demino();
 
 // add route handlers as needed...
 
-// and have a wilcard fallback
+// and have a catch all wildcard fallback
 app.all("*", () => "My server does not like 404");
 ```
 
 ## Route handlers and middlewares
 
 The stuff happens in route handlers. Or in middlewares. Or in both. In fact, 
-they are technically the same thing - the route handler is just the final middleware in the internal middlewares collection.
+they are technically the same thing - the route handler is just the final middleware in 
+the internal middlewares collection.
 
 Having said that, they are still expected to behave a little differently. Middlewares 
-mainly _do_ something (eg validate), while route handlers mainly _return_ something (eg html string or json objects).
+mainly _do_ something (eg validate), while route handlers mainly _return_ something 
+(eg html string or json objects).
 
 As soon as any middleware decides to _return_ a thing, the whole middlewares 
 execution chain is terminated and a response is sent immediately.
@@ -86,10 +91,12 @@ a `Response` instance. If they don't, the `Response` will be created automatical
 based on their return type:
 
 - if the value is `undefined`, empty `204 No Content` response will be created,
-- if the value is a plain object (or `null`, or object with a `.toJSON` method) it will be `JSON.stringify`-ed,
-- everything else will be casted to string (which automatically triggers a `toString` method if available).
+- if the value is a plain object (or `null`, or object with a `toJSON` method) it will 
+  be `JSON.stringify`-ed,
+- everything else will be casted to string (which automatically triggers a `toString` 
+  method if available).
 
-You can safely bypass this opinion by returning the `Response` instance
+You can safely bypass this opinionated behavior by returning the `Response` instance
 yourself.
 
 ```typescript
@@ -119,9 +126,11 @@ app.get("/secret", authCheckMiddleware, handler);
 
 ## Context
 
-Each middleware receives a `context` object which visibility and lifetime is limited to the scope and lifetime of the Deno's request handler. 
+Each middleware receives a `DeminoContext` object which visibility and lifetime is limited 
+to the scope and lifetime of the Deno's request handler. 
 
-It has few "system" props (eg `params` and `headers`) as well as the `locals` prop where each middleware can read and write arbitrary data.
+It has few "system" props (eg `params` and `headers`) as well as the `locals` prop where 
+each middleware can read and write arbitrary data.
 
 ```typescript
 const app = demino('/articles');
@@ -146,8 +155,6 @@ app.get("/[articleId]", (_req, _info, ctx) => render(ctx.locals.article));
 Demino uses the http method name route handler convention. 
 
 ```typescript
-const app = demino();
-
 app.get('/resources/[id]', readResourceHandler);
 app.post('/resources', createResourceHandler);
 // app.delete, app.patch, app.put, ...
@@ -156,16 +163,14 @@ app.post('/resources', createResourceHandler);
 Also, the middlewares usage is similar to express:
 
 ```typescript
-const app = demino();
-
 app.use(someMidlleware);
-
 app.get('/foo', mid1, mid2, [mid3, mid4], handler);
 ```
 
 ## Error handling
 
-Errors are caught and passed to the error handler. The built-in error handler can be customized via the `app.error(handler)` interface.
+Errors are caught and passed to the error handler. The built-in error handler can be 
+replaced via the `app.error(handler)` interface.
 
 ```typescript
 // example: customized json response error handler 
@@ -182,7 +187,8 @@ app.error((_req, _info, ctx) => {
 ## Composition of Demino apps
 
 Multiple Demino apps can be composed into a single app. 
-This is useful if you want to logically group certain mount paths with the same middlewares. For example:
+This is useful if you want to logically group certain mount paths with the same middlewares. 
+For example:
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
