@@ -316,10 +316,10 @@ export function deminoCompose(
 			return mounts["/"]?.(req, info) ?? notFoundHandler(req, info);
 		}
 
-		// now start cutting off path segments from the right, and try to match
-		// against the mapped mount paths. This may not be 100% perfect in wild
-		// route and mount path scenarios, but is extremely cheap and should just get the
-		// job done in most cases.
+		// now start cutting off the path segments from the right, and try to match
+		// against the mapped mount paths. This may not be 100% perfect in a wild
+		// route and mount path scenarios, but is extremely cheap and should just
+		// get the job done in most cases most of the time.
 		let pathname = url.pathname;
 		let pos = pathname.lastIndexOf("/");
 		while (pos > 0) {

@@ -34,6 +34,8 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 	app.get("/2", async () => await Promise.resolve(new Response(world)));
 	app.get("/3", [() => world]); // midware return
 	app.get("/4", [() => Promise.resolve(new Response(world))]); // midware return
+	// this will never be used, because the first usage above wins
+	app.get("/4", () => "never used");
 	//
 	app.post("/post", () => "post");
 	app.patch("/patch", () => "patch");
