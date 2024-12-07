@@ -78,7 +78,11 @@ function _isFn(v: any): boolean {
 
 /** Internal helper */
 function _isPlainObject(v: any): boolean {
-	return Object.prototype.toString.call(v) === "[object Object]";
+	return (
+		v !== null &&
+		typeof v === "object" &&
+		[undefined, Object].includes(v.constructor)
+	);
 }
 
 /** Internal helper */
@@ -106,8 +110,16 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 		body = null;
 		status = HTTP_STATUS.NO_CONTENT;
 	}
-	// json if plain object or toJSON aware (but ignoring json valid primitives, except for NULL)
-	else if (body === null || _isPlainObject(body) || _isFn(body?.toJSON)) {
+	// JSON.stringify
+	else if (
+		// considering NULL a common DTO use case
+		body === null ||
+		// toJSON aware
+		_isFn(body?.toJSON) ||
+		// plain object without its own `toString` method
+		(_isPlainObject(body) &&
+			!Object.prototype.hasOwnProperty.call(body, "toString"))
+	) {
 		body = JSON.stringify(body);
 		headers.set("Content-Type", "application/json; charset=utf-8");
 	}

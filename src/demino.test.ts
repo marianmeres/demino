@@ -175,7 +175,7 @@ Deno.test("middlewares and various return types", async () => {
 		}
 		// return plain string ASAP (final handler will not be invoked)
 		else if (context.params.id == "hey") {
-			return "ho";
+			return { toString: () => "ho" };
 		}
 		// not found (intentionally not throwing, just returning, which must also work)
 		else if (context.params.id) {

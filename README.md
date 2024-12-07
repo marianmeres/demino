@@ -107,8 +107,18 @@ api.use((_req, _info, ctx) => {
     ctx.headers.set("Content-Type", "application/json");
 });
 
-// conveniently return objects directly
+// conveniently return objects directly, and have it be handled automatically
 api.get("/", () => ({ this: 'will', be: 'JSON stringified'}));
+
+// or cast to string example
+class MyRenderer {
+    constructor(private data) {...}
+    toString() { return `...`; }
+}
+api.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
+
+// but not for this route, here we have a full manual control
+api.get('/manual', () => Response('I have a full control'))
 ```
 
 The route handler/middleware has the following signature:
@@ -145,7 +155,7 @@ app.use(async (_req, _info, ctx) => {
     }
 })
 
-// and route handler acting as a pure renderer. This handler will not be reached
+// ...and route handler acting as a pure renderer. This handler will not be reached
 // if the article is not found
 app.get("/[articleId]", (_req, _info, ctx) => render(ctx.locals.article));
 ```
