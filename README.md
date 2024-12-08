@@ -78,8 +78,7 @@ based on what they return:
 - if the value is `undefined`, empty `204 No Content` response will be created,
 - if the value is a plain object (or `null`, or `toJSON` aware) it will 
   be `JSON.stringify`ed,
-- everything else will be casted to string (which triggers a `toString` 
-  method if available).
+- everything else is cast to string (which invokes a `toString` method if available).
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
 yourself.
@@ -98,7 +97,7 @@ class MyRenderer {
 }
 app.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
 
-// or you can have a full control by returning the Response instance directly
+// or you have a full control by returning the Response instance directly
 app.get('/manual', () => new Response('This will be sent as is.'))
 ```
 
