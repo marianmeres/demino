@@ -230,8 +230,7 @@ via the `routerFactory` factory setting.
 
 Consider them proof of concept rather than battle-tested implementations.
 
-
-### ExpressLike router
+### Express-like router
 
 ```ts
 const app = demino("", [], { routerFactory: () => new DeminoExpressLikeRouter() });
@@ -246,8 +245,8 @@ Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
 
 ### Integrating a 3rd party routing library
 
-This should be fairly easy. Demino app expects a `DeminoRouter` 
-interface (2 methods), where you can implement the actual integration.
+Demino app expects a `DeminoRouter` interface (2 methods), where you can implement the 
+actual integration.
 
 ```ts
 class Some3rdPartyRouter extends DeminoRouter {
