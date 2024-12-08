@@ -120,7 +120,7 @@ app.get("/secret", authCheckMiddleware, handler);
 Each middleware receives a `DeminoContext` object which visibility and lifetime is limited 
 to the scope and lifetime of the request handler. 
 
-It has `params` (router parsed params), `headers` (to be used in final response) and 
+It has `params` (router parsed params), `headers` (to be used in the final response) and 
 `locals` props. The `locals` prop is where each middleware can read and write 
 arbitrary data.
 
@@ -223,7 +223,7 @@ via the factory option `routerFactory`.
 
 ### Fixed router
 
-The most trivial, direct strings compare based router, not being able to
+The most trivial, direct strings compare based router, unable to
 extract any params.
 
 ```ts
@@ -233,9 +233,9 @@ app.get("/foo", () => "foo");
 
 ### Regex router
 
-The [`RegExp.exec`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec) 
-based, which makes it quite powerful. The downside is its potential complexity and 
-harder routes readability (routes need to be added as `string`, not `RegExp` instances).
+The powerful [`RegExp.exec`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec) 
+based. The downside is its potential complexity and 
+harder routes readability.
 
 ```ts
 const app = demino("", [], { routerFactory: () => new DeminoRegexRouter() });
@@ -254,18 +254,18 @@ app.get(".+", () => "any");
 
 ### Integrating a 3rd party routing library
 
-You need to extend the abstract `DeminoRouter` and implement all integration inside.
+This should be fairly easy. Demino app expects a `DeminoRouter` 
+interface (2 methods), where you can implement the actual integration.
 
 ```ts
 class Some3rdPartyRouter extends DeminoRouter {
     /** Defines a callback to be executed on a given route match. */
-	on(route: string, callback: DeminoRouterOnMatch): void {
-        // you need to save the callback somewhere
+    on(route: string, callback: DeminoRouterOnMatch): void {
+        // you need to save the route+callback pair somewhere...
     }
-
-	/** Executes pathname match lookup against the registered routes. */
-	exec(pathname: string): null | DeminoRouterOnMatchResult {
-        // if pathname is matched, call the saved callback with parsed params 
+    /** Executes pathname match lookup against the registered routes. */
+    exec(pathname: string): null | DeminoRouterOnMatchResult {
+        // if pathname is matched, call the saved callback with parsed params (if any)
         // as its only argument
     }
 }
