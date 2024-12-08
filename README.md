@@ -151,7 +151,7 @@ replaced via the `app.error(handler)` interface.
 // example: customized json response error handler 
 app.error((_req, _info, ctx) => {
     const headers = ctx.headers || new Headers();
-    headers.set("Content-Type", "application/json");
+    headers.set("content-type", "application/json");
     const error = ctx.error;
     return new Response(
         JSON.stringify({ ok: false, message: error.message }),

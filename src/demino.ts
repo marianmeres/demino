@@ -139,13 +139,17 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
 	) {
 		body = JSON.stringify(body);
-		headers.set("Content-Type", "application/json; charset=utf-8");
+		headers.set("content-type", "application/json; charset=utf-8");
 	}
 	// todo: maybe anything else here?
 	// else if (...) {}
 	// otherwise not much to guess anymore, simply cast to string
 	else {
 		body = `${body}`;
+		// this is obviously naive, but should get the job done most of the time...
+		if (!headers.get("content-type") && /<html/i.test(body)) {
+			headers.set("content-type", "text/html; charset=utf-8");
+		}
 	}
 
 	return new Response(body, { status, headers });

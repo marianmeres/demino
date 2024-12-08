@@ -182,6 +182,8 @@ Deno.test("middlewares and various return types", async () => {
 
 	app.post("/echo", (req) => (req.body ? req.text() : undefined));
 
+	app.get("/html", () => `<html><body>html content</body></html>`);
+
 	try {
 		srv = await startTestServer(app);
 
@@ -189,25 +191,25 @@ Deno.test("middlewares and various return types", async () => {
 		resp = await fetch(`${srv.base}/some/foo`);
 		assertEquals(resp.status, 200);
 		assertEquals(resp.headers.get("X-VERSION"), "1.2.3"); // case insensitive
-		assertMatch(resp.headers.get("Content-Type")!, /json/);
+		assertMatch(resp.headers.get("content-type")!, /json/);
 		assertEquals(await resp.text(), '{"some":"bar"}');
 
 		// "bar" return via toJSON as json
 		resp = await fetch(`${srv.base}/some/bar`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /json/);
+		assertMatch(resp.headers.get("content-type")!, /json/);
 		assertEquals(await resp.text(), '{"baz":"bat"}');
 
 		// "bar" return via toJSON as json
 		resp = await fetch(`${srv.base}/some/hey`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertEquals(await resp.text(), "ho");
 
 		// any other is not found
 		resp = await fetch(`${srv.base}/some/bla`);
 		assertEquals(resp.status, 404);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(resp.statusText, /not found/i);
 		assertMatch(await resp.text(), /some not found/i);
 
@@ -223,6 +225,12 @@ Deno.test("middlewares and various return types", async () => {
 			body: JSON.stringify(hey),
 		});
 		assertEquals(JSON.parse(await resp.text()), hey);
+
+		// check html content-type
+		resp = await fetch(`${srv.base}/html`);
+		assertEquals(resp.status, 200);
+		assertMatch(resp.headers.get("content-type")!, /text\/html/);
+		assertMatch(await resp.text(), /html content/i);
 
 		//
 	} catch (e) {
@@ -247,7 +255,7 @@ Deno.test("custom error handler", async () => {
 		srv = await startTestServer(app);
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 404);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(await resp.text(), /not found/i);
 
 		// err
@@ -257,7 +265,7 @@ Deno.test("custom error handler", async () => {
 
 		// now register custom error handler which will talk always in json
 		app.error((_req, _info, ctx) => {
-			ctx.headers.set("Content-Type", "application/json; charset=utf-8");
+			ctx.headers.set("content-type", "application/json; charset=utf-8");
 			const e = ctx.error;
 			return new Response(
 				JSON.stringify({ ok: false, message: getErrorMessage(e) }),
@@ -303,7 +311,7 @@ Deno.test("composition", async () => {
 
 	// api example
 	const api = demino("/api", (_r, _i, ctx) => {
-		ctx.headers.set("Content-Type", "application/json; charset=utf-8");
+		ctx.headers.set("content-type", "application/json; charset=utf-8");
 	});
 	api.get("/", (_r, _i, _c) => ({ hello: "world" }));
 	api.get("/[slug]", (_r, _i, ctx) => ({ api: ctx.params.slug }));
@@ -320,31 +328,31 @@ Deno.test("composition", async () => {
 		// homepage
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(await resp.text(), /hello/i);
 
 		// homepage slug
 		resp = await fetch(`${srv.base}/foo`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(await resp.text(), /Marketing: foo/i);
 
 		// now, this is not api root, but homepage "api" slug
 		resp = await fetch(`${srv.base}/api`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(await resp.text(), /Marketing: api/i);
 
 		// now this is api root
 		resp = await fetch(`${srv.base}/api/`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /json/);
+		assertMatch(resp.headers.get("content-type")!, /json/);
 		assertEquals(JSON.parse(await resp.text()), { hello: "world" });
 
 		// homepage slug
 		resp = await fetch(`${srv.base}/blog/hey`);
 		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
+		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
 		assertMatch(await resp.text(), /Blog: hey/i);
 	} catch (e) {
 		throw e;

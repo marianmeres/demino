@@ -23,9 +23,16 @@ export class DeminoSimpleRouter extends DeminoRouter {
 	/** Should throw if route is not valid for this router.
 	 * It is used just as a friendly warning when registering routes. */
 	override assertIsValid(route: string): Error | void {
-		if (!["", "*"].includes(route) && !route.startsWith("/")) {
+		if (
+			!["", "*"].includes(route) &&
+			// this check is just an artificial one, it would technically work as
+			// SimpleRouter sanitizes them anyway, but here it feels like they would be
+			// just adding ambiguity
+			(!route.startsWith("/") || route.includes("//"))
+		) {
+			// a friendly explanation warning not a critical condition
 			throw new TypeError(
-				`Route must be either empty, or start with a forward slash.`
+				`Route must be either empty, or start with a slash (and must not contain double slashes).`
 			);
 		}
 	}
