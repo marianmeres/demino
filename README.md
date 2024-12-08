@@ -36,18 +36,17 @@ Deno.serve(app);
 ## Mount path
 
 _Every_ Demino app is mounted to a specific route prefix called the `mountPath`. The default
-`mountPath` is an empty string, which represents the server root.
+`mountPath` is an empty string that represents the server root.
 
 ## Routing
 
-Every incoming request in Demino app is handled based on its `pathname`, which is matched
+Every incoming request in Demino app is handled based on its `pathname` which is matched
 against the registered _routes_.
 
-The actual strategy how the route is matched depends on the active router instance.
+The actual _route_ format and strategy how it is matched depends on the active router instance.
 By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), but
-ships out-of-the-box with a two other implementations as well. Also, it should be 
-fairly easy to integrate any 3rd-party routing library as well. 
-More on this down below.
+ships with additional two implementations as well. Also, it should be 
+fairly easy to integrate any 3rd-party routing library as well. More on this down below.
 
 ```typescript
 // create a Demino with a `/api` mount path
@@ -216,10 +215,9 @@ Deno.serve(app);
 
 ## Non-default routing
 
-Other than the default [simple-router](https://github.com/marianmeres/simple-router), 
-Demino ships two other router implementations, which can be activated
-via the factory option `routerFactory`.
-
+In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
+Demino ships with two additional router implementations that can be activated
+via the `routerFactory` factory setting.
 
 ### Fixed router
 
