@@ -71,13 +71,13 @@ mainly _do_ something (eg validate), while route handlers mainly _return_ someth
 As soon as any middleware decides to _return_ a thing, the middlewares 
 execution chain is terminated and a `Response` is sent immediately.
 
-Unlike in `Deno.serve` handlers, the Demino route handlers are not required to return
-a `Response` instance. If they don't, the `Response` will be created automatically 
-based on the returned type:
+Unlike in `Deno.serve` handlers, the Demino route handlers are neither required nor expected
+to return a `Response` instance. If they don't, the `Response` will be created automatically 
+based on what they return:
 
 - if the value is `undefined`, empty `204 No Content` response will be created,
-- if the value is a plain object (or `null`, or object with a `toJSON` method) it will 
-  be `JSON.stringify`-ed (with proper headers),
+- if the value is a plain object (or `null`, or `toJSON` aware) it will 
+  be `JSON.stringify`ed,
 - everything else will be casted to string (which triggers a `toString` 
   method if available).
 
