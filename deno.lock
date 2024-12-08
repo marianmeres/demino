@@ -4,7 +4,9 @@
     "jsr:@marianmeres/midware@^1.0.6": "1.0.6",
     "jsr:@std/assert@^1.0.9": "1.0.9",
     "jsr:@std/fmt@^1.0.3": "1.0.3",
+    "jsr:@std/fs@^1.0.6": "1.0.6",
     "jsr:@std/internal@^1.0.5": "1.0.5",
+    "jsr:@std/path@^1.0.8": "1.0.8",
     "npm:@marianmeres/http-utils@^1.13.0": "1.13.0",
     "npm:@marianmeres/simple-router@^1.9.1": "1.9.1"
   },
@@ -21,8 +23,17 @@
     "@std/fmt@1.0.3": {
       "integrity": "97765c16aa32245ff4e2204ecf7d8562496a3cb8592340a80e7e554e0bb9149f"
     },
+    "@std/fs@1.0.6": {
+      "integrity": "42b56e1e41b75583a21d5a37f6a6a27de9f510bcd36c0c85791d685ca0b85fa2",
+      "dependencies": [
+        "jsr:@std/path"
+      ]
+    },
     "@std/internal@1.0.5": {
       "integrity": "54a546004f769c1ac9e025abd15a76b6671ddc9687e2313b67376125650dc7ba"
+    },
+    "@std/path@1.0.8": {
+      "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
     }
   },
   "npm": {
@@ -44,6 +55,8 @@
       "jsr:@marianmeres/midware@^1.0.6",
       "jsr:@std/assert@^1.0.9",
       "jsr:@std/fmt@^1.0.3",
+      "jsr:@std/fs@^1.0.6",
+      "jsr:@std/path@^1.0.8",
       "npm:@marianmeres/http-utils@^1.13.0",
       "npm:@marianmeres/simple-router@^1.9.1"
     ]

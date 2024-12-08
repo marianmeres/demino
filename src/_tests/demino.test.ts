@@ -6,27 +6,10 @@ import {
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
 import { assert, assertEquals, assertMatch } from "@std/assert";
-import { demino, deminoCompose } from "./demino.ts";
+import { demino, deminoCompose } from "../demino.ts";
+import { startTestServer } from "./_utils.ts";
 
-const PORT = 9876;
-type Srv = {
-	ac: AbortController;
-	port: number;
-	base: string;
-	server: ReturnType<typeof Deno.serve>;
-};
-
-async function startServer(handler: Deno.ServeHandler, port = PORT) {
-	const ac = new AbortController();
-	// By default `Deno.serve` prints the message ... If you like to
-	// change this behavior, you can specify a custom `onListen` callback.
-	const server = await Deno.serve(
-		{ port, signal: ac.signal, onListen(_) {} },
-		handler
-	);
-	// server.finished.then(() => console.log("Server closed"));
-	return { port, ac, server, base: `http://localhost:${port}` };
-}
+type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
 const hello = (mountPath = "", midwares = [], options = {}) => {
 	const app = demino(mountPath, midwares, options);
@@ -54,7 +37,7 @@ Deno.test("no route is not found", async () => {
 	const app = demino();
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 404);
 		assertMatch(await resp.text(), /not found/i);
@@ -75,7 +58,7 @@ Deno.test("hello world", async () => {
 
 	// execute the server request
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 
 		// raw text
 		resp = await fetch(srv.base);
@@ -119,7 +102,7 @@ Deno.test("mounted hello world", async () => {
 
 	// execute the server request
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 
 		// route is on "all"
 		resp = await fetch(`${srv.base}${mount}`, { method: "POST" });
@@ -144,6 +127,11 @@ Deno.test("mounted hello world", async () => {
 			// head has empty body
 			assertEquals(await resp.text(), method === "head" ? "" : method);
 		}
+
+		// case sensitivity check
+		resp = await fetch(`${srv.base}${mount}/PoSt`);
+		assertEquals(resp.status, 404);
+		assertMatch(await resp.text(), /not found/i);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -195,7 +183,7 @@ Deno.test("middlewares and various return types", async () => {
 	app.post("/echo", (req) => (req.body ? req.text() : undefined));
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 
 		// "foo" is found, and is sent as json, becase the final handler returns context object
 		resp = await fetch(`${srv.base}/some/foo`);
@@ -256,7 +244,7 @@ Deno.test("custom error handler", async () => {
 	app.get("/err", () => new Error("Boo"));
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 404);
 		assertMatch(resp.headers.get("Content-Type")!, /text\/plain/);
@@ -327,7 +315,7 @@ Deno.test("composition", async () => {
 	const app = deminoCompose([home, api, blog]);
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 
 		// homepage
 		resp = await fetch(srv.base);
@@ -377,7 +365,7 @@ Deno.test("catch all fallback route", async () => {
 	app.all("*", () => "hey");
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 		resp = await fetch(srv.base);
 		assertEquals(resp.status, 200);
 		assertMatch(await resp.text(), /index/i);
@@ -405,13 +393,46 @@ Deno.test("same route different method", async () => {
 	}
 
 	try {
-		srv = await startServer(app);
+		srv = await startTestServer(app);
 
 		for (const method of methods) {
 			resp = await fetch(srv.base, { method });
 			assertEquals(resp.status, 200);
 			assertEquals(await resp.text(), method, method);
 		}
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("default router vs trailing slashes", async () => {
+	let srv: Srv | null = null;
+	let resp: Response;
+
+	const app = demino();
+	app.get("/[name]", (_r, _i, c) => c.params);
+
+	try {
+		srv = await startTestServer(app);
+
+		resp = await fetch(`${srv.base}/foo`);
+		assertEquals(resp.status, 200);
+		assertEquals(JSON.parse(await resp.text()), { name: "foo" });
+
+		// the default SimpleRouter always trim slashes, so this will also match
+		// it may be considered both as a feature or as a bug... it depends
+		// anyway, if not desired, you can always:
+		// - have a middleware which will handle slashes (either missing or present)
+		//   and redirect if needed
+		// - use different router, see docs for examples of the built-in ones
+		// - write a custom router of your choice
+		resp = await fetch(`${srv.base}/foo///`);
+		assertEquals(resp.status, 200);
+		assertEquals(JSON.parse(await resp.text()), { name: "foo" });
 	} catch (e) {
 		throw e;
 	} finally {

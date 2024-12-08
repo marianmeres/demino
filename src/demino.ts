@@ -6,12 +6,13 @@ import {
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
 import { Midware } from "@marianmeres/midware";
-import { SimpleRouter } from "@marianmeres/simple-router";
 import { green, red } from "@std/fmt/colors";
+import type { DeminoRouter } from "./router/abstract.ts";
+import { DeminoSimpleRouter } from "./router/simple-router.ts";
 
 /** Well known object passed to middlewares */
 export interface DeminoContext {
-	/** Route's parsed params (merged path named segments AND query vars). */
+	/** Route's parsed params (if available). */
 	params: Record<string, string>;
 	/** Userland read/write key-value map. */
 	locals: Record<string, any>;
@@ -38,20 +39,26 @@ export type DeminoRouteHandler = (
 
 /** The Demino app public interface */
 export interface Demino extends Deno.ServeHandler {
+	/** Special case _every_ HTTP method route handler. */
+	all: DeminoRouteHandler;
+	/** HTTP CONNECT route handler */
+	connect: DeminoRouteHandler;
+	/** HTTP DELETE route handler */
+	delete: DeminoRouteHandler;
 	/** HTTP GET route handler */
 	get: DeminoRouteHandler;
 	/** HTTP HEAD route handler */
 	head: DeminoRouteHandler;
-	/** HTTP PUT route handler */
-	put: DeminoRouteHandler;
-	/** HTTP DELETE route handler */
-	delete: DeminoRouteHandler;
-	/** HTTP POST route handler */
-	post: DeminoRouteHandler;
+	/** HTTP OPTIONS route handler */
+	options: DeminoRouteHandler;
 	/** HTTP PATCH route handler */
 	patch: DeminoRouteHandler;
-	/** Special case _every_ HTTP method route handler. */
-	all: DeminoRouteHandler;
+	/** HTTP POST route handler */
+	post: DeminoRouteHandler;
+	/** HTTP PUT route handler */
+	put: DeminoRouteHandler;
+	/** HTTP TRACE route handler */
+	trace: DeminoRouteHandler;
 	/** Fn to register custom error handler. */
 	error: (handler: DeminoHandler) => void;
 	/** Fn to register global middlewares. */
@@ -61,16 +68,28 @@ export interface Demino extends Deno.ServeHandler {
 }
 
 /** Demino supported method */
-export type DeminoMethod = "DELETE" | "GET" | "HEAD" | "PATCH" | "POST" | "PUT";
+export type DeminoMethod =
+	| "CONNECT"
+	| "DELETE"
+	| "GET"
+	| "HEAD"
+	| "OPTIONS"
+	| "PATCH"
+	| "POST"
+	| "PUT"
+	| "TRACE";
 
 /** Internal list of supported methods */
 const _supportedMethods: DeminoMethod[] = [
+	"CONNECT",
 	"DELETE",
 	"GET",
 	"HEAD",
+	"OPTIONS",
 	"PATCH",
 	"POST",
 	"PUT",
+	"TRACE",
 ];
 
 /** Internal logger inteface (experimental)... */
@@ -81,12 +100,12 @@ export interface DeminoLogger {
 	debug: (...args: any[]) => void;
 }
 
-/** Internal helper */
+/** Internal DRY helper */
 function _isFn(v: any): boolean {
 	return typeof v === "function";
 }
 
-/** Internal helper */
+/** Internal DRY helper */
 function _isPlainObject(v: any): boolean {
 	return (
 		v !== null &&
@@ -98,17 +117,6 @@ function _isPlainObject(v: any): boolean {
 /** Internal helper */
 function _isValidDate(v: any) {
 	return v instanceof Date && !isNaN(v.getTime());
-}
-
-/** Asserts that route meets internal validation criteria */
-function _assertValidRoute(v: string) {
-	v = `${v}`.trim();
-	if (!["", "*"].includes(v) && (!v.startsWith("/") || v.includes("//"))) {
-		throw new TypeError(
-			`Route must be either empty, or start with a slash and must not contain double slashes.`
-		);
-	}
-	return v;
 }
 
 /** Creates Response based on body type */
@@ -143,7 +151,7 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 	return new Response(body, { status, headers });
 }
 
-/** Internal helper */
+/** Internal DRY helper */
 function _createContext(params: Record<string, string>): DeminoContext {
 	return Object.seal({
 		params: Object.freeze(params),
@@ -152,6 +160,24 @@ function _createContext(params: Record<string, string>): DeminoContext {
 		error: null,
 		__start: new Date(),
 	});
+}
+
+/** Demino app factory options. */
+export interface DeminoOptions {
+	/** Function to return custom DeminoRouter instance. */
+	routerFactory?: () => DeminoRouter;
+	/** If truthy will not set `x-powered-by` header signature.
+	 * Relevant only when auto-creating the Response (that is when middlewares
+	 * chain returns anything other than Response instance). */
+	noXPoweredBy?: boolean;
+	/** If truthy will not set `x-response-time` header value.
+	 * Relevant only when auto-creating the Response (that is when middlewares
+	 * chain returns anything other than Response instance). */
+	noXResponseTime?: boolean;
+	/** Will log some more details. (via DeminoLogger) */
+	verbose?: boolean;
+	/** Custom logger (experimental) */
+	logger?: DeminoLogger;
 }
 
 /**
@@ -167,22 +193,23 @@ function _createContext(params: Record<string, string>): DeminoContext {
 export function demino(
 	mountPath: string = "",
 	middleware: DeminoHandler | DeminoHandler[] = [],
-	options: Partial<{
-		verbose: boolean;
-		logger: DeminoLogger;
-		noXPoweredBy: boolean;
-		noXResponseTime: boolean;
-	}> = {}
+	options?: DeminoOptions
 ): Demino {
 	// initialize and normalize...
 	let _middlewares = Array.isArray(middleware) ? middleware : [middleware];
 	const log = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
 
+	// either use provided, or fallback to default DeminoSimpleRouter
+	const _routerFactory =
+		typeof options?.routerFactory === "function"
+			? options.routerFactory
+			: () => new DeminoSimpleRouter();
+
 	// prepare routers for each method individually
 	const _routers = ["ALL", ..._supportedMethods].reduce(
-		(m, k) => ({ ...m, [k]: new SimpleRouter() }),
-		{} as Record<"ALL" | DeminoMethod, SimpleRouter>
+		(m, k) => ({ ...m, [k]: _routerFactory() }),
+		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
 	);
 
 	//
@@ -213,7 +240,7 @@ export function demino(
 				throw createHttpError(HTTP_STATUS.NOT_IMPLEMENTED);
 			}
 
-			const route = url.pathname + url.search;
+			const route = url.pathname;
 			let matched = _routers[method].exec(route);
 
 			// if not matched, try ALL as a second attempt
@@ -239,11 +266,11 @@ export function demino(
 					// maybe some x-headers (this will work only if the result is not
 					// a Response instance, otherwise we would need to clone it...)
 					if (!(result instanceof Response)) {
-						if (!options.noXPoweredBy) {
+						if (!options?.noXPoweredBy) {
 							headers.set("X-Powered-By", `Demino`);
 						}
 
-						if (!options.noXResponseTime && _isValidDate(context?.__start)) {
+						if (!options?.noXResponseTime && _isValidDate(context?.__start)) {
 							headers.set(
 								"X-Response-Time",
 								`${new Date().valueOf() - context.__start.valueOf()}ms`
@@ -289,10 +316,13 @@ export function demino(
 					throw new TypeError(`No DeminoHandler found`);
 				}
 
-				_routers[method].on(
-					_assertValidRoute(mountPath + route),
-					(params: Record<string, string>) => ({ params, method, midwares })
-				);
+				const _fullRoute = mountPath + route;
+				_routers[method].assertIsValid(_fullRoute);
+
+				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
+					params,
+					midwares,
+				}));
 
 				if (options?.verbose) {
 					log.debug(green(` ✔ ${method} ${mountPath + route}`));
@@ -305,13 +335,16 @@ export function demino(
 		};
 
 	// userland method apis
+	_app.all = _createRouteFn("ALL");
+	_app.connect = _createRouteFn("CONNECT");
+	_app.delete = _createRouteFn("DELETE");
 	_app.get = _createRouteFn("GET");
 	_app.head = _createRouteFn("HEAD");
-	_app.put = _createRouteFn("PUT");
-	_app.delete = _createRouteFn("DELETE");
-	_app.post = _createRouteFn("POST");
+	_app.options = _createRouteFn("OPTIONS");
 	_app.patch = _createRouteFn("PATCH");
-	_app.all = _createRouteFn("ALL");
+	_app.post = _createRouteFn("POST");
+	_app.put = _createRouteFn("PUT");
+	_app.trace = _createRouteFn("TRACE");
 
 	// other
 	_app.error = (handler: DeminoHandler) => (_errorHandler = handler);
