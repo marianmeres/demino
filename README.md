@@ -10,7 +10,7 @@ It provides:
 - routing, 
 - middlewares support,
 - unified error handling,
-- express-like semantics.
+- Express-like semantics.
 
 ## Installation
 
@@ -45,7 +45,7 @@ against the registered _routes_.
 
 The actual _route_ format and strategy how it is matched depends on the active router instance.
 By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), but
-ships with additional two implementations as well. Also, it should be 
+ships with some additional implementations as well. Also, it should be 
 fairly easy to integrate any 3rd-party routing library as well. More on this down below.
 
 ```typescript
@@ -106,11 +106,17 @@ The route handler/middleware has the following signature:
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
-Middlewares can be registered globally per instance, or locally per route handler.
+Middlewares can be registered globally per instance, or locally per route handler. 
+Note that globals must be registered _before_ the route handler is declared to take effect.
 
 ```typescript
+// OK
 app.use(someGlobalMiddleware);
 app.get("/secret", authCheckMiddleware, handler);
+
+// NOT OK, the `someGlobalMiddleware` will not be used for the `/secret` handler
+app.get("/secret", authCheckMiddleware, handler);
+app.use(someGlobalMiddleware);
 ```
 
 ## Context
@@ -158,7 +164,7 @@ app.error((_req, _info, ctx) => {
 });
 ```
 
-## The express-like semantics
+## The Express-like semantics
 
 Demino uses the http method name route handler convention. 
 
@@ -168,12 +174,16 @@ app.post('/resources', createResourceHandler);
 // app.delete, app.patch, app.put, ...
 ```
 
-Also, the middlewares usage is similar to express:
+Also, the middlewares usage is similar to Express:
 
 ```typescript
 app.use(someMidlleware);
 app.get('/foo', mid1, mid2, [mid3, mid4], handler);
 ```
+
+One major difference from Express is the format of the route params in the default router. 
+Express uses `/:param` while Demino uses `/[param]` placeholders. Read more on the custom
+routers below.
 
 ## Apps composition
 
@@ -214,40 +224,25 @@ Deno.serve(app);
 
 ## Non-default routing
 
-In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
-Demino ships with two additional router implementations that can be activated
+For the fun of it, in addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
+Demino ships with some additional router implementations that can be activated
 via the `routerFactory` factory setting.
 
-### Fixed router
+Consider them proof of concept rather than battle-tested implementations.
 
-The most trivial, direct strings compare based router, unable to
-extract any params.
 
-```ts
-const app = demino("", [], { routerFactory: () => new DeminoFixedRouter() });
-app.get("/foo", () => "foo");
-```
-
-### Regex router
-
-The powerful [`RegExp.exec`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec) 
-based. The downside is its potential complexity and 
-harder routes readability.
+### ExpressLike router
 
 ```ts
-const app = demino("", [], { routerFactory: () => new DeminoRegexRouter() });
+const app = demino("", [], { routerFactory: () => new DeminoExpressLikeRouter() });
 
-// named groups will be returned as params
-app.get("^/(?<year>\\d{4})$", (_r, _i, c) => c.params);
-app.get("^/(?<year>\\d{4})-(?<month>\\d{2})$", (_r, _i, c) => c.params);
+app.get("/", () => "home");
 
-// fixed, no params
-app.get("^/$", () => "home");
-app.get("^/foo$", () => "foo");
-
-// catch all else
-app.get(".+", () => "any");
+app.get("/user/:foo/section/:bar", (_r, _i, ctx) => ctx.params);
 ```
+
+Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
+[`DeminoRegexRouter`](./src/router/regex-router.ts).
 
 ### Integrating a 3rd party routing library
 
@@ -258,7 +253,7 @@ interface (2 methods), where you can implement the actual integration.
 class Some3rdPartyRouter extends DeminoRouter {
     /** Defines a callback to be executed on a given route match. */
     on(route: string, callback: DeminoRouterOnMatch): void {
-        // you need to save the route+callback pair somewhere...
+        // you need to save the route+callback pairs somewhere...
     }
     /** Executes pathname match lookup against the registered routes. */
     exec(pathname: string): null | DeminoRouterOnMatchResult {

@@ -10,7 +10,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 	/** Internal SimpleRouter instance */
 	#router: SimpleRouter = new SimpleRouter();
 
-	/** Stores a callback to be executed on a given route match. */
+	/** Stores a callback to be executed on a given route. */
 	on(route: string, callback: DeminoRouterOnMatch): void {
 		this.#router.on(route, callback);
 	}
@@ -30,7 +30,6 @@ export class DeminoSimpleRouter extends DeminoRouter {
 			// just adding ambiguity
 			(!route.startsWith("/") || route.includes("//"))
 		) {
-			// a friendly explanation warning not a critical condition
 			throw new TypeError(
 				`Route must be either empty, or start with a slash (and must not contain double slashes).`
 			);

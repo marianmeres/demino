@@ -1,7 +1,7 @@
 {
   "version": "4",
   "specifiers": {
-    "jsr:@marianmeres/midware@^1.0.6": "1.0.6",
+    "jsr:@marianmeres/midware@^1.1.0": "1.1.0",
     "jsr:@std/assert@^1.0.9": "1.0.9",
     "jsr:@std/fmt@^1.0.3": "1.0.3",
     "jsr:@std/fs@^1.0.6": "1.0.6",
@@ -11,8 +11,8 @@
     "npm:@marianmeres/simple-router@^1.9.1": "1.9.1"
   },
   "jsr": {
-    "@marianmeres/midware@1.0.6": {
-      "integrity": "7c5b641f40250894847455ab46aff40fba8b9687103749bee9138cd718dc5564"
+    "@marianmeres/midware@1.1.0": {
+      "integrity": "c65e23a638ceb124811ef74ccab8978f800bc8cf80164369605c9dca8a69d88f"
     },
     "@std/assert@1.0.9": {
       "integrity": "a9f0c611a869cc791b26f523eec54c7e187aab7932c2c8e8bea0622d13680dcd",
@@ -52,7 +52,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@marianmeres/midware@^1.0.6",
+      "jsr:@marianmeres/midware@^1.1.0",
       "jsr:@std/assert@^1.0.9",
       "jsr:@std/fmt@^1.0.3",
       "jsr:@std/fs@^1.0.6",

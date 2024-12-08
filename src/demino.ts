@@ -5,10 +5,12 @@ import {
 	getErrorMessage,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
-import { Midware } from "@marianmeres/midware";
+import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
+import { isPlainObject } from "./utils/is-plain-object.ts";
+import { isValidDate } from "./utils/is-valid-date.ts";
 
 /** Well known object passed to middlewares */
 export interface DeminoContext {
@@ -24,12 +26,11 @@ export interface DeminoContext {
 	error: any;
 }
 
+/** Arguments passed to DeminoHandler (a.k.a. middleware) */
+export type DeminoHandlerArgs = [Request, Deno.ServeHandlerInfo, DeminoContext];
+
 /** Demino route handler AND middlware fn (both are of the same type) */
-export type DeminoHandler = (
-	req: Request,
-	info: Deno.ServeHandlerInfo,
-	context: DeminoContext
-) => any;
+export interface DeminoHandler extends MidwareUseFn<DeminoHandlerArgs> {}
 
 /** Route handler signature */
 export type DeminoRouteHandler = (
@@ -62,7 +63,7 @@ export interface Demino extends Deno.ServeHandler {
 	/** Fn to register custom error handler. */
 	error: (handler: DeminoHandler) => void;
 	/** Fn to register global middlewares. */
-	use: (middleware: DeminoHandler | DeminoHandler[]) => void;
+	use: (...args: (DeminoHandler | DeminoHandler[])[]) => void;
 	/** Returns which path is the current app mounted on. */
 	mountPath: () => string;
 }
@@ -101,22 +102,8 @@ export interface DeminoLogger {
 }
 
 /** Internal DRY helper */
-function _isFn(v: any): boolean {
+function isFn(v: any): boolean {
 	return typeof v === "function";
-}
-
-/** Internal DRY helper */
-function _isPlainObject(v: any): boolean {
-	return (
-		v !== null &&
-		typeof v === "object" &&
-		[undefined, Object].includes(v.constructor)
-	);
-}
-
-/** Internal helper */
-function _isValidDate(v: any) {
-	return v instanceof Date && !isNaN(v.getTime());
 }
 
 /** Creates Response based on body type */
@@ -133,9 +120,9 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 		// considering NULL a common DTO use case
 		body === null ||
 		// toJSON aware
-		_isFn(body?.toJSON) ||
+		isFn(body?.toJSON) ||
 		// plain object without its own `toString` method
-		(_isPlainObject(body) &&
+		(isPlainObject(body) &&
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
 	) {
 		body = JSON.stringify(body);
@@ -146,8 +133,14 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 	// otherwise not much to guess anymore, simply cast to string
 	else {
 		body = `${body}`;
-		// this is obviously naive, but should get the job done most of the time...
-		if (!headers.get("content-type") && /<html/i.test(body)) {
+		if (
+			!headers.get("content-type") &&
+			// this is obviously very naive, but should get the job done most of the time...
+			// but mainly, it's not a big deal at all (the header should be set manually
+			// anyway for an unknown content)
+			/<html/i.test(body) &&
+			(/<head/i.test(body) || /<body/i.test(body))
+		) {
 			headers.set("content-type", "text/html; charset=utf-8");
 		}
 	}
@@ -200,7 +193,7 @@ export function demino(
 	options?: DeminoOptions
 ): Demino {
 	// initialize and normalize...
-	let _middlewares = Array.isArray(middleware) ? middleware : [middleware];
+	const _middlewares = Array.isArray(middleware) ? middleware : [middleware];
 	const log = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
 
@@ -255,14 +248,11 @@ export function demino(
 			if (matched) {
 				try {
 					context = _createContext(matched.params);
-					const _mid = new Midware<
-						[Request, Deno.ServeHandlerInfo, DeminoContext]
-					>([...(_middlewares || []), ...matched.midwares]);
 
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
 					// instance directly (unlike with Deno.ServeHandler)
-					let result = await _mid.execute([req, info, context]);
+					let result = await matched.midware.execute([req, info, context]);
 
 					//
 					const headers = context?.headers || new Headers();
@@ -274,7 +264,7 @@ export function demino(
 							headers.set("X-Powered-By", `Demino`);
 						}
 
-						if (!options?.noXResponseTime && _isValidDate(context?.__start)) {
+						if (!options?.noXResponseTime && isValidDate(context?.__start)) {
 							headers.set(
 								"X-Response-Time",
 								`${new Date().valueOf() - context.__start.valueOf()}ms`
@@ -282,14 +272,13 @@ export function demino(
 						}
 					}
 
-					// middleware returned error instead of throwing? Weird, but possible...
+					// middleware returned error instead of throwing? Not a best practice, but possible...
 					if (result instanceof Error) {
 						context.error = result;
 						result = _createErrorResponse(req, info, context);
 					}
 					// we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						// this is the intended practice to build the Response automatically
 						result = _createResponseFrom(result, headers);
 					}
 
@@ -312,7 +301,22 @@ export function demino(
 		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
 		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): void => {
 			// everything is a middleware...
-			const midwares = [..._middlewares, ...args].flat().filter(Boolean);
+			const midwares: DeminoHandler[] = [..._middlewares, ...args]
+				.flat()
+				.filter(Boolean)
+				.map((mw, i, arr) => {
+					if (i === arr.length - 1) {
+						// the "handler": if not yet defined, make it big
+						mw.__midwarePreExecuteSortOrder ??= Infinity;
+					} else {
+						// the "middleware": let's create some magic value, so we have some
+						// known boundary... in other words, if we would ever need
+						// to programmatically set a middleware at the very end (but before the handler),
+						// we know we have to set the sortOrder to a value greater than 1_000
+						mw.__midwarePreExecuteSortOrder ??= 1_000;
+					}
+					return mw;
+				});
 
 			try {
 				// this is likely a bug (while technically ok)
@@ -320,12 +324,20 @@ export function demino(
 					throw new TypeError(`No DeminoHandler found`);
 				}
 
+				// create the midware
+				const midware = new Midware<DeminoHandlerArgs>(midwares, {
+					// we will sort the stack (see the dance above)
+					preExecuteSortEnabled: true,
+					// and we will check for duplicated middleware usage
+					duplicatesCheckEnabled: true,
+				});
+
 				const _fullRoute = mountPath + route;
 				_routers[method].assertIsValid(_fullRoute);
 
 				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
 					params,
-					midwares,
+					midware,
 				}));
 
 				if (options?.verbose) {
@@ -353,11 +365,8 @@ export function demino(
 	// other
 	_app.error = (handler: DeminoHandler) => (_errorHandler = handler);
 	_app.mountPath = () => mountPath;
-	_app.use = (middleware: DeminoHandler | DeminoHandler[]) => {
-		_middlewares = [
-			..._middlewares,
-			...(Array.isArray(middleware) ? middleware : [middleware]),
-		];
+	_app.use = (...args: (DeminoHandler | DeminoHandler[])[]) => {
+		_middlewares.push(...args.flat());
 	};
 
 	return _app;

@@ -6,8 +6,8 @@ import {
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
 import { assert, assertEquals, assertMatch } from "@std/assert";
-import { demino, deminoCompose } from "../demino.ts";
-import { startTestServer } from "./_utils.ts";
+import { demino, deminoCompose, type DeminoHandler } from "../demino.ts";
+import { assertResp, startTestServer } from "./_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
@@ -32,15 +32,11 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 
 Deno.test("no route is not found", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
-
 	const app = demino();
 
 	try {
 		srv = await startTestServer(app);
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 404);
-		assertMatch(await resp.text(), /not found/i);
+		await assertResp(fetch(`${srv.base}`), 404);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -52,7 +48,6 @@ Deno.test("no route is not found", async () => {
 
 Deno.test("hello world", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const app = hello();
 
@@ -61,29 +56,15 @@ Deno.test("hello world", async () => {
 		srv = await startTestServer(app);
 
 		// raw text
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(fetch(`${srv.base}`), 200, /world/i);
 		// awaited Response
-		resp = await fetch(`${srv.base}/2`);
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(fetch(`${srv.base}/2`), 200, /world/i);
 		// this is get only
-		resp = await fetch(`${srv.base}/2`, { method: "POST" });
-		assertEquals(resp.status, 404);
-		assert(await resp.text());
-
+		await assertResp(fetch(`${srv.base}/2`, { method: "POST" }), 404);
 		// midware returns string
-		resp = await fetch(`${srv.base}/3`);
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(fetch(`${srv.base}/3`), 200, /world/i);
 		// midware returns awaited Response
-		resp = await fetch(`${srv.base}/4`);
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /world/i);
+		await assertResp(fetch(`${srv.base}/4`), 200, /world/i);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -95,7 +76,6 @@ Deno.test("hello world", async () => {
 
 Deno.test("mounted hello world", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const mount = "/hello";
 	const app = hello(mount, [], { verbose: false });
@@ -105,33 +85,29 @@ Deno.test("mounted hello world", async () => {
 		srv = await startTestServer(app);
 
 		// route is on "all"
-		resp = await fetch(`${srv.base}${mount}`, { method: "POST" });
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(
+			fetch(`${srv.base}${mount}`, { method: "POST" }),
+			200,
+			/world/i
+		);
 		// awaited Response
-		resp = await fetch(`${srv.base}${mount}/2`);
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
 		// midware returns string
-		resp = await fetch(`${srv.base}${mount}/3`);
-		assertMatch(await resp.text(), /world/i);
-
+		await assertResp(fetch(`${srv.base}${mount}/3`), 200, /world/i);
 		// midware returns awaited Response
-		resp = await fetch(`${srv.base}${mount}/4`);
-		assertMatch(await resp.text(), /world/i);
+		await assertResp(fetch(`${srv.base}${mount}/4`), 200, /world/i);
 
 		const names = ["post", "patch", "put", "delete", "head"];
 		for (const method of names) {
-			resp = await fetch(`${srv.base}${mount}/${method}`, { method });
-			assertEquals(resp.status, 200);
-			// head has empty body
-			assertEquals(await resp.text(), method === "head" ? "" : method);
+			await assertResp(
+				fetch(`${srv.base}${mount}/${method}`, { method }),
+				200,
+				method === "head" ? "" : method
+			);
 		}
 
 		// case sensitivity check
-		resp = await fetch(`${srv.base}${mount}/PoSt`);
-		assertEquals(resp.status, 404);
-		assertMatch(await resp.text(), /not found/i);
+		await assertResp(fetch(`${srv.base}${mount}/PoSt`), 404);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -143,7 +119,6 @@ Deno.test("mounted hello world", async () => {
 
 Deno.test("middlewares and various return types", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const app = demino("", [
 		// example middleware to add custom header (added via factory)
@@ -188,49 +163,53 @@ Deno.test("middlewares and various return types", async () => {
 		srv = await startTestServer(app);
 
 		// "foo" is found, and is sent as json, becase the final handler returns context object
-		resp = await fetch(`${srv.base}/some/foo`);
-		assertEquals(resp.status, 200);
-		assertEquals(resp.headers.get("X-VERSION"), "1.2.3"); // case insensitive
-		assertMatch(resp.headers.get("content-type")!, /json/);
-		assertEquals(await resp.text(), '{"some":"bar"}');
+		await assertResp(
+			fetch(`${srv.base}/some/foo`),
+			200,
+			{ some: "bar" },
+			{
+				"X-VERSION": "1.2.3",
+				"content-type": /json/,
+			}
+		);
 
 		// "bar" return via toJSON as json
-		resp = await fetch(`${srv.base}/some/bar`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /json/);
-		assertEquals(await resp.text(), '{"baz":"bat"}');
+		await assertResp(
+			fetch(`${srv.base}/some/bar`),
+			200,
+			{ baz: "bat" },
+			{ "content-type": /json/ }
+		);
 
 		// "bar" return via toJSON as json
-		resp = await fetch(`${srv.base}/some/hey`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertEquals(await resp.text(), "ho");
+		await assertResp(fetch(`${srv.base}/some/hey`), 200, "ho", {
+			"content-type": /text\/plain/,
+		});
 
 		// any other is not found
-		resp = await fetch(`${srv.base}/some/bla`);
-		assertEquals(resp.status, 404);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(resp.statusText, /not found/i);
-		assertMatch(await resp.text(), /some not found/i);
+		await assertResp(fetch(`${srv.base}/some/bla`), 404, /some not found/i, {
+			"content-type": /text\/plain/,
+		});
 
 		// no content empty body
-		resp = await fetch(`${srv.base}/no-content`);
-		assertEquals(await resp.text(), "");
-		assertEquals(resp.status, HTTP_STATUS.NO_CONTENT);
+		await assertResp(
+			fetch(`${srv.base}/no-content`),
+			HTTP_STATUS.NO_CONTENT,
+			""
+		);
 
 		// mirror post data
 		const hey = { hey: "ho", lets: "go", rand: Math.random() };
-		resp = await fetch(`${srv.base}/echo`, {
-			method: "POST",
-			body: JSON.stringify(hey),
-		});
-		assertEquals(JSON.parse(await resp.text()), hey);
+		await assertResp(
+			fetch(`${srv.base}/echo`, { method: "POST", body: JSON.stringify(hey) }),
+			200,
+			hey
+		);
 
 		// check html content-type
-		resp = await fetch(`${srv.base}/html`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/html/);
-		assertMatch(await resp.text(), /html content/i);
+		await assertResp(fetch(`${srv.base}/html`), 200, /html content/i, {
+			"content-type": /text\/html/,
+		});
 
 		//
 	} catch (e) {
@@ -242,9 +221,47 @@ Deno.test("middlewares and various return types", async () => {
 	return srv?.server?.finished;
 });
 
+Deno.test("middlewares sort order", async () => {
+	let srv: Srv | null = null;
+
+	let log: number[] = [];
+
+	const m1: DeminoHandler = () => {
+		log.push(1);
+	};
+
+	const m2: DeminoHandler = () => {
+		log.push(2);
+	};
+
+	const m3: DeminoHandler = () => {
+		log.push(3);
+	};
+
+	const app = demino("", m1);
+
+	// use have to be set above the handler
+	app.use(m2, [m3]);
+
+	app.get("/", () => log.join());
+
+	// but this can be set also below
+	m2.__midwarePreExecuteSortOrder = 0;
+
+	try {
+		srv = await startTestServer(app);
+		await assertResp(fetch(`${srv.base}`), 200, /2,1,3/i);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
 Deno.test("custom error handler", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const app = demino();
 
@@ -253,15 +270,12 @@ Deno.test("custom error handler", async () => {
 
 	try {
 		srv = await startTestServer(app);
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 404);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(await resp.text(), /not found/i);
 
-		// err
-		resp = await fetch(`${srv.base}/err`);
-		assertEquals(resp.status, 500);
-		assertEquals(await resp.text(), "Boo");
+		await assertResp(fetch(`${srv.base}`), 404, /not found/i, {
+			"content-type": /text\/plain/,
+		});
+
+		await assertResp(fetch(`${srv.base}/err`), 500, "Boo");
 
 		// now register custom error handler which will talk always in json
 		app.error((_req, _info, ctx) => {
@@ -277,17 +291,15 @@ Deno.test("custom error handler", async () => {
 		});
 
 		// repeat, and expect json
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 404);
-		assertEquals(JSON.parse(await resp.text()), {
-			ok: false,
-			message: "Not Found",
-		});
+		await assertResp(
+			fetch(`${srv.base}`),
+			404,
+			{ ok: false, message: "Not Found" },
+			{ "content-type": /json/ }
+		);
 
 		// err
-		resp = await fetch(`${srv.base}/err`);
-		assertEquals(resp.status, 500);
-		assertEquals(JSON.parse(await resp.text()), {
+		await assertResp(fetch(`${srv.base}/err`), 500, {
 			ok: false,
 			message: "Boo",
 		});
@@ -302,7 +314,6 @@ Deno.test("custom error handler", async () => {
 
 Deno.test("composition", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	// landing page example
 	const home = demino();
@@ -326,34 +337,32 @@ Deno.test("composition", async () => {
 		srv = await startTestServer(app);
 
 		// homepage
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(await resp.text(), /hello/i);
+		await assertResp(fetch(`${srv.base}`), 200, /hello/i, {
+			"content-type": /text\/plain/,
+		});
 
 		// homepage slug
-		resp = await fetch(`${srv.base}/foo`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(await resp.text(), /Marketing: foo/i);
+		await assertResp(fetch(`${srv.base}/foo`), 200, /Marketing: foo/i, {
+			"content-type": /text\/plain/,
+		});
 
 		// now, this is not api root, but homepage "api" slug
-		resp = await fetch(`${srv.base}/api`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(await resp.text(), /Marketing: api/i);
+		await assertResp(fetch(`${srv.base}/api`), 200, /Marketing: api/i, {
+			"content-type": /text\/plain/,
+		});
 
 		// now this is api root
-		resp = await fetch(`${srv.base}/api/`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /json/);
-		assertEquals(JSON.parse(await resp.text()), { hello: "world" });
+		await assertResp(
+			fetch(`${srv.base}/api/`),
+			200,
+			{ hello: "world" },
+			{ "content-type": /json/ }
+		);
 
 		// homepage slug
-		resp = await fetch(`${srv.base}/blog/hey`);
-		assertEquals(resp.status, 200);
-		assertMatch(resp.headers.get("content-type")!, /text\/plain/);
-		assertMatch(await resp.text(), /Blog: hey/i);
+		await assertResp(fetch(`${srv.base}/blog/hey`), 200, /Blog: hey/i, {
+			"content-type": /text\/plain/,
+		});
 	} catch (e) {
 		throw e;
 	} finally {
@@ -365,7 +374,6 @@ Deno.test("composition", async () => {
 
 Deno.test("catch all fallback route", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const app = demino();
 	app.get("/", () => "index");
@@ -374,13 +382,13 @@ Deno.test("catch all fallback route", async () => {
 
 	try {
 		srv = await startTestServer(app);
-		resp = await fetch(srv.base);
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /index/i);
 
-		resp = await fetch(`${srv.base}/${Math.random()}`, { method: "POST" });
-		assertEquals(resp.status, 200);
-		assertMatch(await resp.text(), /hey/i);
+		await assertResp(fetch(`${srv.base}`), 200, /index/i);
+		await assertResp(
+			fetch(`${srv.base}/${Math.random()}`, { method: "POST" }),
+			200,
+			/hey/i
+		);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -392,7 +400,6 @@ Deno.test("catch all fallback route", async () => {
 
 Deno.test("same route different method", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const methods = ["get", "post", "patch", "put", "delete"];
 	const app = demino();
@@ -404,9 +411,7 @@ Deno.test("same route different method", async () => {
 		srv = await startTestServer(app);
 
 		for (const method of methods) {
-			resp = await fetch(srv.base, { method });
-			assertEquals(resp.status, 200);
-			assertEquals(await resp.text(), method, method);
+			await assertResp(fetch(`${srv.base}`, { method }), 200, method);
 		}
 	} catch (e) {
 		throw e;
@@ -419,7 +424,6 @@ Deno.test("same route different method", async () => {
 
 Deno.test("default router vs trailing slashes", async () => {
 	let srv: Srv | null = null;
-	let resp: Response;
 
 	const app = demino();
 	app.get("/[name]", (_r, _i, c) => c.params);
@@ -427,9 +431,7 @@ Deno.test("default router vs trailing slashes", async () => {
 	try {
 		srv = await startTestServer(app);
 
-		resp = await fetch(`${srv.base}/foo`);
-		assertEquals(resp.status, 200);
-		assertEquals(JSON.parse(await resp.text()), { name: "foo" });
+		await assertResp(fetch(`${srv.base}/foo`), 200, { name: "foo" });
 
 		// the default SimpleRouter always trim slashes, so this will also match
 		// it may be considered both as a feature or as a bug... it depends
@@ -438,9 +440,7 @@ Deno.test("default router vs trailing slashes", async () => {
 		//   and redirect if needed
 		// - use different router, see docs for examples of the built-in ones
 		// - write a custom router of your choice
-		resp = await fetch(`${srv.base}/foo///`);
-		assertEquals(resp.status, 200);
-		assertEquals(JSON.parse(await resp.text()), { name: "foo" });
+		await assertResp(fetch(`${srv.base}/foo///`), 200, { name: "foo" });
 	} catch (e) {
 		throw e;
 	} finally {

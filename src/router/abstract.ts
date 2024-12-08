@@ -1,9 +1,10 @@
-import type { DeminoHandler } from "../demino.ts";
+import type { Midware } from "@marianmeres/midware";
+import type { DeminoHandlerArgs } from "../demino.ts";
 
 /** Internal on route match callback result type */
 export type DeminoRouterOnMatchResult = {
 	params: Record<string, string>;
-	midwares: DeminoHandler[];
+	midware: Midware<DeminoHandlerArgs>;
 };
 
 /** Internal on route match callback type */
@@ -13,10 +14,10 @@ export type DeminoRouterOnMatch = (
 
 /** DeminoRouter abstract class. */
 export abstract class DeminoRouter {
-	/** Defines a callback to be executed on a given route match. */
+	/** Defines a callback to be executed on a given route. */
 	abstract on(route: string, callback: DeminoRouterOnMatch): void;
 
-	/** Executes pathname match lookup against registered routes. */
+	/** Executes pathname match lookup against the registered routes. */
 	abstract exec(pathname: string): null | DeminoRouterOnMatchResult;
 
 	/** Should throw if route is not valid for this router.

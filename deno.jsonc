@@ -9,7 +9,7 @@
 	},
 	"imports": {
 		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.13.0",
-		"@marianmeres/midware": "jsr:@marianmeres/midware@^1.0.6",
+		"@marianmeres/midware": "jsr:@marianmeres/midware@^1.1.0",
 		"@marianmeres/simple-router": "npm:@marianmeres/simple-router@^1.9.1",
 		"@std/assert": "jsr:@std/assert@^1.0.9",
 		"@std/fmt": "jsr:@std/fmt@^1.0.3",

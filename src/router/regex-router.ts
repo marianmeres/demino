@@ -5,7 +5,8 @@ import {
 } from "./abstract.ts";
 
 /**
- * Regular expressions based router.
+ * Regular expressions based router. Powerful, but harder to use (may throw `SyntaxErrors`
+ * on malformed input).
  *
  * @example
  *
@@ -13,8 +14,15 @@ import {
  * const app = demino("", [], { routerFactory: () => new DeminoRegexRouter() });
  *
  * // named groups will be returned as params
- * // eg route `/2024-12` will be matched with context.params { year: "2024", month: "12"}
- * app.get("^/(?<year>\\d{4})-(?<month>\\d{2})$", ...);
+ * app.get("^/(?<year>\\d{4})$", (_r, _i, c) => c.params);
+ * app.get("^/(?<year>\\d{4})-(?<month>\\d{2})$", (_r, _i, c) => c.params);
+ *
+ * // fixed, no params
+ * app.get("^/$", () => "home");
+ * app.get("^/foo$", () => "foo");
+ *
+ * // catch all else
+ * app.get(".+", () => "any");
  * ```
  *
  * @see regex-router.test.ts
@@ -23,7 +31,7 @@ export class DeminoRegexRouter extends DeminoRouter {
 	/** Internal Map of registered routes. */
 	#routes = new Map<RegExp, DeminoRouterOnMatch>();
 
-	/** Stores a callback to be executed on a given route match. */
+	/** Stores a callback to be executed on a given route. */
 	on(route: string, callback: DeminoRouterOnMatch): void {
 		this.#routes.set(new RegExp(route), callback);
 	}
