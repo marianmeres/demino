@@ -43,7 +43,7 @@ _Every_ Demino app is mounted to a specific route prefix called the `mountPath`.
 Every incoming request in Demino app is handled based on its `pathname` which is matched
 against the registered _routes_.
 
-The actual _route_ format and strategy how it is matched depends on the active router instance.
+The actual _route_ format and parsing depends on the active router instance.
 By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), but
 ships with some additional implementations as well. Also, it should be 
 fairly easy to integrate any 3rd-party routing library as well. More on this down below.
@@ -149,7 +149,7 @@ app.get("/[articleId]", (_req, _info, ctx) => render(ctx.locals.article));
 ## Error handling
 
 Errors are caught and passed to the error handler. The built-in error handler can be 
-replaced via the `app.error(handler)` interface.
+replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
 
 ```typescript
 // example: customized json response error handler 
@@ -169,7 +169,7 @@ Demino uses the http method name route handler convention.
 ```typescript
 app.get('/resources/[id]', readResourceHandler);
 app.post('/resources', createResourceHandler);
-// app.delete, app.patch, app.put, ...
+// app.delete, app.patch, app.put, app.head...
 ```
 
 Also, the middlewares usage is similar to Express:
