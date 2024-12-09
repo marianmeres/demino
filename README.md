@@ -114,7 +114,7 @@ Note that globals must be registered _before_ the route handler is declared to t
 app.use(someGlobalMiddleware);
 app.get("/secret", authCheckMiddleware, handler);
 
-// NOT OK, the `someGlobalMiddleware` will not be used for the `/secret` handler
+// NOT OK, the `someGlobalMiddleware` will not be used for the `/secret` route
 app.get("/secret", authCheckMiddleware, handler);
 app.use(someGlobalMiddleware);
 ```
@@ -124,9 +124,9 @@ app.use(someGlobalMiddleware);
 Each middleware receives a `DeminoContext` object which visibility and lifetime is limited 
 to the scope and lifetime of the request handler. 
 
-It has `params` (router parsed params), `headers` (to be used in the final response) and 
-`locals` props. The `locals` prop is where each middleware can read and write 
-arbitrary data.
+It has `params` (router parsed params), `headers` (to be used in the final response), 
+`error` (to be used in a custom error handler) and `locals` props. 
+The `locals` prop is where each middleware can read and write arbitrary data.
 
 ```typescript
 const app = demino('/articles');
@@ -154,12 +154,10 @@ replaced via the `app.error(handler)` interface.
 ```typescript
 // example: customized json response error handler 
 app.error((_req, _info, ctx) => {
-    const headers = ctx.headers || new Headers();
-    headers.set("content-type", "application/json");
-    const error = ctx.error;
+    ctx.headers.set("content-type", "application/json");
     return new Response(
-        JSON.stringify({ ok: false, message: error.message }),
-        { status: error?.status || 500, headers }
+        JSON.stringify({ ok: false, message: ctx.error.message }),
+        { status: error?.status || 500, headers: ctx.headers }
     );
 });
 ```
@@ -195,13 +193,14 @@ For example:
 import { demino, deminoCompose } from "@marianmeres/demino";
 
 // landing page example
-const home = demino();
+const home = demino("", loadMetaOgData);
 home.get("/", ...);
 home.get("/[slug]", ...);
 
 // api example (note that middlewares can be added via factory as well)
 const api = demino("/api", [addJsonHeader, validateBearerToken]);
-api.get("/[entity]", ...);
+api.get("/[entity]/[id]", ...);
+api.post("/[entity]", ...);
 
 // compose all together, and serve as a one handler
 Deno.serve(deminoCompose([home, api]));
@@ -213,11 +212,12 @@ The same effect can be achieved without the composition like this:
 const app = demino();
 
 // home
-app.get("/", ...);
-app.get("/[slug]", ...);
+app.get("/", loadMetaOgData, ...);
+app.get("/[slug]", loadMetaOgData, ...);
 
 // api
-app.get("/api/[entity]", [addJsonHeader, validateBearerToken], ...);
+app.get("/api/[entity]/[id]", [addJsonHeader, validateBearerToken], ...);
+app.post("/api/[entity]", [addJsonHeader, validateBearerToken], ...);
 
 Deno.serve(app);
 ```

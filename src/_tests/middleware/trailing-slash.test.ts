@@ -8,8 +8,8 @@ Deno.test("trailing slash manual redirect check", async () => {
 	let srv: Srv | null = null;
 
 	try {
-		const tsOn = createTrailingSlashMiddleware({ strategy: "on" });
-		const tsOff = createTrailingSlashMiddleware({ strategy: "off" });
+		const tsOn = createTrailingSlashMiddleware(true);
+		const tsOff = createTrailingSlashMiddleware(false);
 
 		const app = demino();
 		app.use(() => "this must not be reached because ts will be sorted earlier");
@@ -46,8 +46,8 @@ Deno.test("trailing slash auto redirect", async () => {
 	let srv: Srv | null = null;
 
 	try {
-		const tsOn = createTrailingSlashMiddleware({ strategy: "on" });
-		const tsOff = createTrailingSlashMiddleware({ strategy: "off" });
+		const tsOn = createTrailingSlashMiddleware(true);
+		const tsOff = createTrailingSlashMiddleware(false);
 
 		const app = demino();
 		app.get("/foo/bar", tsOn, () => "foo");
