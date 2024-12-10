@@ -1,3 +1,4 @@
+import { HTTP_STATUS } from "@marianmeres/http-utils";
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
 
 /**
@@ -35,7 +36,7 @@ export function createTrailingSlash(
 			url.pathname += "/";
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`); // debug
 			return new Response(null, {
-				status: 301,
+				status: HTTP_STATUS.MOVED_PERMANENTLY,
 				headers: { Location: url.toString() },
 			});
 		}
@@ -44,7 +45,7 @@ export function createTrailingSlash(
 			url.pathname = url.pathname.slice(0, -1);
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`);
 			return new Response(null, {
-				status: 301,
+				status: HTTP_STATUS.MOVED_PERMANENTLY,
 				headers: { Location: url.toString() },
 			});
 		}

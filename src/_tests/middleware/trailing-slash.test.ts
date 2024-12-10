@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 
+import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { assertEquals } from "@std/assert";
 import { demino } from "../../demino.ts";
 import { createTrailingSlash } from "../../middleware/trailing-slash.ts";
@@ -29,7 +30,7 @@ Deno.test("trailing slash manual redirect check", async () => {
 		// ON
 		await assertResp(
 			fetch(`${srv.base}/foo/bar`, { redirect: "manual" }),
-			301,
+			HTTP_STATUS.MOVED_PERMANENTLY,
 			"",
 			{ location: /\/$/ }
 		);
@@ -37,7 +38,7 @@ Deno.test("trailing slash manual redirect check", async () => {
 		// OFF
 		await assertResp(
 			fetch(`${srv.base}/baz/bat/`, { redirect: "manual" }),
-			301,
+			HTTP_STATUS.MOVED_PERMANENTLY,
 			"",
 			{ location: /[^\/]$/ }
 		);
