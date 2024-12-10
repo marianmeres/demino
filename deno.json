@@ -1,11 +1,10 @@
 {
 	"name": "@marianmeres/demino",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"exports": "./src/mod.ts",
 	"tasks": {
 		"dev": "deno run --watch ./src/mod.ts",
 		"test": "deno test -A --watch"
-		// --reporter=dot
 	},
 	"imports": {
 		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.13.0",
