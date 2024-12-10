@@ -236,9 +236,7 @@ export function demino(
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
 			const e = context.error;
-			if (!context.headers.has("content-type")) {
-				context.headers.set("content-type", CONTENT_TYPE.HTML);
-			}
+			context.headers.set("content-type", CONTENT_TYPE.HTML);
 			r = new Response(getErrorMessage(e), {
 				status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
 				headers: context.headers,
