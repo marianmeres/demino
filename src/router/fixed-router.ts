@@ -6,7 +6,7 @@ import {
 
 /**
  * The most simple router implementation. Basically is just directly comparing
- * 2 string. Unable to extract params from routes.
+ * 2 strings. It is unable to extract params from the routes.
  *
  * While fully functional, serves mainly as an example of a custom router implementation.
  *
@@ -30,6 +30,12 @@ export class DeminoFixedRouter extends DeminoRouter {
 
 	/** Executes pathname match lookup against the registered routes. */
 	exec(pathname: string): null | DeminoRouterOnMatchResult {
-		return this.#routes.has(pathname) ? this.#routes.get(pathname)!({}) : null;
+		// this router is unable to extract params...
+		const params = {};
+
+		//
+		return this.#routes.has(pathname)
+			? this.#routes.get(pathname)!(params)
+			: null;
 	}
 }

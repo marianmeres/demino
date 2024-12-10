@@ -66,7 +66,7 @@ As soon as any middleware decides to _return_ a thing, the middlewares
 execution chain is terminated and a `Response` is sent immediately.
 
 Unlike in `Deno.serve` handlers, the Demino route handlers are not required
-to return a `Response` instance. The `Response` will be created automatically 
+to return a `Response` instance, it will be created automatically 
 based on what they return:
 
 - if the value is `undefined`, empty `204 No Content` response will be created,
@@ -161,46 +161,23 @@ app.error((_req, _info, ctx) => {
     );
 });
 ```
+ 
+## Bundled middlewares
 
-## Apps composition
+### Trailing slash
+The default router, by design, sees `/foo` and `/foo/` as the same routes, 
+which may not be always desired (eg think of SEO). This is where the trailing slash middleware helps.
 
-Multiple Demino apps can be composed into a single app. 
-This is useful if you want to logically group certain mount paths with the same middlewares. For example:
+```ts
+// will ensure every request will be redirected (if needed) 
+// to the trailing slashed route
+app.use(createTrailingSlash(true))
 
-```typescript
-import { demino, deminoCompose } from "@marianmeres/demino";
-
-// landing page example
-const home = demino("", loadMetaOgData);
-home.get("/", ...);
-home.get("/[slug]", ...);
-
-// api example (note that middlewares can be added via factory as well)
-const api = demino("/api", [addJsonHeader, validateBearerToken]);
-api.get("/[entity]/[id]", ...);
-api.post("/[entity]", ...);
-
-// compose all together, and serve as a one handler
-Deno.serve(deminoCompose([home, api]));
+// and the opposite
+app.use(createTrailingSlash(false))
 ```
 
-The same effect can be achieved without the composition like this:
-
-```typescript
-const app = demino();
-
-// home
-app.get("/", loadMetaOgData, ...);
-app.get("/[slug]", loadMetaOgData, ...);
-
-// api
-app.get("/api/[entity]/[id]", [addJsonHeader, validateBearerToken], ...);
-app.post("/api/[entity]", [addJsonHeader, validateBearerToken], ...);
-
-Deno.serve(app);
-```
-
-## Non-default routing
+## Extra: Custom routing
 
 For the fun of it, in addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
 Demino ships with some additional router implementations that can be activated
@@ -223,22 +200,24 @@ Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
 
 For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts).
 
-## Extra: Available middlewares
-
-### Trailing slash
-The default router is by design trailing slash agnostic which means that it 
-sees `/foo` and `/foo/` as the same routes. This may not be always desired (eg think of SEO). This is where the trailing slash middleware helps.
-
-```ts
-// will ensure every request will be redirected (if needed) 
-// to the trailing slashed route
-app.use(createTrailingSlash(true))
-
-// and the oposite
-app.use(createTrailingSlash(false))
-```
 
 ## Extra: file based routing
 
 Work in progress...
+
+## Extra: Apps composition
+
+Multiple apps on a different mount paths can be composed into a single app. 
+For example:
+
+```typescript
+import { demino, deminoCompose } from "@marianmeres/demino";
+
+// skipping routes setup here...
+const home = demino("", loadMetaOgData);
+const api = demino("/api", [addJsonHeader, validateBearerToken]);
+
+// compose all together, and serve as a one handler
+Deno.serve(deminoCompose([home, api]));
+```
 
