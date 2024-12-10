@@ -39,9 +39,8 @@ joined as `mountPath + route`, which - when joined - must begin with a `/`.
 Every incoming request in Demino app is handled based on its `pathname` which is matched
 against the registered _routes_.
 
-The actual _route_ matching is handled by the router.
-By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), 
-but ships with some additional implementations as well.
+The actual route matching is handled by the router.
+By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router).
 
 ```typescript
 // create a Demino with a `/api` mount path
@@ -79,8 +78,6 @@ You can safely bypass this opinionated behavior by returning the `Response` inst
 yourself.
 
 ```typescript
-const app = demino();
-
 // conveniently return plain object and have it be converted 
 // to a Response instance automatically
 app.get("/", () => ({ this: 'will', be: 'JSON stringified'}));
@@ -225,6 +222,21 @@ Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
 ### Integrating a 3rd party routing library
 
 For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts).
+
+## Extra: Available middlewares
+
+### Trailing slash
+The default router is by design trailing slash agnostic which means that it 
+sees `/foo` and `/foo/` as the same routes. This may not be always desired (eg think of SEO). This is where the trailing slash middleware helps.
+
+```ts
+// will ensure every request will be redirected (if needed) 
+// to the trailing slashed route
+app.use(createTrailingSlash(true))
+
+// and the oposite
+app.use(createTrailingSlash(false))
+```
 
 ## Extra: file based routing
 
