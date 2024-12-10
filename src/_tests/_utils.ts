@@ -54,4 +54,6 @@ export async function assertResp(
 			assertEquals(resp.headers.get(k)!, v);
 		}
 	});
+
+	return resp;
 }

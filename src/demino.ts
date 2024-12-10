@@ -36,7 +36,7 @@ export interface DeminoHandler extends MidwareUseFn<DeminoHandlerArgs> {}
 export type DeminoRouteHandler = (
 	route: string,
 	...args: (DeminoHandler | DeminoHandler[])[]
-) => void;
+) => Demino;
 
 /** The Demino app public interface */
 export interface Demino extends Deno.ServeHandler {
@@ -61,9 +61,26 @@ export interface Demino extends Deno.ServeHandler {
 	/** HTTP TRACE route handler */
 	trace: DeminoRouteHandler;
 	/** Fn to register custom error handler. */
-	error: (handler: DeminoHandler) => void;
-	/** Fn to register global middlewares. */
-	use: (...args: (DeminoHandler | DeminoHandler[])[]) => void;
+	error: (handler: DeminoHandler) => Demino;
+	/**
+	 * Fn to register "app global", or "route global" middlewares.
+	 *
+	 * If there are any strings among args, they will be understood as routes, and
+	 * every middleware will be registered "route global" for each of the strings.
+	 *
+	 * If no strings are found, every provided middleware is considered as "app global".
+	 *
+	 * @example
+	 * ```ts
+	 * app.use(mw); // app global
+	 * app.use([mw1, mw2], mw3); // app global
+	 * app.use('/foo', mw1, mw2) // route global (for every route method)
+	 *
+	 * // all mws will be set as route globals for both /foo and /bar
+	 * app.use(mw, '/foo', mw1, '/bar', mw2, mw3);
+	 * ```
+	 */
+	use: (...args: (string | DeminoHandler | DeminoHandler[])[]) => Demino;
 	/** Returns which path is the current app mounted on. */
 	mountPath: () => string;
 }
@@ -106,6 +123,13 @@ function isFn(v: any): boolean {
 	return typeof v === "function";
 }
 
+/** Export few well known ones, for easier consumption in apps */
+export const CONTENT_TYPE = {
+	JSON: "application/json; charset=utf-8",
+	TEXT: "text/plain; charset=utf-8",
+	HTML: "text/html; charset=utf-8",
+};
+
 /** Creates Response based on body type */
 function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 	let status = HTTP_STATUS.OK;
@@ -126,22 +150,15 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
 	) {
 		body = JSON.stringify(body);
-		headers.set("content-type", "application/json; charset=utf-8");
+		headers.set("content-type", CONTENT_TYPE.JSON);
 	}
 	// todo: maybe anything else here?
 	// else if (...) {}
 	// otherwise not much to guess anymore, simply cast to string
 	else {
 		body = `${body}`;
-		if (
-			!headers.get("content-type") &&
-			// this is obviously very naive, but should get the job done most of the time...
-			// but mainly, it's not a big deal at all (the header should be set manually
-			// anyway for an unknown content)
-			/<html/i.test(body) &&
-			(/<head/i.test(body) || /<body/i.test(body))
-		) {
-			headers.set("content-type", "text/html; charset=utf-8");
+		if (!headers.has("content-type")) {
+			headers.set("content-type", CONTENT_TYPE.HTML);
 		}
 	}
 
@@ -193,7 +210,8 @@ export function demino(
 	options?: DeminoOptions
 ): Demino {
 	// initialize and normalize...
-	const _middlewares = Array.isArray(middleware) ? middleware : [middleware];
+	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
+	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
 	const log = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
 
@@ -218,6 +236,9 @@ export function demino(
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
 			const e = context.error;
+			if (!context.headers.has("content-type")) {
+				context.headers.set("content-type", CONTENT_TYPE.HTML);
+			}
 			r = new Response(getErrorMessage(e), {
 				status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
 				headers: context.headers,
@@ -299,9 +320,13 @@ export function demino(
 	//
 	const _createRouteFn =
 		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
-		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): void => {
+		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): Demino => {
 			// everything is a middleware...
-			const midwares: DeminoHandler[] = [..._middlewares, ...args]
+			const midwares: DeminoHandler[] = [
+				..._globalAppMws,
+				...(_globalRouteMws[route] || []),
+				...args,
+			]
 				.flat()
 				.filter(Boolean)
 				.map((mw, i, arr) => {
@@ -348,6 +373,8 @@ export function demino(
 				// fine, no need to die here)
 				log.warn(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
 			}
+
+			return _app;
 		};
 
 	// userland method apis
@@ -363,11 +390,28 @@ export function demino(
 	_app.trace = _createRouteFn("TRACE");
 
 	// other
-	_app.error = (handler: DeminoHandler) => (_errorHandler = handler);
-	_app.mountPath = () => mountPath;
-	_app.use = (...args: (DeminoHandler | DeminoHandler[])[]) => {
-		_middlewares.push(...args.flat());
+	_app.error = (handler: DeminoHandler) => {
+		_errorHandler = handler;
+		return _app;
 	};
+
+	//
+	_app.use = (...args: (string | DeminoHandler | DeminoHandler[])[]) => {
+		const routes = args.filter((v) => typeof v === "string");
+		const mws = args.filter((v) => typeof v !== "string");
+		if (routes.length) {
+			routes.forEach((r) => {
+				_globalRouteMws[r] ??= [];
+				_globalRouteMws[r].push(...mws.flat());
+			});
+		} else {
+			_globalAppMws.push(...mws.flat());
+		}
+		return _app;
+	};
+
+	//
+	_app.mountPath = () => mountPath;
 
 	return _app;
 }

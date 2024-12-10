@@ -3,14 +3,9 @@
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
 "Demino" (Deno minimal) - minimalistic web server framework built on top of the 
-Deno's built-in HTTP server. 
+Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, and more...
 
-It provides:
-
-- routing, 
-- middlewares support,
-- unified error handling,
-- Express-like semantics.
+The API is designed to resemble the Express-like look and feel.
 
 ## Installation
 
@@ -35,18 +30,18 @@ Deno.serve(app);
 
 ## Mount path
 
-_Every_ Demino app is mounted to a specific route prefix called the `mountPath`. The default
-`mountPath` is an empty string that represents the server root.
+Every Demino app is created with a **route prefix** called the `mountPath`. The default
+`mountPath` is an empty string. Every `route` is then
+joined as `mountPath + route`, which - when joined - must begin with a `/`.
 
 ## Routing
 
 Every incoming request in Demino app is handled based on its `pathname` which is matched
 against the registered _routes_.
 
-The actual _route_ format and parsing depends on the active router instance.
-By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), but
-ships with some additional implementations as well. Also, it should be 
-fairly easy to integrate any 3rd-party routing library as well. More on this down below.
+The actual _route_ matching is handled by the router.
+By default, Demino uses [simple-router](https://github.com/marianmeres/simple-router), 
+but ships with some additional implementations as well.
 
 ```typescript
 // create a Demino with a `/api` mount path
@@ -56,7 +51,7 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 ```
 
-For more default router details see [the simple-router docs](https://github.com/marianmeres/simple-router).
+For more details [see the simple-router docs](https://github.com/marianmeres/simple-router).
 
 ## Route handlers and middlewares
 
@@ -71,14 +66,14 @@ mainly _do_ something (eg validate), while route handlers mainly _return_ someth
 As soon as any middleware decides to _return_ a thing, the middlewares 
 execution chain is terminated and a `Response` is sent immediately.
 
-Unlike in `Deno.serve` handlers, the Demino route handlers are neither required nor expected
-to return a `Response` instance. If they don't, the `Response` will be created automatically 
+Unlike in `Deno.serve` handlers, the Demino route handlers are not required
+to return a `Response` instance. The `Response` will be created automatically 
 based on what they return:
 
 - if the value is `undefined`, empty `204 No Content` response will be created,
 - if the value is a plain object (or `null`, or `toJSON` aware) it will 
-  be `JSON.stringify`ed,
-- everything else is cast to string (which invokes a `toString` method if available).
+  be `JSON.stringify`-ed,
+- everything else is cast to string.
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
 yourself.
@@ -90,33 +85,41 @@ const app = demino();
 // to a Response instance automatically
 app.get("/", () => ({ this: 'will', be: 'JSON stringified'}));
 
-// or return any other type with a `toString` method
+// or return any other type (the `toString` method, if available, will be invoked by js)
 class MyRenderer {
     constructor(private data) {...}
     toString() { return `...`; }
 }
 app.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
 
-// or you have a full control by returning the Response instance directly
+// or return the Response instance directly
 app.get('/manual', () => new Response('This will be sent as is.'))
 ```
 
-The route handler/middleware has the following signature:
+The middleware and/or route handler has the following signature:
 ```typescript
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
-Middlewares can be registered globally per instance, or locally per route handler. 
-Note that globals must be registered _before_ the route handler is declared to take effect.
+Middlewares can be registered as:
+- `app.use(middleware)` - globally per app, 
+- `app.use("/route", middleware)` - globally per route, will be invoked for every route http method, or
+- `app.get("/route", middleware, handler)` - locally per route + method
+
+Note that global ones must be registered _before_ the local ones to take effect.
 
 ```typescript
-// OK
-app.use(someGlobalMiddleware);
-app.get("/secret", authCheckMiddleware, handler);
+// GOOD
+app
+    .use(someGlobal)
+    .use("/secret", authCheck)
+    .get("/secret", readSecret, handler);
 
-// NOT OK, the `someGlobalMiddleware` will not be used for the `/secret` route
-app.get("/secret", authCheckMiddleware, handler);
-app.use(someGlobalMiddleware);
+// BAD! neither `someGlobal` nor `authCheck` will be used for the `GET /secret` route
+app
+    .get("/secret", readSecret, handler)
+    .use("/secret", authCheck)
+    .use(someGlobal);
 ```
 
 ## Context
@@ -162,32 +165,10 @@ app.error((_req, _info, ctx) => {
 });
 ```
 
-## The Express-like semantics
-
-Demino uses the http method name route handler convention. 
-
-```typescript
-app.get('/resources/[id]', readResourceHandler);
-app.post('/resources', createResourceHandler);
-// app.delete, app.patch, app.put, app.head...
-```
-
-Also, the middlewares usage is similar to Express:
-
-```typescript
-app.use(someMidlleware);
-app.get('/foo', mid1, mid2, [mid3, mid4], handler);
-```
-
-One major difference from Express is the format of the route params in the default router. 
-Express uses `/:param` while Demino uses `/[param]` placeholders. Read more on the custom
-routers below.
-
 ## Apps composition
 
 Multiple Demino apps can be composed into a single app. 
-This is useful if you want to logically group certain mount paths with the same middlewares. 
-For example:
+This is useful if you want to logically group certain mount paths with the same middlewares. For example:
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
@@ -228,8 +209,6 @@ For the fun of it, in addition to the default [simple-router](https://github.com
 Demino ships with some additional router implementations that can be activated
 via the `routerFactory` factory setting.
 
-Consider them proof of concept rather than battle-tested implementations.
-
 ### Express-like router
 
 ```ts
@@ -245,24 +224,7 @@ Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
 
 ### Integrating a 3rd party routing library
 
-Demino app expects a `DeminoRouter` interface (2 methods), where you can implement the 
-actual integration.
-
-```ts
-class Some3rdPartyRouter extends DeminoRouter {
-    /** Defines a callback to be executed on a given route match. */
-    on(route: string, callback: DeminoRouterOnMatch): void {
-        // you need to save the route+callback pairs somewhere...
-    }
-    /** Executes pathname match lookup against the registered routes. */
-    exec(pathname: string): null | DeminoRouterOnMatchResult {
-        // if pathname is matched, call the saved callback with parsed params (if any)
-        // as its only argument
-    }
-}
-
-const app = demino("", [], { routerFactory: () => new Some3rdPartyRouter() });
-```
+For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts).
 
 ## Extra: file based routing
 

@@ -12,21 +12,26 @@ import { assertResp, startTestServer } from "./_utils.ts";
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
 const hello = (mountPath = "", midwares = [], options = {}) => {
-	const app = demino(mountPath, midwares, options);
 	const world = "world";
+
+	const app = demino(mountPath, midwares, options)
+		.all("/", () => world)
+		.get("/2", async () => await Promise.resolve(new Response(world)))
+		// midware return
+		.get("/3", [() => world])
+		// this will never be used, because the first usage above wins
+		.get("/4", [() => Promise.resolve(new Response(world))])
+		// midware return
+		.get("/4", () => "never used");
+
 	//
-	app.all("/", () => world);
-	app.get("/2", async () => await Promise.resolve(new Response(world)));
-	app.get("/3", [() => world]); // midware return
-	app.get("/4", [() => Promise.resolve(new Response(world))]); // midware return
-	// this will never be used, because the first usage above wins
-	app.get("/4", () => "never used");
-	//
-	app.post("/post", () => "post");
-	app.patch("/patch", () => "patch");
-	app.put("/put", () => "put");
-	app.delete("/delete", () => "delete");
-	app.head("/head", () => "head");
+	app
+		.post("/post", () => "post")
+		.patch("/patch", () => "patch")
+		.put("/put", () => "put")
+		.delete("/delete", () => "delete")
+		.head("/head", () => "head");
+
 	return app;
 };
 
@@ -183,12 +188,12 @@ Deno.test("middlewares and various return types", async () => {
 
 		// "bar" return via toJSON as json
 		await assertResp(fetch(`${srv.base}/some/hey`), 200, "ho", {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		// any other is not found
 		await assertResp(fetch(`${srv.base}/some/bla`), 404, /some not found/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		// no content empty body
@@ -223,17 +228,13 @@ Deno.test("middlewares and various return types", async () => {
 
 Deno.test("middlewares sort order", async () => {
 	let srv: Srv | null = null;
-
-	let log: number[] = [];
-
+	const log: number[] = [];
 	const m1: DeminoHandler = () => {
 		log.push(1);
 	};
-
 	const m2: DeminoHandler = () => {
 		log.push(2);
 	};
-
 	const m3: DeminoHandler = () => {
 		log.push(3);
 	};
@@ -260,6 +261,51 @@ Deno.test("middlewares sort order", async () => {
 	return srv?.server?.finished;
 });
 
+Deno.test("global route middlewares", async () => {
+	let srv: Srv | null = null;
+	let log: number[] = [];
+	const m1: DeminoHandler = () => {
+		log.push(1);
+	};
+	const m2: DeminoHandler = () => {
+		log.push(2);
+	};
+	const m3: DeminoHandler = () => {
+		log.push(3);
+	};
+	const m4: DeminoHandler = () => {
+		log.push(4);
+	};
+
+	try {
+		const app = demino("", m1)
+			.use("/[id]", m3)
+			.use(m2) // note, that this will take effect before m3
+			.get("/[id]", m4, (_r, _i, c) => c.params.id)
+			.post("/[id]", (_r, _i, c) => c.params.id);
+
+		srv = await startTestServer(app);
+
+		await assertResp(fetch(`${srv.base}`), 404);
+		assertEquals(log.length, 0);
+
+		// all 4 mws in effect
+		await assertResp(fetch(`${srv.base}/foo`), 200, "foo");
+		assertEquals(log, [1, 2, 3, 4]);
+
+		// only first 3
+		log = [];
+		await assertResp(fetch(`${srv.base}/foo`, { method: "POST" }), 200, "foo");
+		assertEquals(log, [1, 2, 3]);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
 Deno.test("custom error handler", async () => {
 	let srv: Srv | null = null;
 
@@ -272,7 +318,7 @@ Deno.test("custom error handler", async () => {
 		srv = await startTestServer(app);
 
 		await assertResp(fetch(`${srv.base}`), 404, /not found/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		await assertResp(fetch(`${srv.base}/err`), 500, "Boo");
@@ -338,17 +384,17 @@ Deno.test("composition", async () => {
 
 		// homepage
 		await assertResp(fetch(`${srv.base}`), 200, /hello/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		// homepage slug
 		await assertResp(fetch(`${srv.base}/foo`), 200, /Marketing: foo/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		// now, this is not api root, but homepage "api" slug
 		await assertResp(fetch(`${srv.base}/api`), 200, /Marketing: api/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 
 		// now this is api root
@@ -361,7 +407,7 @@ Deno.test("composition", async () => {
 
 		// homepage slug
 		await assertResp(fetch(`${srv.base}/blog/hey`), 200, /Blog: hey/i, {
-			"content-type": /text\/plain/,
+			"content-type": /text\/html/,
 		});
 	} catch (e) {
 		throw e;
