@@ -170,7 +170,7 @@ app.error((_req, _info, ctx) => {
 
 ### Trailing slash
 The default router, by design, sees `/foo` and `/foo/` as the same routes, 
-which may not be always desired (eg think of SEO). This is where the trailing slash 
+which may not be always desired (eg for SEO). This is where the trailing slash 
 middleware helps.
 
 ```ts
