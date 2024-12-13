@@ -52,7 +52,7 @@ api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 
 For more details [see the simple-router docs](https://github.com/marianmeres/simple-router).
 
-## Route handlers and middlewares
+##  Middlewares and route handlers
 
 The stuff happens in route handlers. Or in middlewares. Or in both. In fact, 
 they are technically the same thing - the route handler is just the final middleware in 
@@ -101,9 +101,9 @@ function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoConte
 ```
 
 Middlewares can be registered as:
-- `app.use(middleware)` - globally per app (will be invoked for every method on every route), 
-- `app.use("/route", middleware)` - globally per route (will be invoked for every method for a given route), or
-- `app.get("/route", middleware, handler)` - locally per route + method
+- `app.use(middleware)` - globally per app (will be invoked for every method on every route),
+- `app.use("/route", middleware)` - globally per route (will be invoked for every method on a given route),
+- `app.get("/route", middleware, handler)` - locally for given method and route.
 
 The global ones must be registered _before_ the local ones to take effect.
 
@@ -123,7 +123,7 @@ app
 
 ## Context
 
-Each middleware receives a `DeminoContext` object (as its last parameter), 
+Each middleware receives a `DeminoContext` object as its last parameter 
 which visibility and lifetime is limited to the scope and lifetime of the request handler. 
 
 It has `params` (router parsed params), `headers` (to be used in the final response), 
@@ -135,6 +135,8 @@ const app = demino('/articles');
 
 // example middleware loading article (from DB, let's say)...
 app.use(async (_req, _info, ctx) => {
+    // eg any route which will have an `/[articleId]/` segment, we automatically read
+    // article data (which also means, it will auto validate the parameter)
     if (ctx.params.articleId) {
         ctx.locals.article = await Article.find(ctx.params.articleId);
         if (!ctx.locals.article) {
@@ -168,7 +170,8 @@ app.error((_req, _info, ctx) => {
 
 ### Trailing slash
 The default router, by design, sees `/foo` and `/foo/` as the same routes, 
-which may not be always desired (eg think of SEO). This is where the trailing slash middleware helps.
+which may not be always desired (eg think of SEO). This is where the trailing slash 
+middleware helps.
 
 ```ts
 // will ensure every request will be redirected (if needed) 
