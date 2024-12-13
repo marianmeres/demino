@@ -52,7 +52,7 @@ export function createTrailingSlash(
 	};
 
 	// this does the trick o moving the midware to front
-	midware.__midwarePreExecuteSortOrder = 0;
+	midware.__midwarePreExecuteSortOrder = -Infinity;
 
 	return midware;
 }

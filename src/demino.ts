@@ -150,10 +150,11 @@ function _createResponseFrom(body: any, headers: Headers = new Headers()) {
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
 	) {
 		body = JSON.stringify(body);
-		headers.set("content-type", CONTENT_TYPE.JSON);
+		if (!headers.has("content-type")) {
+			headers.set("content-type", CONTENT_TYPE.JSON);
+		}
 	}
-	// todo: maybe anything else here?
-	// else if (...) {}
+	// maybe any other auto detection here?
 	// otherwise not much to guess anymore, simply cast to string
 	else {
 		body = `${body}`;

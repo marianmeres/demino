@@ -71,8 +71,8 @@ based on what they return:
 
 - if the value is `undefined`, empty `204 No Content` response will be created,
 - if the value is a plain object (or `null`, or `toJSON` aware) it will 
-  be `JSON.stringify`-ed,
-- everything else is cast to string.
+  be `JSON.stringify`-ed and served as `application/json` content type,
+- everything else is cast to string as `text/html`.
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
 yourself.
@@ -94,21 +94,21 @@ app.get('/manual', () => new Response('This will be sent as is.'))
 ```
 
 The middleware and/or route handler has the following signature (note that the arguments 
-are a subset of the "normal" `Deno.ServeHandler`, meaning that any valid `Deno.ServeHandler` 
+are a subset of the normal `Deno.ServeHandler`, meaning that any valid `Deno.ServeHandler` 
 is a valid Demino app handler):
 ```typescript
-function middlewareOrHandler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
+function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
 Middlewares can be registered as:
-- `app.use(middleware)` - globally per app, 
-- `app.use("/route", middleware)` - globally per route, will be invoked for every route http method, or
+- `app.use(middleware)` - globally per app (will be invoked for every method on every route), 
+- `app.use("/route", middleware)` - globally per route (will be invoked for every method for a given route), or
 - `app.get("/route", middleware, handler)` - locally per route + method
 
 The global ones must be registered _before_ the local ones to take effect.
 
 ```typescript
-// GOOD
+// GOOD - the globals are registered before the final handler
 app
     .use(someGlobal)
     .use("/secret", authCheck)
@@ -123,8 +123,8 @@ app
 
 ## Context
 
-Each middleware receives a `DeminoContext` object which visibility and lifetime is limited 
-to the scope and lifetime of the request handler. 
+Each middleware receives a `DeminoContext` object (as its last parameter), 
+which visibility and lifetime is limited to the scope and lifetime of the request handler. 
 
 It has `params` (router parsed params), `headers` (to be used in the final response), 
 `error` (to be used in a custom error handler) and `locals` props. 
