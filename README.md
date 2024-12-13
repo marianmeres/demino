@@ -134,7 +134,7 @@ The `locals` prop is where each middleware can read and write arbitrary data.
 const app = demino('/articles');
 
 // example middleware loading article (from DB, let's say)...
-app.use(async (_req, _info, ctx) => {
+app.use(async (_req: Request, _info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
     // eg any route which will have an `/[articleId]/` segment, we automatically read
     // article data (which also means, it will auto validate the parameter)
     if (ctx.params.articleId) {
