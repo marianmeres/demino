@@ -93,9 +93,11 @@ app.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
 app.get('/manual', () => new Response('This will be sent as is.'))
 ```
 
-The middleware and/or route handler has the following signature:
+The middleware and/or route handler has the following signature (note that the arguments 
+are a subset of the "normal" `Deno.ServeHandler`, meaning that any valid `Deno.ServeHandler` 
+is a valid Demino app handler):
 ```typescript
-function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
+function middlewareOrHandler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
 
 Middlewares can be registered as:
@@ -103,7 +105,7 @@ Middlewares can be registered as:
 - `app.use("/route", middleware)` - globally per route, will be invoked for every route http method, or
 - `app.get("/route", middleware, handler)` - locally per route + method
 
-Note that global ones must be registered _before_ the local ones to take effect.
+The global ones must be registered _before_ the local ones to take effect.
 
 ```typescript
 // GOOD
