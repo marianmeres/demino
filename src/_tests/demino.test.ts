@@ -5,7 +5,7 @@ import {
 	HTTP_ERROR,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
-import { assert, assertEquals, assertMatch } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { demino, deminoCompose, type DeminoHandler } from "../demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
 
@@ -37,10 +37,8 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 
 Deno.test("no route is not found", async () => {
 	let srv: Srv | null = null;
-	const app = demino();
-
 	try {
-		srv = await startTestServer(app);
+		srv = await startTestServer(demino());
 		await assertResp(fetch(`${srv.base}`), 404);
 	} catch (e) {
 		throw e;
@@ -54,10 +52,8 @@ Deno.test("no route is not found", async () => {
 Deno.test("hello world", async () => {
 	let srv: Srv | null = null;
 
-	const app = hello();
-
-	// execute the server request
 	try {
+		const app = hello();
 		srv = await startTestServer(app);
 
 		// raw text
@@ -82,11 +78,11 @@ Deno.test("hello world", async () => {
 Deno.test("mounted hello world", async () => {
 	let srv: Srv | null = null;
 
-	const mount = "/hello";
-	const app = hello(mount, [], { verbose: false });
-
-	// execute the server request
 	try {
+		const mount = "/hello";
+		const app = hello(mount, [], { verbose: false });
+
+		//
 		srv = await startTestServer(app);
 
 		// route is on "all"
@@ -278,13 +274,15 @@ Deno.test("global route middlewares", async () => {
 	};
 
 	try {
-		const app = demino("", m1)
+		const app = demino("", m1);
+		srv = await startTestServer(app);
+
+		// lets register routes bellow server start (which must make no difference)
+		app
 			.use("/[id]", m3)
 			.use(m2) // note, that this will take effect before m3
 			.get("/[id]", m4, (_r, _i, c) => c.params.id)
 			.post("/[id]", (_r, _i, c) => c.params.id);
-
-		srv = await startTestServer(app);
 
 		await assertResp(fetch(`${srv.base}`), 404);
 		assertEquals(log.length, 0);
@@ -480,13 +478,34 @@ Deno.test("default router vs trailing slashes", async () => {
 		await assertResp(fetch(`${srv.base}/foo`), 200, { name: "foo" });
 
 		// the default SimpleRouter always trim slashes, so this will also match
-		// it may be considered both as a feature or as a bug... it depends
-		// anyway, if not desired, you can always:
-		// - have a middleware which will handle slashes (either missing or present)
-		//   and redirect if needed
-		// - use different router, see docs for examples of the built-in ones
-		// - write a custom router of your choice
+		// it may be considered both as a feature or as a bug... if not desired, use
+		// the shipped trailingSlash middleware
 		await assertResp(fetch(`${srv.base}/foo///`), 200, { name: "foo" });
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("first route match wins", async () => {
+	let srv: Srv | null = null;
+
+	const app = demino();
+
+	app.get("/a/static", (_r, _i, c) => "a/static");
+	app.get("/a/[name]", (_r, _i, c) => "a/name: " + c.params.name);
+
+	// parametrized will always win as "static" is validly resolved as param
+	app.get("/b/[name]", (_r, _i, c) => "b/name: " + c.params.name);
+	app.get("/b/static", (_r, _i, c) => "b/static"); // never reached
+
+	try {
+		srv = await startTestServer(app);
+		await assertResp(fetch(`${srv.base}/a/static`), 200, "a/static");
+		await assertResp(fetch(`${srv.base}/b/static`), 200, "b/name: static");
 	} catch (e) {
 		throw e;
 	} finally {

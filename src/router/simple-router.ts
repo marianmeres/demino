@@ -24,6 +24,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 	 * It is used just as a friendly warning when registering routes. */
 	override assertIsValid(route: string): Error | void {
 		if (
+			// the * wildcard is a SimpleRouter feature
 			!["", "*"].includes(route) &&
 			// this check is just an artificial one, it would technically work as
 			// SimpleRouter sanitizes them anyway, but here it feels like they would be

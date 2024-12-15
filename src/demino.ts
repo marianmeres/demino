@@ -98,7 +98,7 @@ export type DeminoMethod =
 	| "TRACE";
 
 /** Internal list of supported methods */
-const _supportedMethods: DeminoMethod[] = [
+export const supportedMethods: DeminoMethod[] = [
 	"CONNECT",
 	"DELETE",
 	"GET",
@@ -191,7 +191,7 @@ export interface DeminoOptions {
 	noXResponseTime?: boolean;
 	/** Will log some more details. (via DeminoLogger) */
 	verbose?: boolean;
-	/** Custom logger (experimental) */
+	/** Custom logger (default console) */
 	logger?: DeminoLogger;
 }
 
@@ -223,7 +223,7 @@ export function demino(
 			: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
-	const _routers = ["ALL", ..._supportedMethods].reduce(
+	const _routers = ["ALL", ...supportedMethods].reduce(
 		(m, k) => ({ ...m, [k]: _routerFactory() }),
 		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
 	);
@@ -330,13 +330,12 @@ export function demino(
 				.filter(Boolean)
 				.map((mw, i, arr) => {
 					if (i === arr.length - 1) {
-						// the "handler": if not yet defined, make it big
+						// handler: if sort order is not yet defined, make it big
 						mw.__midwarePreExecuteSortOrder ??= Infinity;
 					} else {
-						// the "middleware": let's create some magic value, so we have some
-						// known boundary... in other words, if we would ever need
-						// to programmatically set a middleware at the very end (but before the handler),
-						// we know we have to set the sortOrder to a value greater than 1_000
+						// middleware: let's create some magic value, so we have some known boundary...
+						// in other words, if we would ever need to manually set a mw position after normal ones,
+						// we'll know to set a value greater than 1_000
 						mw.__midwarePreExecuteSortOrder ??= 1_000;
 					}
 					return mw;
@@ -376,7 +375,7 @@ export function demino(
 			return _app;
 		};
 
-	// userland method apis
+	// userland method api
 	_app.all = _createRouteFn("ALL");
 	_app.connect = _createRouteFn("CONNECT");
 	_app.delete = _createRouteFn("DELETE");
@@ -388,13 +387,13 @@ export function demino(
 	_app.put = _createRouteFn("PUT");
 	_app.trace = _createRouteFn("TRACE");
 
-	// other
+	// custom error handler
 	_app.error = (handler: DeminoHandler) => {
 		_errorHandler = handler;
 		return _app;
 	};
 
-	//
+	// register middleware api
 	_app.use = (...args: (string | DeminoHandler | DeminoHandler[])[]) => {
 		const routes = args.filter((v) => typeof v === "string");
 		const mws = args.filter((v) => typeof v !== "string");

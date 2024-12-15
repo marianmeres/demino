@@ -1,3 +1,3 @@
 export function GET() {
-	return "/1";
+	return "3";
 }

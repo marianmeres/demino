@@ -5,8 +5,6 @@
 "Demino" (Deno minimal) - minimalistic web server framework built on top of the 
 Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, and more...
 
-The API is designed to resemble the Express-like look and feel.
-
 ## Installation
 
 ```sh
@@ -80,7 +78,7 @@ yourself.
 ```typescript
 // conveniently return plain object and have it be converted 
 // to a Response instance automatically
-app.get("/", () => ({ this: 'will', be: 'JSON stringified'}));
+app.get("/json", () => ({ this: 'will', be: 'JSON', string: 'ified'}));
 
 // or return any other type (the `toString` method, if available, will be invoked by js)
 class MyRenderer {
@@ -182,7 +180,7 @@ app.use(createTrailingSlash(true))
 app.use(createTrailingSlash(false))
 ```
 
-## Extra: Custom routing
+<!-- ## Extra: Custom routing
 
 For the fun of it, in addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
 Demino ships with some additional router implementations that can be activated
@@ -203,12 +201,45 @@ Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
 
 ### Integrating a 3rd party routing library
 
-For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts).
+For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts). -->
 
 
-## Extra: file based routing
+## Extra: file/directory based routing
 
-Work in progress...
+`deminoFileBased` function allows you to register routes and route handlers from the files system.
+It will scan the provided directory and look **only** for `index.(j|t)s` and `_middleware.(j|t)s` files.
+After the scan it will collect the found symbols (will look for HTTP method named exports, or default 
+exports of array of middlewares) and apply the found routes to the app.
+
+So, instead of writing it manually
+
+```typescript
+app.use(someGLobalMw);
+app.get('/users', usersMw, () => ...);
+app.get('/users/[userId]', userMw, () => ...);
+```
+
+and assuming the following directory structure:
+
+```
+assuming this directory structure
++-- routes
+|   +-- users
+|   |   +-- [userId] (with brackets - a named segment)
+|   |   |   +-- _middleware.ts (default exports [userMw])
+|   |   |   +-- index.ts (with exported GET function)
+|   |   +-- _middleware.ts (default exports [usersMw])
+|   |   +-- index.ts (with exported GET function)
+|   +--  _middleware.ts (default exports [someGLobalMw])
+```
+
+you can achieve the same effect like this:
+
+```typescript
+import { demino, deminoFileBased } from "@marianmeres/demino";
+const app = demino();
+await deminoFileBased(app, './routes')
+```
 
 ## Extra: Apps composition
 

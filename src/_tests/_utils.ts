@@ -40,7 +40,7 @@ export async function assertResp(
 		assertMatch(text, textCheck);
 	} else if (typeof textCheck === "boolean") {
 		if (textCheck) assert(text, "text() is not truthy");
-		else assert(!text, "text() is not falsey");
+		else assert(!text, "text() is not falsy");
 	} else if (isPlainObject(textCheck)) {
 		assertEquals(JSON.parse(text), textCheck);
 	} else if (textCheck !== undefined) {
