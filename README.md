@@ -206,12 +206,12 @@ For inspiration, see the [source of the most basic one](./src/router/fixed-route
 
 ## Extra: file/directory based routing
 
-`deminoFileBased` function allows you to register routes and route handlers from the files system.
-It will scan the provided directory and look **only** for `index.(j|t)s` and `_middleware.(j|t)s` files.
-After the scan it will collect the found symbols (will look for HTTP method named exports, or default 
-exports of array of middlewares) and apply the found routes to the app.
+`deminoFileBased` function allows you to register routes and route handlers from the file system.
+It will scan the provided directory and look **only** for `index.(j|t)s` and `_middleware.(j|t)s` modules.
+After the scan it will import and collect the found symbols (will look for HTTP method named exports, or default 
+exports of array of middlewares) and apply it all to the app.
 
-So, instead of writing it manually
+So, instead of writing manually
 
 ```typescript
 app.use(someGLobalMw);
@@ -219,10 +219,9 @@ app.get('/users', usersMw, () => ...);
 app.get('/users/[userId]', userMw, () => ...);
 ```
 
-and assuming the following directory structure:
+you can achieve the same effect like this (assuming the following directory structure):
 
 ```
-assuming this directory structure
 +-- routes
 |   +-- users
 |   |   +-- [userId] (with brackets - a named segment)
@@ -232,8 +231,6 @@ assuming this directory structure
 |   |   +-- index.ts (with exported GET function)
 |   +--  _middleware.ts (default exports [someGLobalMw])
 ```
-
-you can achieve the same effect like this:
 
 ```typescript
 import { demino, deminoFileBased } from "@marianmeres/demino";
