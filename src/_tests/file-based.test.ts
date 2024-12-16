@@ -18,7 +18,7 @@ const root3 = join(_dirname, "./fixtures/_root3");
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
-Deno.test.only("file-based", async () => {
+Deno.test("file-based", async () => {
 	let srv: Srv | null = null;
 
 	try {
