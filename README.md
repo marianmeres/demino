@@ -207,9 +207,14 @@ For inspiration, see the [source of the most basic one](./src/router/fixed-route
 ## Extra: file/directory based routing
 
 `deminoFileBased` function allows you to register routes and route handlers from the file system.
-It will scan the provided directory and look **only** for `index.(j|t)s` and `_middleware.(j|t)s` modules.
-After the scan it will import and collect the found symbols (will look for HTTP method named exports, or default 
-exports of array of middlewares) and apply it all to the app.
+It will search the provided directory for `index.(j|t)s` and `_middleware.(j|t)s` modules.
+If found, it will import and collect the exported symbols (will look for HTTP method named 
+exports, or default exports of array of middlewares) and apply it all to the provided app instance.
+
+The presence of the `index.ts` with at least one known exported symbol marks the directory 
+as a route. Any directory with path segment starting with `_` or `.` will be skipped. The 
+optional `_middleware.ts` are collected along the path from the beginning, so potentionally 
+multiple ones may be effective for the final route handler.
 
 So, instead of writing manually
 
