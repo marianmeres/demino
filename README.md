@@ -48,7 +48,8 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 ```
 
-For more details [see the simple-router docs](https://github.com/marianmeres/simple-router).
+Demino also comes with [URLPattern based](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
+router. Read more about it below.
 
 ##  Middlewares and route handlers
 
@@ -180,29 +181,17 @@ app.use(createTrailingSlash(true))
 app.use(createTrailingSlash(false))
 ```
 
-<!-- ## Extra: Custom routing
+## Extra: URLPattern routing
 
-For the fun of it, in addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
-Demino ships with some additional router implementations that can be activated
-via the `routerFactory` factory setting.
-
-### Express-like router
+In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
+Demino comes with [URLPattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
+router implementation that can be activated via the `routerFactory` factory setting.
 
 ```ts
-const app = demino("", [], { routerFactory: () => new DeminoExpressLikeRouter() });
-
+const app = demino("", [], { routerFactory: () => new DeminoUrlPatternRouter() });
 app.get("/", () => "home");
-
 app.get("/user/:foo/section/:bar", (_r, _i, ctx) => ctx.params);
 ```
-
-Also available: [`DeminoFixedRouter`](./src/router/fixed-router.ts),
-[`DeminoRegexRouter`](./src/router/regex-router.ts).
-
-### Integrating a 3rd party routing library
-
-For inspiration, see the [source of the most basic one](./src/router/fixed-router.ts). -->
-
 
 ## Extra: file/directory based routing
 
@@ -212,8 +201,8 @@ If found, it will import and collect the exported symbols (will look for HTTP me
 exports, or default exports of array of middlewares) and apply it all to the provided app instance.
 
 The presence of the `index.ts` with at least one known exported symbol marks the directory 
-as a route. Any directory with path segment starting with `_` or `.` will be skipped. The 
-optional `_middleware.ts` are collected along the path from the beginning, so potentionally 
+as a valid route. Any directory with path segment starting with `_` or `.` will be skipped. The 
+optional `_middleware.ts` are collected along the path from the beginning, so potentially 
 multiple ones may be effective for the final route handler.
 
 So, instead of writing manually
@@ -242,6 +231,9 @@ import { demino, deminoFileBased } from "@marianmeres/demino";
 const app = demino();
 await deminoFileBased(app, './routes')
 ```
+
+Note that this feature is tested and probably will work correctly 
+**with the default router only**.
 
 ## Extra: Apps composition
 

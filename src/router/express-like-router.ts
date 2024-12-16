@@ -5,8 +5,9 @@ import {
 } from "./abstract.ts";
 
 /**
- * Proof of concept Express-like router implementation.
+ * Proof of concept Express-like router toy implementation.
  *
+ * @deprecated use DeminoUrlPatternRouter
  * @see express-like-router.test.ts
  */
 export class DeminoExpressLikeRouter extends DeminoRouter {
