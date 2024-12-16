@@ -181,7 +181,11 @@ app.use(createTrailingSlash(true))
 app.use(createTrailingSlash(false))
 ```
 
-## Extra: URLPattern routing
+### Cors
+
+Work in progress...
+
+## Extra: URLPattern router
 
 In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
 Demino comes with [URLPattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
@@ -193,7 +197,7 @@ app.get("/", () => "home");
 app.get("/user/:foo/section/:bar", (_r, _i, ctx) => ctx.params);
 ```
 
-## Extra: file/directory based routing
+## Extra: Directory based routing
 
 `deminoFileBased` function allows you to register routes and route handlers from the file system.
 It will search the provided directory for `index.(j|t)s` and `_middleware.(j|t)s` modules.
