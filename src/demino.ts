@@ -228,6 +228,18 @@ export function demino(
 		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
 	);
 
+	const _maybeSetXHeaders = (context: DeminoContext) => {
+		if (!options?.noXPoweredBy) {
+			context.headers.set("X-Powered-By", `Demino`);
+		}
+		if (!options?.noXResponseTime && isValidDate(context?.__start)) {
+			context.headers.set(
+				"X-Response-Time",
+				`${new Date().valueOf() - context.__start.valueOf()}ms`
+			);
+		}
+	};
+
 	//
 	const _createErrorResponse = async (
 		req: Request,
@@ -236,6 +248,7 @@ export function demino(
 	) => {
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
+			_maybeSetXHeaders(context);
 			const e = context.error;
 			context.headers.set("content-type", CONTENT_TYPE.HTML);
 			r = new Response(getErrorMessage(e), {
@@ -277,19 +290,9 @@ export function demino(
 					//
 					const headers = context?.headers || new Headers();
 
-					// maybe some x-headers (this will work only if the result is not
-					// a Response instance, otherwise we would need to clone it...)
+					// maybe some x-headers (this will work only if the result is not a Response instance)
 					if (!(result instanceof Response)) {
-						if (!options?.noXPoweredBy) {
-							headers.set("X-Powered-By", `Demino`);
-						}
-
-						if (!options?.noXResponseTime && isValidDate(context?.__start)) {
-							headers.set(
-								"X-Response-Time",
-								`${new Date().valueOf() - context.__start.valueOf()}ms`
-							);
-						}
+						_maybeSetXHeaders(context);
 					}
 
 					// middleware returned error instead of throwing? Not a best practice, but possible...
