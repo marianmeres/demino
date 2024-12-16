@@ -219,7 +219,7 @@ multiple ones may be effective for the final route handler.
 So, instead of writing manually
 
 ```typescript
-app.use(someGLobalMw);
+app.use(globalMw);
 app.get('/users', usersMw, () => ...);
 app.get('/users/[userId]', userMw, () => ...);
 ```
@@ -234,7 +234,7 @@ you can achieve the same effect like this (assuming the following directory stru
 |   |   |   +-- index.ts (with exported GET function)
 |   |   +-- _middleware.ts (default exports [usersMw])
 |   |   +-- index.ts (with exported GET function)
-|   +--  _middleware.ts (default exports [someGLobalMw])
+|   +--  _middleware.ts (default exports [globalMw])
 ```
 
 ```typescript
