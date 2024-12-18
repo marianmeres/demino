@@ -1,4 +1,4 @@
-# @marianmeres/demino
+# @marianmeres/demino (BETA)
 
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
@@ -10,7 +10,7 @@ and a little more...
 
 The design goal of this project is to provide a thin [sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) 
 extensible layer on top of the `Deno.serve` handler. Nothing more, nothing less.
-In other words, this is a base framework, not a full featured web server.
+In other words, this is a building blocks framework, not a full featured web server.
 
 ## Beta
 
@@ -60,8 +60,8 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 ```
 
-Demino also comes with [URLPattern based](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
-router. Read more about it below.
+Demino also comes with [URL Pattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
+based router. Read more about it below.
 
 ##  Middlewares and route handlers
 
@@ -135,12 +135,17 @@ app
 
 ## Context
 
-Each middleware receives a `DeminoContext` object as its last parameter 
+Each middleware receives a `DeminoContext` sealed object as its last parameter 
 which visibility and lifetime is limited to the scope and lifetime of the request handler. 
 
-It has `params` (router parsed params), `headers` (to be used in the final response), 
-`error` (to be used in a custom error handler) and `locals` props. 
-The `locals` prop is where each middleware can read and write arbitrary data.
+It has these props:
+- `params` - the readonly router parsed params,
+- `locals` - plain object, where each middleware can write and read arbitrary data.
+
+Additionally, it also exposes:
+- `status` - HTTP status number to be optionally used in the final response,
+- `headers` - any headers to be optionally used in the final response,
+- `error` - to be used in a custom error handler.
 
 ```typescript
 const app = demino('/articles');
@@ -170,11 +175,13 @@ replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
 ```typescript
 // example: customized json response error handler 
 app.error((_req, _info, ctx) => {
-    ctx.headers.set("content-type", "application/json");
-    return new Response(
-        JSON.stringify({ ok: false, message: ctx.error.message }),
-        { status: error?.status || 500, headers: ctx.headers }
-    );
+    // ctx.headers.set("content-type", "application/json");
+    ctx.status = ctx.error?.status || 500;
+    return { ok: false, message: ctx.error.message };
+    // return new Response(
+        // JSON.stringify({ ok: false, message: ctx.error.message }),
+        // { status: ctx.error?.status || 500, headers: ctx.headers }
+    // );
 });
 ```
 
@@ -201,10 +208,10 @@ app.use(trailingSlash(true))
 
 Work in progress...
 
-## Extra: URLPattern router
+## Extra: URL Pattern router
 
 In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
-Demino comes with [URLPattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
+Demino comes with [URL Pattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) 
 router implementation that can be activated via the `routerFactory` factory setting.
 
 ```ts

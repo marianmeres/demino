@@ -20,6 +20,8 @@ export interface DeminoContext {
 	locals: Record<string, any>;
 	/** Custom userland response (!) headers to be used in the final output. */
 	headers: Headers;
+	/** The response status to be used in the final response if auto generating the response (default 200). */
+	status: number;
 	/** Internal: timestamp of the incoming request. */
 	__start: Date;
 	/** Internal: error ref for the error handler */
@@ -131,8 +133,12 @@ export const CONTENT_TYPE = {
 };
 
 /** Creates Response based on body type */
-function _createResponseFrom(body: any, headers: Headers = new Headers()) {
-	let status = HTTP_STATUS.OK;
+function _createResponseFrom(
+	body: any,
+	headers: Headers = new Headers(),
+	status = HTTP_STATUS.OK
+) {
+	status ||= HTTP_STATUS.OK;
 
 	// make no assumptions - empty body is technically valid
 	if (body === undefined) {
@@ -173,6 +179,7 @@ function _createContext(params: Record<string, string>): DeminoContext {
 		locals: {},
 		headers: new Headers(),
 		error: null,
+		status: HTTP_STATUS.OK,
 		__start: new Date(),
 	});
 }
@@ -249,12 +256,13 @@ export function demino(
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
 			_maybeSetXHeaders(context);
-			const e = context.error;
-			context.headers.set("content-type", CONTENT_TYPE.HTML);
-			r = new Response(getErrorMessage(e), {
-				status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
-				headers: context.headers,
-			});
+			// make sure to reset any content-type we might have (the factory below will set the proper one)
+			context.headers.delete("content-type");
+			r = _createResponseFrom(
+				r || getErrorMessage(context.error),
+				context.headers,
+				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
+			);
 		}
 		return r;
 	};
@@ -302,7 +310,7 @@ export function demino(
 					}
 					// we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						result = _createResponseFrom(result, headers);
+						result = _createResponseFrom(result, headers, context?.status);
 					}
 
 					return result;

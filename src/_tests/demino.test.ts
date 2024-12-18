@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import {
+	createHttpError,
 	getErrorMessage,
 	HTTP_ERROR,
 	HTTP_STATUS,
@@ -311,6 +312,9 @@ Deno.test("custom error handler", async () => {
 
 	// return, not throw
 	app.get("/err", () => new Error("Boo"));
+	app.get("/secret", () => {
+		throw createHttpError(HTTP_STATUS.FORBIDDEN);
+	});
 
 	try {
 		srv = await startTestServer(app);
@@ -320,19 +324,24 @@ Deno.test("custom error handler", async () => {
 		});
 
 		await assertResp(fetch(`${srv.base}/err`), 500, "Boo");
+		await assertResp(
+			fetch(`${srv.base}/secret`),
+			HTTP_STATUS.FORBIDDEN,
+			"Forbidden"
+		);
 
 		// now register custom error handler which will talk always in json
 		app.error((_req, _info, ctx) => {
-			ctx.headers.set("content-type", "application/json; charset=utf-8");
 			const e = ctx.error;
-			return new Response(
-				JSON.stringify({ ok: false, message: getErrorMessage(e) }),
-				{
-					status: e?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
-					headers: ctx.headers,
-				}
-			);
+			return { ok: false, message: getErrorMessage(e) };
 		});
+
+		await assertResp(
+			fetch(`${srv.base}/secret`),
+			HTTP_STATUS.FORBIDDEN,
+			{ ok: false, message: "Forbidden" },
+			{ "content-type": /json/ }
+		);
 
 		// repeat, and expect json
 		await assertResp(
