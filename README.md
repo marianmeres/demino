@@ -3,7 +3,8 @@
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
 "Demino" (Deno minimal) - minimalistic web server framework built on top of the 
-Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, and more...
+Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, 
+and a little more...
 
 ## Batteries are NOT included
 
@@ -106,6 +107,7 @@ app.get('/manual', () => new Response('This will be sent as is.'))
 The middleware and/or route handler has the following signature (note that the arguments 
 are a subset of the normal `Deno.ServeHandler`, meaning that any valid `Deno.ServeHandler` 
 is a valid Demino app handler):
+
 ```typescript
 function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
 ```
@@ -175,8 +177,13 @@ app.error((_req, _info, ctx) => {
     );
 });
 ```
- 
-## Bundled middlewares
+
+## Extras
+
+All features described below are extensions to the base framework
+(some batteries are included after all).
+
+## Extra: Bundled middlewares
 
 ### Trailing slash
 The default router, by design, sees `/foo` and `/foo/` as the same routes, 
@@ -215,10 +222,10 @@ exports, or default exports of array of middlewares) and apply it all to the pro
 
 The presence of the `index.ts` with at least one known exported symbol marks the directory 
 as a valid route. Any directory with path segment starting with `_` or `.` will be skipped. The 
-optional `_middleware.ts` are collected along the path from the beginning, so potentially 
+optional `_middleware.ts` are collected along the path from the beginning, so 
 multiple ones may be effective for the final route handler.
 
-So, instead of writing manually
+So, instead of writing manually:
 
 ```typescript
 app.use(globalMw);
