@@ -8,7 +8,7 @@ and a little more...
 
 ## Batteries are NOT included
 
-The design goal of this project is to provide a thin [sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) 
+The design goal of this project is to provide a thin and [sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) 
 extensible layer on top of the `Deno.serve` handler. Nothing more, nothing less.
 In other words, this is a building blocks framework, not a full featured web server.
 
