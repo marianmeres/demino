@@ -83,7 +83,9 @@ based on what they return:
 - if the value is `undefined`, empty `204 No Content` response will be created,
 - if the value is a plain object (or `null`, or `toJSON` aware) it will 
   be `JSON.stringify`-ed and served as `application/json` content type,
-- everything else is cast to string as `text/html`.
+- everything else is cast to string and served as `text/html`.
+
+The automatic content type headers above are only set if none exist.
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
 yourself.
