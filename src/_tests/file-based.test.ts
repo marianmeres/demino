@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 
+import { assertEquals } from "@std/assert";
+import { demino } from "../demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
-import { assertEquals, assertMatch } from "@std/assert";
-import { demino, DeminoContext } from "../demino.ts";
 
 import { dirname, join } from "@std/path";
 import { deminoFileBased, routesCompare } from "../file-based.ts";
