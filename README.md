@@ -5,6 +5,17 @@
 "Demino" (Deno minimal) - minimalistic web server framework built on top of the 
 Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, and more...
 
+## Batteries are NOT included
+
+The design goal of this project is to provide a thin [sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) 
+extensible layer on top of the `Deno.serve` handler. Nothing more, nothing less.
+In other words, this is a base framework, not a full featured web server.
+
+## Beta
+
+Despite being marked as `1.0.x`, it is still in its early stages, where the
+API may occasionally change.
+
 ## Installation
 
 ```sh
@@ -173,12 +184,10 @@ which may not be always desired (eg for SEO). This is where the trailing slash
 middleware helps.
 
 ```ts
-// will ensure every request will be redirected (if needed) 
-// to the trailing slashed route
-app.use(createTrailingSlash(true))
-
-// and the opposite
-app.use(createTrailingSlash(false))
+// will ensure every request will be redirected (if needed) to the trailing slash route
+app.use(trailingSlash(true))
+// and the opposite:
+// app.use(trailingSlash(false))
 ```
 
 ### Cors
@@ -236,8 +245,7 @@ const app = demino();
 await deminoFileBased(app, './routes')
 ```
 
-Note that this feature is tested and probably will work correctly 
-**with the default router only**.
+Note that this feature is designed to work **with the default router only**.
 
 ## Extra: Apps composition
 
