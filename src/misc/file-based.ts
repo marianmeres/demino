@@ -9,7 +9,7 @@ import {
 	type DeminoHandler,
 	type DeminoLogger,
 	type DeminoMethod,
-} from "./demino.ts";
+} from "../demino.ts";
 
 /** `deminoFileBased` options */
 export interface DeminoFileBasedOptions {

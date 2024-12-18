@@ -3,8 +3,8 @@
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
 "Demino" (Deno minimal) - minimalistic web server framework built on top of the 
-Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling**, 
-and a little more...
+Deno's built-in HTTP server, providing **routing**, **middlewares support**, **error handling** 
+and a little more.
 
 ## Batteries are NOT included
 
