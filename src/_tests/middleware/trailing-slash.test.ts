@@ -3,7 +3,7 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { assertEquals } from "@std/assert";
 import { demino } from "../../demino.ts";
-import { createTrailingSlash } from "../../middleware/trailing-slash.ts";
+import { trailingSlash } from "../../middleware/trailing-slash.ts";
 import { assertResp, startTestServer } from "../_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
@@ -12,8 +12,8 @@ Deno.test("trailing slash manual redirect check", async () => {
 	let srv: Srv | null = null;
 
 	try {
-		const tsOn = createTrailingSlash(true);
-		const tsOff = createTrailingSlash(false);
+		const tsOn = trailingSlash(true);
+		const tsOff = trailingSlash(false);
 
 		const globalMwOutput =
 			"this must not be reached (tsMw will be executed earlier)";
@@ -64,8 +64,8 @@ Deno.test("trailing slash auto redirect", async () => {
 	const _log: string[] = [];
 	const logger = (v: string) => _log.push(v);
 	try {
-		const tsOn = createTrailingSlash(true, { logger });
-		const tsOff = createTrailingSlash(false, { logger });
+		const tsOn = trailingSlash(true, { logger });
+		const tsOff = trailingSlash(false, { logger });
 
 		const app = demino();
 		app.get("/foo/bar", tsOn, () => "foo");

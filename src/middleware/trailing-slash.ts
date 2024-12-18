@@ -11,7 +11,7 @@ import type { DeminoContext, DeminoHandler } from "../demino.ts";
  * If there is nothing to do, will do nothing. This middleware will try to position itself
  * at the beginning of the middlewares stack, to potentially terminate the chain ASAP.
  */
-export function createTrailingSlash(
+export function trailingSlash(
 	/** The master flag - TRUE: add slash, FALSE: remove slash */
 	flag: boolean,
 	options?: {
