@@ -121,16 +121,10 @@ The global ones must be registered _before_ the local ones to take effect.
 
 ```typescript
 // GOOD - the globals are registered before the final handler
-app
-    .use(someGlobal)
-    .use("/secret", authCheck)
-    .get("/secret", readSecret, handler);
+app.use(someGlobal).use("/secret", authCheck).get("/secret", readSecret, handler);
 
 // BAD! neither `someGlobal` nor `authCheck` will be used for the `GET /secret` route
-app
-    .get("/secret", readSecret, handler)
-    .use("/secret", authCheck)
-    .use(someGlobal);
+app.get("/secret", readSecret, handler).use("/secret", authCheck).use(someGlobal);
 ```
 
 ## Context
@@ -175,20 +169,15 @@ replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
 ```typescript
 // example: customized json response error handler 
 app.error((_req, _info, ctx) => {
-    // ctx.headers.set("content-type", "application/json");
     ctx.status = ctx.error?.status || 500;
     return { ok: false, message: ctx.error.message };
-    // return new Response(
-        // JSON.stringify({ ok: false, message: ctx.error.message }),
-        // { status: ctx.error?.status || 500, headers: ctx.headers }
-    // );
 });
 ```
 
 ## Extras
 
-All features described below are extensions to the base framework
-(some batteries are included after all).
+All features described below are extensions to the base framework.
+Some batteries are included after all.
 
 ## Extra: Bundled middlewares
 
