@@ -80,9 +80,11 @@ Unlike in `Deno.serve` handlers, the Demino route handlers are not required
 to return a `Response` instance, it will be created automatically 
 based on what they return:
 
-- if the value is `undefined`, empty `204 No Content` response will be created,
-- if the value is a plain object (or `null`, or `toJSON` aware) it will 
+- if the final returned value is `undefined` (no middleware returned a defined value), 
+  empty `204 No Content` response will be created,
+- if any returned value is a plain object (or `null`, or `toJSON` aware) it will 
   be `JSON.stringify`-ed and served as `application/json` content type,
+- if any middleware threw (or returned) an `Error`, error response is generated,
 - everything else is cast to string and served as `text/html`.
 
 The automatic content type headers above are only set if none exist.

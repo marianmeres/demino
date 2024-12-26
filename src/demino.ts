@@ -127,7 +127,7 @@ function isFn(v: any): boolean {
 
 /** Export few well known ones, for easier consumption in apps */
 export const CONTENT_TYPE = {
-	JSON: "application/json; charset=utf-8",
+	JSON: "application/json", // default encoding is utf-8
 	TEXT: "text/plain; charset=utf-8",
 	HTML: "text/html; charset=utf-8",
 };

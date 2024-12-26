@@ -2,20 +2,20 @@
   "version": "4",
   "specifiers": {
     "jsr:@marianmeres/midware@^1.1.0": "1.1.0",
-    "jsr:@std/assert@^1.0.9": "1.0.9",
+    "jsr:@std/assert@^1.0.10": "1.0.10",
     "jsr:@std/fmt@^1.0.3": "1.0.3",
-    "jsr:@std/fs@^1.0.6": "1.0.6",
+    "jsr:@std/fs@^1.0.8": "1.0.8",
     "jsr:@std/internal@^1.0.5": "1.0.5",
     "jsr:@std/path@^1.0.8": "1.0.8",
-    "npm:@marianmeres/http-utils@^1.13.0": "1.13.0",
+    "npm:@marianmeres/http-utils@^1.15.0": "1.15.0",
     "npm:@marianmeres/simple-router@^1.9.2": "1.9.2"
   },
   "jsr": {
     "@marianmeres/midware@1.1.0": {
       "integrity": "c65e23a638ceb124811ef74ccab8978f800bc8cf80164369605c9dca8a69d88f"
     },
-    "@std/assert@1.0.9": {
-      "integrity": "a9f0c611a869cc791b26f523eec54c7e187aab7932c2c8e8bea0622d13680dcd",
+    "@std/assert@1.0.10": {
+      "integrity": "59b5cbac5bd55459a19045d95cc7c2ff787b4f8527c0dd195078ff6f9481fbb3",
       "dependencies": [
         "jsr:@std/internal"
       ]
@@ -23,8 +23,8 @@
     "@std/fmt@1.0.3": {
       "integrity": "97765c16aa32245ff4e2204ecf7d8562496a3cb8592340a80e7e554e0bb9149f"
     },
-    "@std/fs@1.0.6": {
-      "integrity": "42b56e1e41b75583a21d5a37f6a6a27de9f510bcd36c0c85791d685ca0b85fa2",
+    "@std/fs@1.0.8": {
+      "integrity": "161c721b6f9400b8100a851b6f4061431c538b204bb76c501d02c508995cffe0",
       "dependencies": [
         "jsr:@std/path"
       ]
@@ -37,8 +37,8 @@
     }
   },
   "npm": {
-    "@marianmeres/http-utils@1.13.0": {
-      "integrity": "sha512-wasT+p8Z8hHxi4sjZp+IYpReIrxcJUaT2IOqK/Md/zzF9wtBk3gLLyc/spI2u9x+EQx1JPcwXCGuIYErZfP5PQ==",
+    "@marianmeres/http-utils@1.15.0": {
+      "integrity": "sha512-5VQZ5nXh93ryjJTFGwcIZXpjyOSp2KxjaW+++Rg8tAJ4WK4CIyJDnfDUtUiBk6lCLH2bnCaxzCx4noALw+r5gQ==",
       "dependencies": [
         "dset"
       ]
@@ -53,11 +53,11 @@
   "workspace": {
     "dependencies": [
       "jsr:@marianmeres/midware@^1.1.0",
-      "jsr:@std/assert@^1.0.9",
+      "jsr:@std/assert@^1.0.10",
       "jsr:@std/fmt@^1.0.3",
-      "jsr:@std/fs@^1.0.6",
+      "jsr:@std/fs@^1.0.8",
       "jsr:@std/path@^1.0.8",
-      "npm:@marianmeres/http-utils@^1.13.0",
+      "npm:@marianmeres/http-utils@^1.15.0",
       "npm:@marianmeres/simple-router@^1.9.2"
     ]
   }

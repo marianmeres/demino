@@ -9,7 +9,6 @@ import {
 import { assertEquals } from "@std/assert";
 import { demino, type DeminoHandler } from "../demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
-import { deminoCompose } from "../misc/compose.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
@@ -297,6 +296,28 @@ Deno.test("global route middlewares", async () => {
 		log = [];
 		await assertResp(fetch(`${srv.base}/foo`, { method: "POST" }), 200, "foo");
 		assertEquals(log, [1, 2, 3]);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("error handler", async () => {
+	let srv: Srv | null = null;
+
+	const app = demino();
+	app.get("/foo", () => {
+		const e: any = new Error("Bar");
+		e.code = 12345;
+		throw e;
+	});
+
+	try {
+		srv = await startTestServer(app);
+		await assertResp(fetch(`${srv.base}/foo`), 500, /bar/i); // not 12345
 	} catch (e) {
 		throw e;
 	} finally {
