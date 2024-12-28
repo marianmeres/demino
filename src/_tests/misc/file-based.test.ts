@@ -9,8 +9,11 @@ import { assertResp, startTestServer } from "../_utils.ts";
 // absolute
 const _dirname = import.meta.dirname!;
 const root1 = join(_dirname, "../fixtures/_root1");
-const root2 = join(_dirname, "../fixtures/_root2");
-const root3 = join(_dirname, "../fixtures/_root3");
+// const root2 = join(_dirname, "../fixtures/_root2");
+
+// relative
+// const root1 = "src/_tests/fixtures/_root1";
+const root2 = "./src/_tests/fixtures/_root2";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 

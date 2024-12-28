@@ -52,19 +52,6 @@ export async function deminoFileBased(
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
 	for (const rootDir of rootDirs) {
-		// https://docs.deno.com/deploy/api/dynamic-import/
-		// enforcing absolute here, so we can make it relative down
-		const parsed = parse(rootDir);
-		if (!parsed.root) {
-			throw new Error(
-				`Root dir must be specified as an absolute path (${rootDir})`
-			);
-		}
-
-		if (!rootDir.startsWith(Deno.cwd())) {
-			throw new Error(`Root dir must be a subdirectory of the cwd`);
-		}
-
 		for (const dirEntry of walkSync(rootDir, {
 			includeDirs: false,
 			// we are cosuming only ts/js here
