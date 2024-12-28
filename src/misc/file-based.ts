@@ -2,7 +2,7 @@
 
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
-import { dirname, join, normalize, parse } from "@std/path";
+import { dirname, join, normalize, parse, relative } from "@std/path";
 import {
 	supportedMethods,
 	type Demino,
@@ -51,6 +51,19 @@ export async function deminoFileBased(
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
 	for (const rootDir of rootDirs) {
+		// https://docs.deno.com/deploy/api/dynamic-import/
+		// enforcing absolute here, so we can make it relative down
+		const parsed = parse(rootDir);
+		if (!parsed.root) {
+			throw new Error(
+				`Root dir must be specified as an absolute path (${rootDir})`
+			);
+		}
+
+		if (!rootDir.startsWith(Deno.cwd())) {
+			throw new Error(`Root dir must be a subdirectory of the cwd`);
+		}
+
 		for (const dirEntry of walkSync(rootDir, {
 			includeDirs: false,
 			// we are cosuming only ts/js here
@@ -58,18 +71,12 @@ export async function deminoFileBased(
 		})) {
 			// ignore dotfiles quickly
 			if (dirEntry.name.startsWith(".")) continue;
-			let filepath = dirEntry.path;
+			const filepath = dirEntry.path;
 			const name = dirEntry.name;
 
 			// route is the "relative" dirname portion (also, try to windows normalize)
 			const route = dirname(filepath.slice(rootDir.length)).replace("\\", "/");
 			let type: "routeHandler" | "middleware";
-
-			//
-			const parsed = parse(filepath);
-			if (!parsed.root) {
-				filepath = join(Deno.cwd(), filepath);
-			}
 
 			// 1. formal filename checks first (and skip processing asap)
 
@@ -221,7 +228,10 @@ async function _importRouteHandlers(
 	filepath: string,
 	debugLog?: CallableFunction
 ): Promise<Partial<Record<"ALL" | DeminoMethod, DeminoHandler>>> {
-	const module = await import(filepath);
+	// https://docs.deno.com/deploy/api/dynamic-import/
+	filepath = relative(import.meta.dirname!, filepath);
+	const module = await import(`./${filepath}`);
+
 	const out: Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> = {};
 
 	let found = 0;
@@ -250,7 +260,11 @@ async function _importMiddlewares(
 	filepath: string,
 	debugLog?: CallableFunction
 ): Promise<DeminoHandler[]> {
-	const module = await import(filepath);
+	// https://docs.deno.com/deploy/api/dynamic-import/
+	filepath = relative(import.meta.dirname!, filepath);
+	const module = await import(`./${filepath}`);
+
+	//
 	const out: DeminoHandler[] = [];
 	const hint =
 		"(Hint: file must default export array of middleware functions.)";
