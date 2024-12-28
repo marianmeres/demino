@@ -35,19 +35,13 @@ export function trailingSlash(
 		if (flag && !url.pathname.endsWith("/")) {
 			url.pathname += "/";
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`); // debug
-			return new Response(null, {
-				status: HTTP_STATUS.MOVED_PERMANENTLY,
-				headers: { Location: url.toString() },
-			});
+			return Response.redirect(url.toString(), HTTP_STATUS.MOVED_PERMANENTLY);
 		}
 		// remove slash
 		else if (!flag && url.pathname.endsWith("/")) {
 			url.pathname = url.pathname.slice(0, -1);
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`);
-			return new Response(null, {
-				status: HTTP_STATUS.MOVED_PERMANENTLY,
-				headers: { Location: url.toString() },
-			});
+			return Response.redirect(url.toString(), HTTP_STATUS.MOVED_PERMANENTLY);
 		}
 	};
 

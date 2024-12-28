@@ -7,6 +7,7 @@ import {
 } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
+import requestIp from "npm:request-ip";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
@@ -235,7 +236,7 @@ export function demino(
 			`Mount path must not end with a slash (path: ${mountPath})`
 		);
 	}
-	if (/\[:/.test(mountPath)) {
+	if (/\[:\*/.test(mountPath)) {
 		throw new TypeError(
 			`Mount path must not contain named segments (path: ${mountPath})`
 		);
@@ -303,11 +304,14 @@ export function demino(
 	) => {
 		// make sure it is async, so it never prevents responding
 		return new Promise(() => {
+			const _clientIp = requestIp.getClientIp({
+				headers: Object.fromEntries(req.headers),
+			});
 			log?.access?.({
 				timestamp: new Date(),
 				req,
 				status,
-				ip: (info?.remoteAddr as any)?.hostname,
+				ip: _clientIp || (info?.remoteAddr as any)?.hostname,
 				duration: Date.now() - start,
 			});
 		});
