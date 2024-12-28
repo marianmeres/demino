@@ -178,6 +178,15 @@ app.error((_req, _info, ctx) => {
 });
 ```
 
+## Serving static files
+
+Static files can be served through `.static(...)` method, internally implemented 
+with [`@std/http/serveDir`](https://jsr.io/@std/http/doc/~/serveDir).
+
+```typescript
+app.static('/files', '/path/to/my/files/dir', options?: ServeDirOptions);
+```
+
 ## Extras
 
 All features described below are extensions to the base framework.

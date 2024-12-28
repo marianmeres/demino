@@ -7,6 +7,7 @@ import {
 } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
+import { serveDir, type ServeDirOptions } from "@std/http/file-server";
 import requestIp from "npm:request-ip@3";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
@@ -86,6 +87,12 @@ export interface Demino extends Deno.ServeHandler {
 	use: (...args: (string | DeminoHandler | DeminoHandler[])[]) => Demino;
 	/** Returns which path is the current app mounted on. */
 	mountPath: () => string;
+	/** Will serve static files via `@std/http/serveDir` from the given `fsRoot` directory.  */
+	static: (
+		route: string,
+		fsRoot: string,
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+	) => Demino;
 }
 
 /** Demino supported method */
@@ -236,9 +243,9 @@ export function demino(
 			`Mount path must not end with a slash (path: ${mountPath})`
 		);
 	}
-	if (/\[:\*/.test(mountPath)) {
+	if (/[\[\]:\*]/.test(mountPath)) {
 		throw new TypeError(
-			`Mount path must not contain named segments (path: ${mountPath})`
+			`Mount path must not contain dynamic segments (path: ${mountPath})`
 		);
 	}
 
@@ -478,6 +485,39 @@ export function demino(
 
 	//
 	_app.mountPath = () => mountPath;
+
+	// experimental and ugly
+	_app.static = (
+		route: string,
+		fsRoot: string,
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+	) => {
+		// probably hackish-ly doable, but not worth the dance
+		if (/[\[\]:\*]/.test(route)) {
+			throw new TypeError(
+				`Static route must not contain dynamic segments (route: ${route})`
+			);
+		}
+		let _starLess: string;
+
+		// make sure we're passing a catch-all route (will work fine with simple-router)
+		if (!route.endsWith("/*")) {
+			_starLess = route;
+			route = `${route}/*`.replace(/\/+/g, "/");
+		} else {
+			_starLess = route.slice(0, -2);
+		}
+
+		_app.all(route, (req) => {
+			return serveDir(req, {
+				...(options || {}),
+				fsRoot,
+				urlRoot: _starLess.slice(1),
+			});
+		});
+
+		return _app;
+	};
 
 	return _app;
 }
