@@ -182,7 +182,7 @@ app.error((_req, _info, ctx) => {
 
 Static files can be served through `.static(...)` method, internally implemented 
 with [`@std/http/serveDir`](https://jsr.io/@std/http/doc/~/serveDir) where you can
-optionally pass other [`ServeDirOptions` options](https://jsr.io/@std/http/doc/~/ServeDirOptions) 
+optionally pass other [`ServeDirOptions`](https://jsr.io/@std/http/doc/~/ServeDirOptions) 
 (except `fsRoot` and `urlRoot`).
 
 ```typescript
