@@ -68,6 +68,8 @@ Deno.test("composition", async () => {
 			200,
 			/special: foo/i
 		);
+
+		await assertResp(fetch(`${srv.base}/some/not/existing/`), 404);
 	} catch (e) {
 		throw e;
 	} finally {
