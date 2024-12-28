@@ -37,6 +37,7 @@ export interface DeminoFileBasedOptions {
 export async function deminoFileBased(
 	app: Demino,
 	rootDirs: string | string[],
+	doImport: (modulePath: string) => Promise<any>,
 	options?: DeminoFileBasedOptions
 ): Promise<Demino> {
 	if (!Array.isArray(rootDirs)) rootDirs = [rootDirs];
@@ -91,12 +92,14 @@ export async function deminoFileBased(
 			if (type === "routeHandler") {
 				options?.verbose && log?.debug?.(green(`${filepath}`));
 				routes[route] = await _importRouteHandlers(
+					await doImport(filepath),
 					filepath,
 					options?.verbose ? log?.debug : undefined
 				);
 			} else if (type === "middleware") {
 				options?.verbose && log?.debug?.(green(`${filepath}`));
 				middlewares[route] = await _importMiddlewares(
+					await doImport(filepath),
 					filepath,
 					options?.verbose ? log?.debug : undefined
 				);
@@ -224,13 +227,14 @@ function _isMiddlewareValidFilename(filename: string) {
 }
 
 /** Will import filepath as a js module and look for known exports */
-async function _importRouteHandlers(
-	filepath: string,
+function _importRouteHandlers(
+	module: any,
+	fileDebugLabel: string,
 	debugLog?: CallableFunction
-): Promise<Partial<Record<"ALL" | DeminoMethod, DeminoHandler>>> {
+): Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> {
 	// https://docs.deno.com/deploy/api/dynamic-import/
-	filepath = relative(import.meta.dirname!, filepath);
-	const module = await import(`./${filepath}`);
+	// filepath = relative(import.meta.dirname!, filepath);
+	// const module = await import(`./${filepath}`);
 
 	const out: Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> = {};
 
@@ -246,7 +250,7 @@ async function _importRouteHandlers(
 
 	if (!found) {
 		throw new TypeError(
-			`No expected route handlers found in ${filepath}. (Hint: file must export HTTP method named functions.)`
+			`No expected route handlers found in ${fileDebugLabel}. (Hint: file must export HTTP method named functions.)`
 		);
 	} else {
 		debugLog?.(` ✔ found: ${Object.keys(out).join(", ")}`);
@@ -256,13 +260,14 @@ async function _importRouteHandlers(
 }
 
 /** Will import filepath as a js module and look for known exports */
-async function _importMiddlewares(
-	filepath: string,
+function _importMiddlewares(
+	module: any,
+	fileDebugLabel: string,
 	debugLog?: CallableFunction
-): Promise<DeminoHandler[]> {
+): DeminoHandler[] {
 	// https://docs.deno.com/deploy/api/dynamic-import/
-	filepath = relative(import.meta.dirname!, filepath);
-	const module = await import(`./${filepath}`);
+	// filepath = relative(import.meta.dirname!, filepath);
+	// const module = await import(`./${filepath}`);
 
 	//
 	const out: DeminoHandler[] = [];
@@ -270,7 +275,7 @@ async function _importMiddlewares(
 		"(Hint: file must default export array of middleware functions.)";
 
 	if (!Array.isArray(module.default)) {
-		throw new TypeError(`Invalid middleware file ${filepath}. ${hint}`);
+		throw new TypeError(`Invalid middleware file ${fileDebugLabel}. ${hint}`);
 	}
 
 	module.default.forEach((v: any) => {
@@ -278,7 +283,7 @@ async function _importMiddlewares(
 			out.push(v);
 		} else {
 			throw new TypeError(
-				`Not a function middleware type in ${filepath}. ${hint}`
+				`Not a function middleware type in ${fileDebugLabel}. ${hint}`
 			);
 		}
 	});
