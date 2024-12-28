@@ -42,7 +42,7 @@ export async function deminoFileBased(
 	if (!Array.isArray(rootDirs)) rootDirs = [rootDirs];
 	rootDirs = rootDirs.map(normalize);
 
-	const log = options?.logger ?? console;
+	const log: DeminoLogger = options?.logger ?? console;
 
 	const routes: Record<
 		string,
@@ -142,7 +142,7 @@ export async function deminoFileBased(
 	// final apply
 	defs.forEach(([route, method, mws, handler]) => {
 		options?.verbose &&
-			log.debug(green(` ✔ ${method} ${route} (${mws.length} mws)`));
+			log?.debug?.(green(` ✔ ${method} ${route} (${mws.length} mws)`));
 		// console.log(method.toLocaleLowerCase(), handler);
 		(app as any)[method.toLocaleLowerCase()](route, mws, handler);
 	});

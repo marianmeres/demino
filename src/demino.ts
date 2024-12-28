@@ -114,10 +114,17 @@ export const supportedMethods: DeminoMethod[] = [
 
 /** Internal logger inteface (experimental)... */
 export interface DeminoLogger {
-	error: (...args: any[]) => void;
-	warn: (...args: any[]) => void;
-	log: (...args: any[]) => void;
-	debug: (...args: any[]) => void;
+	error?: (...args: any[]) => void;
+	warn?: (...args: any[]) => void;
+	log?: (...args: any[]) => void;
+	debug?: (...args: any[]) => void;
+	access?: (data: {
+		timestamp: Date;
+		status: number;
+		req: Request;
+		ip: string | undefined;
+		duration: number;
+	}) => void;
 }
 
 /** Internal DRY helper */
@@ -237,7 +244,7 @@ export function demino(
 	// initialize and normalize...
 	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
-	const log = options?.logger ?? console;
+	const log: DeminoLogger = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
@@ -263,7 +270,7 @@ export function demino(
 		) {
 			context.headers.set(
 				"X-Response-Time",
-				`${new Date().valueOf() - context.__start.valueOf()}ms`
+				`${Date.now() - context.__start.valueOf()}ms`
 			);
 		}
 	};
@@ -273,7 +280,7 @@ export function demino(
 		req: Request,
 		info: Deno.ServeHandlerInfo,
 		context: DeminoContext
-	) => {
+	): Promise<Response> => {
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
 			_maybeSetXHeaders(context);
@@ -288,11 +295,30 @@ export function demino(
 		return r;
 	};
 
+	const _accessLog = (
+		req: Request,
+		info: Deno.ServeHandlerInfo,
+		status: number,
+		start: number
+	) => {
+		// make sure it is async, so it never prevents responding
+		return new Promise(() => {
+			log?.access?.({
+				timestamp: new Date(),
+				req,
+				status,
+				ip: (info?.remoteAddr as any)?.hostname,
+				duration: Date.now() - start,
+			});
+		});
+	};
+
 	//
 	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
 		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
 		let context = _createContext({});
+		const start = Date.now();
 
 		try {
 			if (!_routers[method]) {
@@ -327,14 +353,18 @@ export function demino(
 					// middleware returned error instead of throwing? Not a best practice, but possible...
 					if (result instanceof Error) {
 						context.error = result;
-						result = _createErrorResponse(req, info, context);
+						result = await _createErrorResponse(req, info, context);
 					}
 					// we need Response instance eventually...
 					else if (!(result instanceof Response)) {
 						result = _createResponseFrom(result, headers, context?.status);
 					}
 
-					return result;
+					//
+					_accessLog(req, info, (result as Response).status, start);
+
+					//
+					return result as Response;
 				} catch (e: any) {
 					const status = e.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
 					throw createHttpError(status, null, null, e);
@@ -344,7 +374,9 @@ export function demino(
 			}
 		} catch (e: any) {
 			context.error = e;
-			return _createErrorResponse(req, info, context);
+			const resp = await _createErrorResponse(req, info, context);
+			_accessLog(req, info, resp.status, start);
+			return resp;
 		}
 	};
 
@@ -396,12 +428,12 @@ export function demino(
 				}));
 
 				if (options?.verbose) {
-					log.debug(green(` ✔ ${method} ${mountPath + route}`));
+					log?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
 				}
 			} catch (e) {
 				// this is a friendly warning not a fatal condition (other routes may work
 				// fine, no need to die here)
-				log.warn(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
+				log?.warn?.(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
 			}
 
 			return _app;

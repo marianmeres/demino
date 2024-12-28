@@ -6,9 +6,10 @@ import {
 	HTTP_ERROR,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
-import { assertEquals } from "@std/assert";
-import { demino, type DeminoHandler } from "../demino.ts";
+import { assert, assertEquals } from "@std/assert";
+import { demino, DeminoLogger, type DeminoHandler } from "../demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
+import { sleep } from "@marianmeres/midware";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
@@ -477,6 +478,55 @@ Deno.test("first route match wins", async () => {
 		srv = await startTestServer(app);
 		await assertResp(fetch(`${srv.base}/a/static`), 200, "a/static");
 		await assertResp(fetch(`${srv.base}/b/static`), 200, "b/name: static");
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("access log", async () => {
+	let srv: Srv | null = null;
+
+	const _log: string[] = [];
+	const logger: DeminoLogger = {
+		access: async ({ req, status }) => {
+			// intentionally sleeping - must not prevent responding
+			await sleep(10);
+			const { pathname, search } = new URL(req.url);
+			_log.push(`${req.method} ${pathname}${search} ${status}`);
+		},
+	};
+
+	const app = demino("", [], { logger });
+
+	app.all("/", () => "/");
+	app.all("/a", () => "a");
+	app.all("/b", () => new HTTP_ERROR.ImATeapot());
+
+	try {
+		srv = await startTestServer(app);
+
+		await assertResp(fetch(`${srv.base}/?hey`));
+		await assertResp(fetch(`${srv.base}/a`, { method: "POST" }));
+		await assertResp(fetch(`${srv.base}/b`, { method: "PUT" }), 418);
+		await assertResp(fetch(`${srv.base}/foo/bar?baz=bat`), 404);
+
+		// because logger intentionally sleeps above (must not prevent the server to respond)
+		assertEquals(_log.length, 0);
+
+		// wait for logger to complete
+		await sleep(100);
+
+		// now check
+		assertEquals(_log, [
+			"GET /?hey 200",
+			"POST /a 200",
+			"PUT /b 418",
+			"GET /foo/bar?baz=bat 404",
+		]);
 	} catch (e) {
 		throw e;
 	} finally {
