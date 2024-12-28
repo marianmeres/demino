@@ -447,6 +447,7 @@ export function demino(
 					duplicatesCheckEnabled: true,
 				});
 
+				//
 				const _fullRoute = mountPath + route;
 				_routers[method].assertIsValid(_fullRoute);
 
@@ -515,18 +516,20 @@ export function demino(
 				`Static route must not contain dynamic segments (route: ${route})`
 			);
 		}
-		let _starLess: string;
+		let urlRoot: string;
 
 		// make sure we're passing a catch-all route (will work fine with simple-router)
 		if (!route.endsWith("/*")) {
-			_starLess = route;
+			urlRoot = mountPath + route;
 			route = `${route}/*`.replace(/\/+/g, "/");
 		} else {
-			_starLess = route.slice(0, -2);
+			urlRoot = (mountPath + route).slice(0, -2);
 		}
 
+		urlRoot = urlRoot.slice(1); // strip leading slash
+		// console.log(123, route, urlRoot);
+
 		_app.all(route, (req) => {
-			const urlRoot = _starLess.slice(1);
 			return serveDir(req, { ...(options || {}), fsRoot, urlRoot });
 		});
 
