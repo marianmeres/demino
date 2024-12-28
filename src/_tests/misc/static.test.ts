@@ -22,9 +22,7 @@ Deno.test("serve static on root", async () => {
 		await assertResp(fetch(`${srv.base}/foo.txt`), 200, /foo/);
 		await assertResp(fetch(`${srv.base}/foo`), 404);
 		await assertResp(fetch(`${srv.base}/foo/bar/baz.txt`), 200, /baz/);
-
 		await assertResp(fetch(`${srv.base}/hey/ho`), 404);
-
 		await assertResp(fetch(`${srv.base}/hello`), 200, /world/);
 	} catch (e) {
 		throw e;
@@ -49,12 +47,10 @@ Deno.test("serve static on route", async () => {
 		srv = await startTestServer(app);
 
 		await assertResp(fetch(`${srv.base}`), 200, /hello/);
-
 		await assertResp(fetch(`${srv.base}/files`), 200, /index/); // showIndex is true by default
 		await assertResp(fetch(`${srv.base}/files/foo.txt`), 200, /foo/);
 		await assertResp(fetch(`${srv.base}/files/foo`), 404);
 		await assertResp(fetch(`${srv.base}/files/foo/bar/baz.txt`), 200, /baz/);
-
 		await assertResp(fetch(`${srv.base}/files/hey/ho`), 404);
 	} catch (e) {
 		throw e;
@@ -71,21 +67,19 @@ Deno.test("serve static on inner route", async () => {
 	// landing page example
 	const app = demino();
 	app.get("/", () => "hello");
-	app.static("/my/files", join(import.meta.dirname!, "../static"), {
+	app.static("/m/y/fil/es", join(import.meta.dirname!, "../static"), {
 		quiet: true,
 	});
 
 	try {
 		srv = await startTestServer(app);
+		const { base } = srv;
 
-		await assertResp(fetch(`${srv.base}`), 200, /hello/);
-
-		await assertResp(fetch(`${srv.base}/my/files`), 200, /index/); // showIndex is true by default
-		await assertResp(fetch(`${srv.base}/my/files/foo.txt`), 200, /foo/);
-		await assertResp(fetch(`${srv.base}/my/files/foo`), 404);
-		await assertResp(fetch(`${srv.base}/my/files/foo/bar/baz.txt`), 200, /baz/);
-		//
-		await assertResp(fetch(`${srv.base}/my/files/hey/ho`), 404);
+		await assertResp(fetch(`${base}`), 200, /hello/);
+		await assertResp(fetch(`${base}/m/y/fil/es`), 200, /index/); // showIndex is true by default
+		await assertResp(fetch(`${base}/m/y/fil/es/foo`), 404);
+		await assertResp(fetch(`${base}/m/y/fil/es/foo/bar/baz.txt`), 200, /baz/);
+		await assertResp(fetch(`${base}/m/y/fil/es/hey/ho`), 404);
 	} catch (e) {
 		throw e;
 	} finally {

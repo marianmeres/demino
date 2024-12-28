@@ -28,6 +28,8 @@ export interface DeminoContext {
 	__start: Date;
 	/** Internal: error ref for the error handler */
 	error: any;
+	/** Client ip address */
+	ip: string;
 }
 
 /** Arguments passed to DeminoHandler (a.k.a. middleware) */
@@ -188,14 +190,23 @@ function _createResponseFrom(
 }
 
 /** Internal DRY helper */
-function _createContext(params: Record<string, string>): DeminoContext {
+function _createContext(
+	start: number,
+	params: Record<string, string>,
+	req: Request,
+	info: Deno.ServeHandlerInfo
+): DeminoContext {
+	const _clientIp = requestIp.getClientIp({
+		headers: Object.fromEntries(req.headers), // requestIp needs plain object
+	});
 	return Object.seal({
 		params: Object.freeze(params),
 		locals: {},
 		headers: new Headers(),
 		error: null,
 		status: HTTP_STATUS.OK,
-		__start: new Date(),
+		ip: _clientIp || (info?.remoteAddr as any)?.hostname,
+		__start: new Date(start),
 	});
 }
 
@@ -300,25 +311,30 @@ export function demino(
 				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
 			);
 		}
+
+		// error log
+		if (log?.error) {
+			new Promise(() => {});
+		}
+
 		return r;
 	};
 
-	const _accessLog = (
-		req: Request,
-		info: Deno.ServeHandlerInfo,
-		status: number,
-		start: number
-	) => {
-		// make sure it is async, so it never prevents responding
+	const _accessLog = (data: {
+		req: Request;
+		status: number;
+		start: number;
+		ip: string;
+	}) => {
+		if (!log?.access) return;
+		const { req, status, start, ip } = data;
+		// make sure it is async, so it never effects responding
 		return new Promise(() => {
-			const _clientIp = requestIp.getClientIp({
-				headers: Object.fromEntries(req.headers),
-			});
 			log?.access?.({
 				timestamp: new Date(),
 				req,
 				status,
-				ip: _clientIp || (info?.remoteAddr as any)?.hostname,
+				ip,
 				duration: Date.now() - start,
 			});
 		});
@@ -328,8 +344,8 @@ export function demino(
 	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
 		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
-		let context = _createContext({});
 		const start = Date.now();
+		let context = _createContext(start, {}, req, info);
 
 		try {
 			if (!_routers[method]) {
@@ -346,7 +362,7 @@ export function demino(
 
 			if (matched) {
 				try {
-					context = _createContext(matched.params);
+					context = _createContext(start, matched.params, req, info);
 
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
@@ -372,7 +388,8 @@ export function demino(
 					}
 
 					//
-					_accessLog(req, info, (result as Response).status, start);
+					const status = (result as Response).status;
+					_accessLog({ req, status, start, ip: context.ip });
 
 					//
 					return result as Response;
@@ -386,7 +403,7 @@ export function demino(
 		} catch (e: any) {
 			context.error = e;
 			const resp = await _createErrorResponse(req, info, context);
-			_accessLog(req, info, resp.status, start);
+			_accessLog({ req, status: resp.status, start, ip: context.ip });
 			return resp;
 		}
 	};
@@ -492,7 +509,7 @@ export function demino(
 		fsRoot: string,
 		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
 	) => {
-		// probably hackish-ly doable, but not worth the dance
+		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
 		if (/[\[\]:\*]/.test(route)) {
 			throw new TypeError(
 				`Static route must not contain dynamic segments (route: ${route})`
@@ -509,11 +526,8 @@ export function demino(
 		}
 
 		_app.all(route, (req) => {
-			return serveDir(req, {
-				...(options || {}),
-				fsRoot,
-				urlRoot: _starLess.slice(1),
-			});
+			const urlRoot = _starLess.slice(1);
+			return serveDir(req, { ...(options || {}), fsRoot, urlRoot });
 		});
 
 		return _app;
