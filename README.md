@@ -259,12 +259,12 @@ you can achieve the same effect like this (assuming the following directory stru
 
 ```typescript
 import { demino, deminoFileBased } from "@marianmeres/demino";
-import { relative } from "@std/path";
+import { join, relative } from "@std/path";
 
 const app = demino();
 await deminoFileBased(
     app, 
-    './routes', 
+    join(import.meta.dirname!, "routes")
     // https://docs.deno.com/deploy/api/dynamic-import/
     // due to the limitations of dynamic imports, we must provide the hoisted import worker 
     // function (located in the project space)
