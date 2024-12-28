@@ -2,7 +2,7 @@
 
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
-import { dirname, normalize } from "@std/path";
+import { dirname, join, normalize, parse } from "@std/path";
 import {
 	supportedMethods,
 	type Demino,
@@ -58,12 +58,18 @@ export async function deminoFileBased(
 		})) {
 			// ignore dotfiles quickly
 			if (dirEntry.name.startsWith(".")) continue;
-			const filepath = dirEntry.path;
+			let filepath = dirEntry.path;
 			const name = dirEntry.name;
 
 			// route is the "relative" dirname portion (also, try to windows normalize)
 			const route = dirname(filepath.slice(rootDir.length)).replace("\\", "/");
 			let type: "routeHandler" | "middleware";
+
+			//
+			const parsed = parse(filepath);
+			if (!parsed.root) {
+				filepath = join(Deno.cwd(), filepath);
+			}
 
 			// 1. formal filename checks first (and skip processing asap)
 
@@ -76,9 +82,17 @@ export async function deminoFileBased(
 			// 2. path is formally valid, now need to investigate the exported symbols
 
 			if (type === "routeHandler") {
-				routes[route] = await _importRouteHandlers(filepath);
+				options?.verbose && log?.debug?.(green(`${filepath}`));
+				routes[route] = await _importRouteHandlers(
+					filepath,
+					options?.verbose ? log?.debug : undefined
+				);
 			} else if (type === "middleware") {
-				middlewares[route] = await _importMiddlewares(filepath);
+				options?.verbose && log?.debug?.(green(`${filepath}`));
+				middlewares[route] = await _importMiddlewares(
+					filepath,
+					options?.verbose ? log?.debug : undefined
+				);
 			}
 		}
 	}
@@ -204,7 +218,8 @@ function _isMiddlewareValidFilename(filename: string) {
 
 /** Will import filepath as a js module and look for known exports */
 async function _importRouteHandlers(
-	filepath: string
+	filepath: string,
+	debugLog?: CallableFunction
 ): Promise<Partial<Record<"ALL" | DeminoMethod, DeminoHandler>>> {
 	const module = await import(filepath);
 	const out: Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> = {};
@@ -223,13 +238,18 @@ async function _importRouteHandlers(
 		throw new TypeError(
 			`No expected route handlers found in ${filepath}. (Hint: file must export HTTP method named functions.)`
 		);
+	} else {
+		debugLog?.(` ✔ found: ${Object.keys(out).join(", ")}`);
 	}
 
 	return out;
 }
 
 /** Will import filepath as a js module and look for known exports */
-async function _importMiddlewares(filepath: string): Promise<DeminoHandler[]> {
+async function _importMiddlewares(
+	filepath: string,
+	debugLog?: CallableFunction
+): Promise<DeminoHandler[]> {
 	const module = await import(filepath);
 	const out: DeminoHandler[] = [];
 	const hint =
@@ -248,6 +268,10 @@ async function _importMiddlewares(filepath: string): Promise<DeminoHandler[]> {
 			);
 		}
 	});
+
+	if (out.length) {
+		debugLog?.(` ✔ found: ${out.length}`);
+	}
 
 	// empty is ok
 	return out;

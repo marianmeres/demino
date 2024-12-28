@@ -4,17 +4,20 @@ import { assertEquals } from "@std/assert";
 import { demino } from "../../demino.ts";
 import { assertResp, startTestServer } from "../_utils.ts";
 
-import { dirname, join } from "@std/path";
+import { join, relative } from "@std/path";
 import { deminoFileBased, routesCompare } from "../../misc/file-based.ts";
 
-// const create = Deno.readTextFileSync(
-// join(dirname(import.meta.filename!), "__schema-template__.sql"),
-// );
-
-const _dirname = dirname(import.meta.filename!);
+// relative
+const _dirname = relative(Deno.cwd(), import.meta.dirname!);
 const root1 = join(_dirname, "../fixtures/_root1");
 const root2 = join(_dirname, "../fixtures/_root2");
 const root3 = join(_dirname, "../fixtures/_root3");
+
+// absolute
+// const _dirname = dirname(import.meta.filename!);
+// const root1 = join(_dirname, "../fixtures/_root1");
+// const root2 = join(_dirname, "../fixtures/_root2");
+// const root3 = join(_dirname, "../fixtures/_root3");
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
