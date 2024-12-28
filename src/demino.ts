@@ -7,7 +7,7 @@ import {
 } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
-import requestIp from "npm:request-ip";
+import requestIp from "npm:request-ip@3";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";

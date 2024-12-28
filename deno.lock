@@ -10,6 +10,7 @@
     "npm:@marianmeres/http-utils@^1.15.0": "1.15.0",
     "npm:@marianmeres/simple-router@^1.9.2": "1.9.2",
     "npm:request-ip@*": "3.3.0",
+    "npm:request-ip@3": "3.3.0",
     "npm:request-ip@^3.3.0": "3.3.0"
   },
   "jsr": {
