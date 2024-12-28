@@ -21,9 +21,15 @@ Deno.test("composition", async () => {
 
 	// etc...
 	const blog = demino("/blog");
+	blog.get("/", (_r, _i, _c) => `Blog root`);
 	blog.get("/[slug]", (_r, _i, ctx) => `Blog: ${ctx.params.slug}`);
 
-	const app = deminoCompose([home, api, blog]);
+	// mounted "inside" of another - must win over /blog/[slug]
+	const special = demino("/blog/special");
+	special.get("/", (_r, _i, _c) => `special`);
+	special.get("/[slug]", (_r, _i, ctx) => `special: ${ctx.params.slug}`);
+
+	const app = deminoCompose([home, api, blog, special]);
 
 	try {
 		srv = await startTestServer(app);
@@ -38,23 +44,30 @@ Deno.test("composition", async () => {
 			"content-type": /text\/html/,
 		});
 
-		// now, this is not api root, but homepage "api" slug
-		await assertResp(fetch(`${srv.base}/api`), 200, /Marketing: api/i, {
-			"content-type": /text\/html/,
-		});
-
-		// now this is api root
+		// api root
 		await assertResp(
-			fetch(`${srv.base}/api/`),
+			fetch(`${srv.base}/api`),
 			200,
 			{ hello: "world" },
 			{ "content-type": /json/ }
 		);
 
+		await assertResp(fetch(`${srv.base}/blog`), 200, /Blog root/i);
+		await assertResp(fetch(`${srv.base}/blog/`), 200, /Blog root/i);
+
 		// homepage slug
 		await assertResp(fetch(`${srv.base}/blog/hey`), 200, /Blog: hey/i, {
 			"content-type": /text\/html/,
 		});
+
+		// deep nested
+		await assertResp(fetch(`${srv.base}/blog/special`), 200, "special");
+		await assertResp(fetch(`${srv.base}/blog/special/`), 200, "special");
+		await assertResp(
+			fetch(`${srv.base}/blog/special/foo`),
+			200,
+			/special: foo/i
+		);
 	} catch (e) {
 		throw e;
 	} finally {

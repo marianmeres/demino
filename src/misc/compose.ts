@@ -10,16 +10,9 @@ export function deminoCompose(
 		info: Deno.ServeHandlerInfo
 	) => Response | Promise<Response>
 ): Deno.ServeHandler {
-	// helper to normalize paths as "/di/r/s/"
-	const _slashed = (s: string) => {
-		if (!s.startsWith("/")) s = "/" + s;
-		if (!s.endsWith("/")) s += "/";
-		return s;
-	};
-
 	// in case of the same mountPaths, the later wins
 	const mounts = apps.reduce(
-		(m, a) => ({ ...m, [_slashed(a.mountPath() || "/")]: a }),
+		(m, a) => ({ ...m, [a.mountPath() || "/"]: a }),
 		{} as Record<string, Demino>
 	);
 	// console.log(Object.keys(mounts));
@@ -30,9 +23,9 @@ export function deminoCompose(
 	return (req: Request, info: Deno.ServeHandlerInfo) => {
 		const url = new URL(req.url);
 
-		// root special case
-		if ("/" === url.pathname) {
-			return mounts["/"]?.(req, info) ?? notFoundHandler(req, info);
+		// do we have a direct hit?
+		if (mounts[url.pathname]) {
+			return mounts[url.pathname](req, info);
 		}
 
 		// now start cutting off the path segments from the right, and try to match
@@ -43,9 +36,10 @@ export function deminoCompose(
 		let pos = pathname.lastIndexOf("/");
 		while (pos > 0) {
 			pathname = pathname.slice(0, pos);
+			if (mounts[pathname]) {
+				return mounts[pathname](req, info);
+			}
 			pos = pathname.lastIndexOf("/");
-			const key = _slashed(pathname);
-			if (mounts[key]) return mounts[key](req, info);
 		}
 
 		// fallback to root mount (if available)...

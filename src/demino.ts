@@ -217,6 +217,23 @@ export function demino(
 	middleware: DeminoHandler | DeminoHandler[] = [],
 	options?: DeminoOptions
 ): Demino {
+	// forcing conventional and composable behavior (see `deminoCompose` and URL.pathname)
+	if (mountPath !== "" && !mountPath.startsWith("/")) {
+		throw new TypeError(
+			`Mount path must be either empty or must start with a slash (path: ${mountPath})`
+		);
+	}
+	if (mountPath.endsWith("/")) {
+		throw new TypeError(
+			`Mount path must not end with a slash (path: ${mountPath})`
+		);
+	}
+	if (/\[:/.test(mountPath)) {
+		throw new TypeError(
+			`Mount path must not contain named segments (path: ${mountPath})`
+		);
+	}
+
 	// initialize and normalize...
 	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
@@ -236,10 +253,14 @@ export function demino(
 	);
 
 	const _maybeSetXHeaders = (context: DeminoContext) => {
-		if (!options?.noXPoweredBy) {
+		if (!options?.noXPoweredBy && !context.headers.has("X-Powered-By")) {
 			context.headers.set("X-Powered-By", `Demino`);
 		}
-		if (!options?.noXResponseTime && isValidDate(context?.__start)) {
+		if (
+			!options?.noXResponseTime &&
+			!context.headers.has("X-Response-Time") &&
+			isValidDate(context?.__start)
+		) {
 			context.headers.set(
 				"X-Response-Time",
 				`${new Date().valueOf() - context.__start.valueOf()}ms`
