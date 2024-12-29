@@ -266,7 +266,7 @@ await deminoFileBased(
     app, 
     "./routes",
     // https://docs.deno.com/deploy/api/dynamic-import/
-    // due to the limitations of dynamic imports, we must provide the hoisted 
+    // due to the limitations of dynamic imports, we must explicitly provide the hoisted 
     // import worker function (must be located in the local project space)
     (mod) => import(`./${relative(import.meta.dirname!, mod)}`)
 );
