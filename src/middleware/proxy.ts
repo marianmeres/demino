@@ -1,8 +1,28 @@
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
 import { withTimeout } from "@marianmeres/midware";
 
+/**
+ * Will create a proxy middleware which will proxy the current request to the specified
+ * target in options.
+ *
+ * Target can be relative or absolute. If specified as a plain string, search query params
+ * will be proxied as well.
+ *
+ * @example
+ * ```ts
+ * app.get('/search', proxy({ target: 'https://google.com' }));
+ * // or as a function for dynamic target
+ * app.get(
+ *     '/search/[keyword]',
+ *     proxy({ target: (_r, _i, c) => `https://google.com/?q=${c.params.keyword}` })
+ * );
+ * ```
+ */
 export function proxy(options: {
+	/** Either plain url string or a function resolving to one. */
 	target: string | ((req: Request) => string | Promise<string>);
+	/** If non zero number of ms is provided, will set the watch clock for the proxy
+	 * request to complete. */
 	timeout?: number;
 }): DeminoHandler {
 	let { target, timeout = 10_000 } = options ?? {};
@@ -35,7 +55,7 @@ export function proxy(options: {
 
 		// Prevent proxying to ourselves
 		if (targetUrl.toString() === url.toString()) {
-			return new Error("Cannot proxy to self");
+			throw new Error("Cannot proxy to self");
 		}
 
 		const proxyHdrs = new Headers(req.headers);
