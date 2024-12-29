@@ -224,6 +224,16 @@ app.get(
 );
 ```
 
+### Redirect
+
+Will create a middleware which will `Response.redirect` to the provided `url`
+with provided optional `status`. Only advantage over manual `Response.redirect` is 
+that you can pass in a relative urls which would otherwise be considered invalid.
+
+```ts
+app.use('/old', redirect('/new'));
+```
+
 ## Extra: URL Pattern router
 
 In addition to the default [simple-router](https://github.com/marianmeres/simple-router), 
