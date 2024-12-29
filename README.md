@@ -218,7 +218,9 @@ app.get('/search', proxy({ target: 'https://google.com' }));
 // or as a function for dynamic target
 app.get(
     '/search/[keyword]', 
-    proxy({ target: (_r, _i, c) => `https://google.com/?q=${c.params.keyword}` })
+    proxy({ 
+        target: (r: Request, c: DeminoContext) => `https://google.com/?q=${c.params.keyword}` 
+    })
 );
 ```
 

@@ -14,13 +14,15 @@ import { withTimeout } from "@marianmeres/midware";
  * // or as a function for dynamic target
  * app.get(
  *     '/search/[keyword]',
- *     proxy({ target: (_r, _i, c) => `https://google.com/?q=${c.params.keyword}` })
+ *     proxy({ target: (req, ctx) => `https://google.com/?q=${ctx.params.keyword}` })
  * );
  * ```
  */
 export function proxy(options: {
 	/** Either plain url string or a function resolving to one. */
-	target: string | ((req: Request) => string | Promise<string>);
+	target:
+		| string
+		| ((req: Request, ctx: DeminoContext) => string | Promise<string>);
 	/** If non zero number of ms is provided, will set the watch clock for the proxy
 	 * request to complete. */
 	timeout?: number;
@@ -44,7 +46,7 @@ export function proxy(options: {
 			if (!_tmp.search) target += url.search;
 		} else if (typeof target === "function") {
 			// no auto magic with functions
-			target = await target(req);
+			target = await target(req, ctx);
 		}
 
 		if (typeof target !== "string" || !target) {
