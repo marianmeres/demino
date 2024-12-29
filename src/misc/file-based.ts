@@ -28,10 +28,21 @@ export interface DeminoFileBasedOptions {
  * - none of the path segments starts with "_" or "."
  * - the leaf index.[j|t]s file exists and exports at least one known symbol
  *
+ * @see https://docs.deno.com/deploy/api/dynamic-import/
+ *
  * @example
  * ```ts
+ * import { relative } from "@std/path";
+ *
  * const app = demino();
- * await deminoFileBased(app, '/my/routes/dir/');
+ *
+ * await deminoFileBased(
+ *     app,
+ *     '/my/routes/dir/',
+ *     // due to the limitations of dynamic imports, we must explicitly provide the hoisted
+ *     // import worker function (must be located in the local project scope)
+ *     (mod) => import(`./${relative(import.meta.dirname!, mod)}`)
+ * );
  * ```
  */
 export async function deminoFileBased(
