@@ -1,6 +1,6 @@
 {
 	"name": "@marianmeres/demino",
-	"version": "1.0.24",
+	"version": "1.0.25",
 	"exports": "./src/mod.ts",
 	"tasks": {
 		"dev": "deno run --watch ./src/mod.ts",
