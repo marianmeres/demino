@@ -388,6 +388,47 @@ Deno.test("custom error handler", async () => {
 	return srv?.server?.finished;
 });
 
+Deno.test("error handler", async () => {
+	let srv: Srv | null = null;
+
+	const app = demino();
+	app.get("/foo", () => {
+		const e: any = new Error("Bar");
+		e.code = 12345;
+		throw e;
+	});
+
+	try {
+		srv = await startTestServer(app);
+		await assertResp(fetch(`${srv.base}/foo`), 500, /bar/i); // not 12345
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
+Deno.test("custom error handler via options", async () => {
+	let srv: Srv | null = null;
+
+	const app = demino("", [], {
+		errorHandler: (_r, _i, c) => ({ error: getErrorMessage(c.error) }),
+	});
+
+	try {
+		srv = await startTestServer(app);
+		await assertResp(fetch(`${srv.base}/foo`), 404, { error: "Not Found" });
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
 Deno.test("catch all fallback route", async () => {
 	let srv: Srv | null = null;
 

@@ -226,6 +226,8 @@ export interface DeminoOptions {
 	verbose?: boolean;
 	/** Custom logger (default console) */
 	logger?: DeminoLogger;
+	/** As a convenience shortcut, you can pass in custom error handler directly in options */
+	errorHandler?: DeminoHandler;
 }
 
 /**
@@ -539,6 +541,10 @@ export function demino(
 
 		return _app;
 	};
+
+	if (options?.errorHandler) {
+		_app.error(options.errorHandler);
+	}
 
 	return _app;
 }
