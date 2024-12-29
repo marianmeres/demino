@@ -27,9 +27,9 @@ export function proxy(options: {
 	 * request to complete. */
 	timeout?: number;
 }): DeminoHandler {
-	let { target, timeout = 10_000 } = options ?? {};
+	let { target, timeout = 60_000 } = options ?? {};
 
-	if (isNaN(timeout) || timeout <= 0) {
+	if (isNaN(timeout) || timeout < 0) {
 		throw new TypeError(`Invalid timeout value '${timeout}'`);
 	}
 
@@ -82,6 +82,7 @@ export function proxy(options: {
 			headers: proxyHdrs,
 			body: req.body,
 			redirect: "follow",
+			cache: "no-store",
 		});
 
 		const resp = await fetch(proxyReq);

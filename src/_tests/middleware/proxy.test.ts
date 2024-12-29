@@ -13,6 +13,9 @@ Deno.test("proxy works", async () => {
 
 	try {
 		const app = demino();
+		srv = await startTestServer(app);
+		const { base } = srv;
+
 		app.get("/a", () => "a");
 		app.get("/b", (r) => new URL(r.url).search);
 		app.get("/c", proxy({ target: "/d" }));
@@ -34,9 +37,6 @@ Deno.test("proxy works", async () => {
 
 		app.get("/xslow", proxy({ target: "/slow", timeout: 20 }));
 
-		srv = await startTestServer(app);
-		const { base } = srv;
-
 		await assertResp(fetch(`${base}/xa`), 200, "a");
 		await assertResp(fetch(`${base}/xb?foo=bar`), 200, "?foo=bar");
 		await assertResp(fetch(`${base}/xc`), 200, "d"); // not c!
@@ -54,6 +54,20 @@ Deno.test("proxy works", async () => {
 		app.get("/a/b", () => "/a/b");
 		app.get("/a/b/c/d", proxy({ target: "../" }));
 		await assertResp(fetch(`${base}/a/b/c/d`), 200, "/a/b");
+
+		// wildcard proxy
+		app.get(
+			"/old/*",
+			proxy({
+				target: (r) => {
+					const path = new URL(r.url).pathname.slice("/old".length);
+					return `/new${path}`;
+				},
+			})
+		);
+		app.get("/new/*", (r) => new URL(r.url).pathname);
+
+		await assertResp(fetch(`${base}/old/x/y/z`), 200, "/new/x/y/z");
 	} catch (e) {
 		throw e;
 	} finally {
