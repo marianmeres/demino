@@ -1,5 +1,5 @@
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
 import { withTimeout } from "@marianmeres/midware";
+import type { DeminoContext, DeminoHandler } from "../demino.ts";
 
 /**
  * Will create a proxy middleware which will proxy the current request to the specified
@@ -7,6 +7,8 @@ import { withTimeout } from "@marianmeres/midware";
  *
  * Target can be relative or absolute. If specified as a plain string, search query params
  * will be proxied as well.
+ *
+ * Currently does NOT support websockets.
  *
  * @example
  * ```ts
@@ -27,17 +29,13 @@ export function proxy(options: {
 	 * request to complete. */
 	timeout?: number;
 }): DeminoHandler {
-	let { target, timeout = 60_000 } = options ?? {};
-
+	const { timeout = 60_000 } = options ?? {};
 	if (isNaN(timeout) || timeout < 0) {
 		throw new TypeError(`Invalid timeout value '${timeout}'`);
 	}
 
-	const _proxy = async (
-		req: Request,
-		_i: Deno.ServeHandlerInfo,
-		ctx: DeminoContext
-	) => {
+	const _proxy: DeminoHandler = async (req, _i, ctx) => {
+		let { target } = options ?? {};
 		const url = new URL(req.url);
 
 		if (typeof target === "string") {
@@ -60,48 +58,52 @@ export function proxy(options: {
 			throw new Error("Cannot proxy to self");
 		}
 
-		const proxyHdrs = new Headers(req.headers);
-
-		// Update host header to match target URL
-		proxyHdrs.set("host", targetUrl.host);
+		const proxyHeaders = new Headers(req.headers);
+		proxyHeaders.set("host", targetUrl.host);
+		const origin = req.headers.get("origin");
+		if (origin) proxyHeaders.set("origin", origin);
 
 		// Remove headers that might cause issues
-		proxyHdrs.delete("connection");
-		proxyHdrs.delete("keep-alive");
-		proxyHdrs.delete("transfer-encoding");
-		proxyHdrs.delete("upgrade");
-		proxyHdrs.delete("expect");
+		// prettier-ignore
+		["connection", "keep-alive", "transfer-encoding", "upgrade", "expect"].forEach(
+			(name) => proxyHeaders.delete(name)
+		);
 
 		// X-Forwarded-* headers
-		proxyHdrs.set("x-forwarded-host", url.host);
-		proxyHdrs.set("x-forwarded-proto", url.protocol.replace(":", ""));
-		proxyHdrs.set("x-forwarded-for", ctx.ip);
+		proxyHeaders.set("x-forwarded-host", url.host);
+		proxyHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""));
+		proxyHeaders.set("x-forwarded-for", ctx.ip);
 
 		const proxyReq = new Request(targetUrl, {
 			method: req.method,
-			headers: proxyHdrs,
+			headers: proxyHeaders,
 			body: req.body,
 			redirect: "follow",
 			cache: "no-store",
 		});
 
+		// console.log(proxyReq);
+
 		const resp = await fetch(proxyReq);
 
 		// Create response with cleaned headers
-		const respHdrs = new Headers(resp.headers);
-		respHdrs.delete("connection");
-		respHdrs.delete("keep-alive");
-		respHdrs.delete("transfer-encoding");
+		const respHeaders = new Headers(resp.headers);
+		// prettier-ignore
+		["connection", "keep-alive", "transfer-encoding"].forEach(
+			(name) => respHeaders.delete(name)
+		);
 
 		//
-		return new Response(resp.body, {
+		const r = new Response(resp.body, {
 			status: resp.status,
 			statusText: resp.statusText,
-			headers: respHdrs,
+			headers: respHeaders,
 		});
+
+		return r;
 	};
 
 	return timeout
-		? withTimeout(_proxy, timeout, "Proxy request timed out")
+		? withTimeout<DeminoHandler>(_proxy, timeout, "Proxy request timed out")
 		: _proxy;
 }

@@ -211,7 +211,8 @@ app.use(trailingSlash(true))
 ### Proxy
 
 Will proxy the current request to `target`. Target can be specified either as a plain 
-url string (absolute or relative) or a function resolving to one.
+url string (absolute or relative) or a function resolving to one. Currently does NOT 
+support websockets.
 
 ```ts
 app.get('/search', proxy({ target: 'https://google.com' }));

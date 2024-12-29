@@ -67,6 +67,8 @@ Deno.test("proxy works", async () => {
 		);
 		app.get("/new/*", (r) => new URL(r.url).pathname);
 
+		await assertResp(fetch(`${base}/old`), 200, "/new");
+		await assertResp(fetch(`${base}/old/`), 200, "/new/");
 		await assertResp(fetch(`${base}/old/x/y/z`), 200, "/new/x/y/z");
 	} catch (e) {
 		throw e;
