@@ -59,7 +59,7 @@ Deno.test("file-based", async () => {
 		await assertResp(fetch(`${srv.base}/${rnd}`), 200, { b: `${rnd}` }); // root1
 		await assertResp(fetch(`${srv.base}/_ignored`), 200, { b: `_ignored` }); // this is the [b] route
 		// /
-		await assertResp(fetch(`${srv.base}/`), 200, "/2|/"); // root2 (root1 is overwritten)
+		await assertResp(fetch(`${srv.base}`), 200, "/2|/"); // root2 (root1 is overwritten)
 
 		//
 		await assertResp(fetch(`${srv.base}/a/b/c/d`), 404);

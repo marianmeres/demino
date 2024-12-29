@@ -530,7 +530,11 @@ export function demino(
 		// console.log(123, route, urlRoot);
 
 		_app.all(route, (req) => {
-			return serveDir(req, { ...(options || {}), fsRoot, urlRoot });
+			return serveDir(req, {
+				...(options || { quiet: true }),
+				fsRoot,
+				urlRoot,
+			});
 		});
 
 		return _app;

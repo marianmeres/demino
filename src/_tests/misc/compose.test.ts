@@ -12,9 +12,7 @@ Deno.test("composition", async () => {
 	const home = demino();
 	home.get("/", () => "Hello");
 	home.get("/[slug]", (_r, _i, ctx) => `Marketing: ${ctx.params.slug}`);
-	home.static("/files", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	home.static("/files", join(import.meta.dirname!, "../static"));
 
 	// api example
 	const api = demino("/api", (_r, _i, ctx) => {
@@ -27,17 +25,13 @@ Deno.test("composition", async () => {
 	const blog = demino("/blog");
 	blog.get("/", (_r, _i, _c) => `Blog root`);
 	blog.get("/[slug]", (_r, _i, ctx) => `Blog: ${ctx.params.slug}`);
-	blog.static("/files", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	blog.static("/files", join(import.meta.dirname!, "../static"));
 
 	// mounted "inside" of another - must win over /blog/[slug]
 	const special = demino("/blog/special");
 	special.get("/", (_r, _i, _c) => `special`);
 	special.get("/[slug]", (_r, _i, ctx) => `special: ${ctx.params.slug}`);
-	special.static("/files", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	special.static("/files", join(import.meta.dirname!, "../static"));
 
 	const app = deminoCompose([home, api, blog, special]);
 

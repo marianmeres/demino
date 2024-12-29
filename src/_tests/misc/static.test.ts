@@ -9,9 +9,7 @@ Deno.test("serve static on root", async () => {
 
 	// landing page example
 	const app = demino();
-	app.static("/", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	app.static("/", join(import.meta.dirname!, "../static"));
 
 	app.get("/hello", () => "world");
 
@@ -39,9 +37,7 @@ Deno.test("serve static on route", async () => {
 	// landing page example
 	const app = demino();
 	app.get("/", () => "hello");
-	app.static("/files", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	app.static("/files", join(import.meta.dirname!, "../static"));
 
 	try {
 		srv = await startTestServer(app);
@@ -67,9 +63,7 @@ Deno.test("serve static on inner route", async () => {
 	// landing page example
 	const app = demino();
 	app.get("/", () => "hello");
-	app.static("/m/y/fil/es", join(import.meta.dirname!, "../static"), {
-		quiet: true,
-	});
+	app.static("/m/y/fil/es", join(import.meta.dirname!, "../static"));
 
 	try {
 		srv = await startTestServer(app);
