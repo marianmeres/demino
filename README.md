@@ -208,9 +208,19 @@ app.use(trailingSlash(true))
 // app.use(trailingSlash(false))
 ```
 
-### Cors
+### Proxy
 
-Work in progress...
+Will proxy the current request to `target`. Target can be specified either as a plain 
+url string (absolute or relative) or a function resolving to one.
+
+```ts
+app.get('/search', proxy({ target: 'https://google.com' }));
+// or as a function for dynamic target
+app.get(
+    '/search/[keyword]', 
+    proxy({ target: (_r, _i, c) => `https://google.com/?q=${c.params.keyword}` })
+);
+```
 
 ## Extra: URL Pattern router
 
