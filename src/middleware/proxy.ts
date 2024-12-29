@@ -1,10 +1,10 @@
-import type { DeminoContext } from "../demino.ts";
+import type { DeminoContext, DeminoHandler } from "../demino.ts";
 import { withTimeout } from "@marianmeres/midware";
 
 export function proxy(options: {
 	target: string | ((req: Request) => string | Promise<string>);
 	timeout?: number;
-}) {
+}): DeminoHandler {
 	let { target, timeout = 10_000 } = options ?? {};
 
 	if (isNaN(timeout) || timeout <= 0) {
