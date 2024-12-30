@@ -102,7 +102,7 @@ class MyRenderer {
     constructor(private data) {...}
     toString() { return `...`; }
 }
-app.get('/templated', (_r, _i, c) => new MyRenderer(c.locals))
+app.get('/templated', (r, i, c) => new MyRenderer(c.locals))
 
 // or return the Response instance directly
 app.get('/manual', () => new Response('This will be sent as is.'))
@@ -149,7 +149,7 @@ Additionally, it also exposes:
 const app = demino('/articles');
 
 // example middleware loading article (from DB, let's say)...
-app.use(async (_req: Request, _info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
+app.use(async (req: Request, info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
     // eg any route which will have an `/[articleId]/` segment, we automatically read
     // article data (which also means, it will auto validate the parameter)
     if (ctx.params.articleId) {
@@ -162,7 +162,7 @@ app.use(async (_req: Request, _info: Deno.ServeHandlerInfo, ctx: DeminoContext) 
 
 // ...and route handler acting as a pure renderer. This handler will not 
 // be reached if the article is not found
-app.get("/[articleId]", (_req, _info, ctx) => render(ctx.locals.article));
+app.get("/[articleId]", (req, info, ctx) => render(ctx.locals.article));
 ```
 
 ## Error handling
@@ -172,7 +172,7 @@ replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
 
 ```typescript
 // example: customized json response error handler 
-app.error((_req, _info, ctx) => {
+app.error((req, info, ctx) => {
     ctx.status = ctx.error?.status || 500;
     return { ok: false, message: ctx.error.message };
 });
@@ -215,13 +215,11 @@ url string (absolute or relative) or a function resolving to one. Currently does
 support websockets.
 
 ```ts
-app.get('/search', proxy({ target: 'https://google.com' }));
+app.get('/some/*', proxy('http://some-server/*'));
 // or as a function for dynamic target
 app.get(
     '/search/[keyword]', 
-    proxy({ 
-        target: (r: Request, c: DeminoContext) => `https://google.com/?q=${c.params.keyword}` 
-    })
+    proxy((r: Request, c: DeminoContext) => `https://google.com/?q=${c.params.keyword}`)
 );
 ```
 
@@ -244,7 +242,7 @@ router implementation that can be activated via the `routerFactory` factory sett
 ```ts
 const app = demino("", [], { routerFactory: () => new DeminoUrlPatternRouter() });
 app.get("/", () => "home");
-app.get("/user/:foo/section/:bar", (_r, _i, ctx) => ctx.params);
+app.get("/user/:foo/section/:bar", (r, i, ctx) => ctx.params);
 ```
 
 ## Extra: Directory based routing

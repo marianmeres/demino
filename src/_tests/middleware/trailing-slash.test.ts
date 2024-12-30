@@ -2,92 +2,63 @@
 
 import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { assertEquals } from "@std/assert";
-import { demino } from "../../demino.ts";
 import { trailingSlash } from "../../middleware/trailing-slash.ts";
-import { assertResp, startTestServer } from "../_utils.ts";
+import {
+	assertResp,
+	runTestServerTests,
+	type TestServerTestsParams,
+} from "../_utils.ts";
 
-type Srv = Awaited<ReturnType<typeof startTestServer>>;
+runTestServerTests([
+	{
+		name: "trailing slash manual redirect check",
+		fn: async ({ app, base }: TestServerTestsParams) => {
+			const tsOn = trailingSlash(true);
+			const tsOff = trailingSlash(false);
 
-Deno.test("trailing slash manual redirect check", async () => {
-	let srv: Srv | null = null;
+			const globalMwOutput = "this must not be reached";
+			app.use(() => globalMwOutput);
+			app.get("/foo/bar", tsOn, () => "foo");
+			app.get("/baz/bat", tsOff, () => "baz");
+			app.get("/", tsOff, () => "home"); // root must be ignored
 
-	try {
-		const tsOn = trailingSlash(true);
-		const tsOff = trailingSlash(false);
+			const MP = HTTP_STATUS.MOVED_PERMANENTLY;
+			const prm: any = { redirect: "manual" };
 
-		const globalMwOutput =
-			"this must not be reached (tsMw will be executed earlier)";
-		const app = demino();
-		app.use(() => globalMwOutput);
-		app.get("/foo/bar", tsOn, () => "foo");
-		app.get("/baz/bat", tsOff, () => "baz");
+			// ON
+			await assertResp(fetch(`${base}/foo/bar`, prm), MP, "", {
+				location: /\/$/,
+			});
+			// OFF
+			await assertResp(fetch(`${base}/baz/bat/`, prm), MP, "", {
+				location: /[^\/]$/,
+			});
+			// NO-OP (it's correct that the global ms is reached here)
+			await assertResp(fetch(`${base}`, prm), 200, globalMwOutput);
+		},
+	},
+	{
+		name: "trailing slash auto redirect",
+		fn: async ({ app, base }: TestServerTestsParams) => {
+			const _log: string[] = [];
+			const logger = (v: string) => _log.push(v);
 
-		// root must be ignored
-		app.get("/", tsOff, () => "home");
+			const tsOn = trailingSlash(true, { logger });
+			const tsOff = trailingSlash(false, { logger });
 
-		srv = await startTestServer(app);
+			app.get("/foo/bar", tsOn, () => "foo");
+			app.get("/baz/bat", tsOff, () => "baz");
 
-		// ON
-		await assertResp(
-			fetch(`${srv.base}/foo/bar`, { redirect: "manual" }),
-			HTTP_STATUS.MOVED_PERMANENTLY,
-			"",
-			{ location: /\/$/ }
-		);
+			// ON
+			await assertResp(fetch(`${base}/foo/bar`), 200, "foo");
+			await assertResp(fetch(`${base}/foo/bar/`), 200, "foo"); // no-op
 
-		// OFF
-		await assertResp(
-			fetch(`${srv.base}/baz/bat/`, { redirect: "manual" }),
-			HTTP_STATUS.MOVED_PERMANENTLY,
-			"",
-			{ location: /[^\/]$/ }
-		);
+			// OFF
+			await assertResp(fetch(`${base}/baz/bat/`), 200, "baz");
+			await assertResp(fetch(`${base}/baz/bat`), 200, "baz"); // no-op
 
-		// NO-OP (it's correct that the global ms is reached here)
-		await assertResp(
-			fetch(`${srv.base}`, { redirect: "manual" }),
-			200,
-			globalMwOutput
-		);
-	} catch (e) {
-		throw e;
-	} finally {
-		srv?.ac?.abort();
-	}
-
-	return srv?.server?.finished;
-});
-
-Deno.test("trailing slash auto redirect", async () => {
-	let srv: Srv | null = null;
-
-	const _log: string[] = [];
-	const logger = (v: string) => _log.push(v);
-	try {
-		const tsOn = trailingSlash(true, { logger });
-		const tsOff = trailingSlash(false, { logger });
-
-		const app = demino();
-		app.get("/foo/bar", tsOn, () => "foo");
-		app.get("/baz/bat", tsOff, () => "baz");
-
-		srv = await startTestServer(app);
-
-		// ON
-		await assertResp(fetch(`${srv.base}/foo/bar`), 200, "foo");
-		await assertResp(fetch(`${srv.base}/foo/bar/`), 200, "foo"); // no-op
-
-		// OFF
-		await assertResp(fetch(`${srv.base}/baz/bat/`), 200, "baz");
-		await assertResp(fetch(`${srv.base}/baz/bat`), 200, "baz"); // no-op
-
-		// the above 4 fetches must have triggered exactly 2 redirects (2 were no-ops)
-		assertEquals(_log.length, 2);
-	} catch (e) {
-		throw e;
-	} finally {
-		srv?.ac?.abort();
-	}
-
-	return srv?.server?.finished;
-});
+			// the above 4 fetches must have triggered exactly 2 redirects (2 were no-ops)
+			assertEquals(_log.length, 2);
+		},
+	},
+]);

@@ -2,6 +2,8 @@
 
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { isPlainObject } from "../utils/is-plain-object.ts";
+import { Demino, demino, DeminoOptions } from "../demino.ts";
+import { createHttpApi } from "@marianmeres/http-utils";
 
 export const TEST_PORT = 9876;
 
@@ -56,4 +58,56 @@ export async function assertResp(
 	});
 
 	return resp;
+}
+
+export interface TestServerTestsParams {
+	srv: Awaited<ReturnType<typeof startTestServer>>;
+	base: string;
+	app: Demino;
+	get: ReturnType<typeof createHttpApi>["get"];
+	post: ReturnType<typeof createHttpApi>["post"];
+	put: ReturnType<typeof createHttpApi>["put"];
+	patch: ReturnType<typeof createHttpApi>["patch"];
+	del: ReturnType<typeof createHttpApi>["del"];
+}
+
+//
+export function runTestServerTests(
+	tests: {
+		name: string;
+		fn: CallableFunction;
+		only?: boolean;
+		ignore?: boolean;
+		raw?: boolean;
+		appOptions?: DeminoOptions;
+	}[]
+) {
+	for (const def of tests) {
+		const { name, ignore, only } = def;
+		if (typeof def.fn !== "function") continue;
+		Deno.test(
+			{ name, ignore, only },
+			def.raw
+				? () => def.fn()
+				: async () => {
+						let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
+						try {
+							const app = demino("", [], def.appOptions);
+							srv = await startTestServer(app);
+							const api = createHttpApi(srv.base);
+							await def.fn({
+								srv,
+								base: srv.base,
+								app,
+								...api,
+							} as TestServerTestsParams);
+						} catch (e) {
+							throw e;
+						} finally {
+							srv?.ac?.abort();
+						}
+						return srv?.server?.finished;
+				  }
+		);
+	}
 }

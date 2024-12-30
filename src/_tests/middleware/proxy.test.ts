@@ -1,80 +1,71 @@
 // deno-lint-ignore-file no-explicit-any
 
-import { serveFile } from "@std/http/file-server";
-import { demino } from "../../demino.ts";
-import { proxy } from "../../middleware/proxy.ts";
-import { assertResp, startTestServer } from "../_utils.ts";
 import { sleep } from "@marianmeres/midware";
+import { serveFile } from "@std/http/file-server";
+import { proxy } from "../../middleware/proxy.ts";
+import {
+	assertResp,
+	runTestServerTests,
+	type TestServerTestsParams,
+} from "../_utils.ts";
 
-type Srv = Awaited<ReturnType<typeof startTestServer>>;
+runTestServerTests([
+	{
+		name: "proxy works",
+		fn: async ({ srv, app }: TestServerTestsParams) => {
+			const { base } = srv;
 
-Deno.test("proxy works", async () => {
-	let srv: Srv | null = null;
+			app.get("/a", () => "a");
+			app.get("/b", (r) => new URL(r.url).search);
+			app.get("/c", proxy("/d"));
+			app.get("/d", () => "d");
+			app.get("/file", (req) => serveFile(req, "./src/_tests/static/foo.txt"));
 
-	try {
-		const app = demino();
-		srv = await startTestServer(app);
-		const { base } = srv;
+			app.get("/to-self", proxy("/to-self")); // will throw
 
-		app.get("/a", () => "a");
-		app.get("/b", (r) => new URL(r.url).search);
-		app.get("/c", proxy({ target: "/d" }));
-		app.get("/d", () => "d");
-		app.get("/file", (req) => serveFile(req, "./src/_tests/static/foo.txt"));
+			app.get("/xa", proxy("/a"));
+			app.get("/xb", proxy("/b"));
+			app.get("/xc", proxy("/c"));
+			app.get("/xfile", proxy("/file"));
 
-		app.get("/to-self", proxy({ target: "/to-self" })); // will throw
+			await assertResp(fetch(`${base}/xa`), 200, "a");
+			await assertResp(fetch(`${base}/xb?foo=bar`), 200, "?foo=bar");
+			await assertResp(fetch(`${base}/xc`), 200, "d"); // not c!
+			await assertResp(fetch(`${base}/to-self`), 500, /proxy to self/i);
+			await assertResp(fetch(`${base}/xfile`), 200, "foo");
 
-		const _sleepTimer = { id: -1 };
-		app.get("/slow", async () => {
-			await sleep(100, _sleepTimer);
-			return "woke up";
-		});
+			//
+			const _sleepTimer = { id: -1 };
+			app.get("/slow", async () => {
+				await sleep(100, _sleepTimer);
+				return "woke up";
+			});
+			app.get("/xslow", proxy("/slow", { timeout: 20 }));
+			await assertResp(fetch(`${base}/xslow`), 500, /timed out/i);
+			clearTimeout(_sleepTimer.id);
 
-		app.get("/xa", proxy({ target: "/a" }));
-		app.get("/xb", proxy({ target: "/b" }));
-		app.get("/xc", proxy({ target: "/c" }));
-		app.get("/xfile", proxy({ target: "/file" }));
+			// target as full url
+			app.get("/full", proxy(`${base}/d`));
+			await assertResp(fetch(`${base}/full`), 200, "d");
 
-		app.get("/xslow", proxy({ target: "/slow", timeout: 20 }));
+			// relative target
+			app.get("/a/b", () => "/a/b");
+			app.get("/a/b/c/d", proxy("../"));
+			await assertResp(fetch(`${base}/a/b/c/d`), 200, "/a/b");
 
-		await assertResp(fetch(`${base}/xa`), 200, "a");
-		await assertResp(fetch(`${base}/xb?foo=bar`), 200, "?foo=bar");
-		await assertResp(fetch(`${base}/xc`), 200, "d"); // not c!
-		await assertResp(fetch(`${base}/to-self`), 500, /proxy to self/i);
-		await assertResp(fetch(`${base}/xfile`), 200, "foo");
-
-		await assertResp(fetch(`${base}/xslow`), 500, /timed out/i);
-		clearTimeout(_sleepTimer.id);
-
-		// target as full url
-		app.get("/full", proxy({ target: `${base}/d` }));
-		await assertResp(fetch(`${base}/full`), 200, "d");
-
-		// relative target
-		app.get("/a/b", () => "/a/b");
-		app.get("/a/b/c/d", proxy({ target: "../" }));
-		await assertResp(fetch(`${base}/a/b/c/d`), 200, "/a/b");
-
-		// wildcard proxy
-		app.get(
-			"/old/*",
-			proxy({
-				target: (r) => {
+			// wildcard proxy
+			app.get(
+				"/old/*",
+				proxy((r) => {
 					const path = new URL(r.url).pathname.slice("/old".length);
 					return `/new${path}`;
-				},
-			})
-		);
-		app.get("/new/*", (r) => new URL(r.url).pathname);
+				})
+			);
+			app.get("/new/*", (r) => new URL(r.url).pathname);
 
-		await assertResp(fetch(`${base}/old`), 200, "/new");
-		await assertResp(fetch(`${base}/old/`), 200, "/new/");
-		await assertResp(fetch(`${base}/old/x/y/z`), 200, "/new/x/y/z");
-	} catch (e) {
-		throw e;
-	} finally {
-		srv?.ac?.abort();
-	}
-
-	return srv?.server?.finished;
-});
+			await assertResp(fetch(`${base}/old`), 200, "/new");
+			await assertResp(fetch(`${base}/old/`), 200, "/new/");
+			await assertResp(fetch(`${base}/old/x/y/z`), 200, "/new/x/y/z");
+		},
+	},
+]);

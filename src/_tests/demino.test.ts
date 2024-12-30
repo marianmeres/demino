@@ -6,10 +6,10 @@ import {
 	HTTP_ERROR,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
-import { assert, assertEquals } from "@std/assert";
+import { sleep } from "@marianmeres/midware";
+import { assertEquals } from "@std/assert";
 import { demino, DeminoLogger, type DeminoHandler } from "../demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
-import { sleep } from "@marianmeres/midware";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
