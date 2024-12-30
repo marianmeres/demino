@@ -30,6 +30,8 @@ export interface DeminoContext {
 	error: any;
 	/** Client ip address */
 	ip: string;
+	/** Matched route definition */
+	route: string;
 }
 
 /** Arguments passed to DeminoHandler (a.k.a. middleware) */
@@ -193,6 +195,7 @@ function _createResponseFrom(
 function _createContext(
 	start: number,
 	params: Record<string, string>,
+	route: string,
 	req: Request,
 	info: Deno.ServeHandlerInfo
 ): DeminoContext {
@@ -201,6 +204,7 @@ function _createContext(
 	});
 	return Object.seal({
 		params: Object.freeze(params),
+		route,
 		locals: {},
 		headers: new Headers(),
 		error: null,
@@ -347,7 +351,7 @@ export function demino(
 		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
 		const start = Date.now();
-		let context = _createContext(start, {}, req, info);
+		let context = _createContext(start, {}, "", req, info);
 
 		try {
 			if (!_routers[method]) {
@@ -364,7 +368,13 @@ export function demino(
 
 			if (matched) {
 				try {
-					context = _createContext(start, matched.params, req, info);
+					context = _createContext(
+						start,
+						matched.params,
+						matched.route,
+						req,
+						info
+					);
 
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
@@ -456,6 +466,7 @@ export function demino(
 				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
 					params,
 					midware,
+					route: _fullRoute,
 				}));
 
 				if (options?.verbose) {

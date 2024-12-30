@@ -144,6 +144,7 @@ Additionally, it also exposes:
 - `status` - HTTP status number to be optionally used in the final response,
 - `headers` - any headers to be optionally used in the final response,
 - `error` - to be used in a custom error handler.
+- `route` - currently matched route definition
 
 ```typescript
 const app = demino('/articles');
@@ -214,12 +215,25 @@ Will proxy the current request to `target`. Target can be specified either as a 
 url string (absolute or relative) or a function resolving to one. Currently does NOT 
 support websockets.
 
+Signature:
 ```ts
-app.get('/some/*', proxy('http://some-server/*'));
-// or as a function for dynamic target
+proxy(
+	target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
+	options?: Partial<{ timeout: number; }>
+): DeminoHandler
+```
+
+```ts
+// string target: GET /foo/bar?x=y -> GET http://some/foo/bar?x=y
+app.get('/foo/*', proxy('http://some/*'));
+
+// fn target using req: GET /foo/bar?x=y -> GET http://some/bar (no query)
+app.get('/foo/*', proxy((r) => `http://some/${new URL(r.url).pathname.slice(4)}`));
+
+// fn target using context: GET /search/foo -> GET https://google.com/?q=foo
 app.get(
     '/search/[keyword]', 
-    proxy((r: Request, c: DeminoContext) => `https://google.com/?q=${c.params.keyword}`)
+    proxy((r, c) => `https://google.com/?q=${c.params.keyword}`)
 );
 ```
 

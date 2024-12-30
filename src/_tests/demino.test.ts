@@ -9,7 +9,12 @@ import {
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
 import { demino, DeminoLogger, type DeminoHandler } from "../demino.ts";
-import { assertResp, startTestServer } from "./_utils.ts";
+import {
+	assertResp,
+	runTestServerTests,
+	startTestServer,
+	TestServerTestsParams,
+} from "./_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
@@ -576,3 +581,14 @@ Deno.test("access log", async () => {
 
 	return srv?.server?.finished;
 });
+
+runTestServerTests([
+	{
+		name: "context contains matched route definition",
+		fn: async ({ app, base }: TestServerTestsParams) => {
+			app.get("/", () => "hello");
+			app.get("/[slug]", (_r, _i, c) => c.route);
+			await assertResp(fetch(`${base}/a`), 200, "/[slug]");
+		},
+	},
+]);

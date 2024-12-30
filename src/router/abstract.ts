@@ -5,6 +5,7 @@ import type { DeminoHandlerArgs } from "../demino.ts";
 export type DeminoRouterOnMatchResult = {
 	params: Record<string, string>;
 	midware: Midware<DeminoHandlerArgs>;
+	route: string;
 };
 
 /** Internal on route match callback type */

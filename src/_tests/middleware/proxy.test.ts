@@ -12,9 +12,7 @@ import {
 runTestServerTests([
 	{
 		name: "proxy works",
-		fn: async ({ srv, app }: TestServerTestsParams) => {
-			const { base } = srv;
-
+		fn: async ({ app, base }: TestServerTestsParams) => {
 			app.get("/a", () => "a");
 			app.get("/b", (r) => new URL(r.url).search);
 			app.get("/c", proxy("/d"));
