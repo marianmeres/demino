@@ -216,8 +216,9 @@ url string (absolute or relative) or a function resolving to one. Currently does
 support websockets.
 
 Signature:
+
 ```ts
-proxy(
+function proxy(
 	target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
 	options?: Partial<{ timeout: number; }>
 ): DeminoHandler
@@ -239,9 +240,8 @@ app.get(
 
 ### Redirect
 
-Will create a middleware which will `Response.redirect` to the provided `url`
-with provided optional `status`. Only advantage over manual `Response.redirect` is 
-that you can pass in a relative urls which would otherwise be considered invalid.
+Will create a middleware which will redirect to the provided `url` (relative or absolute)
+with provided optional `status`.
 
 ```ts
 app.use('/old', redirect('/new'));
