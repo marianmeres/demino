@@ -8,12 +8,12 @@ import {
 } from "@marianmeres/http-utils";
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
-import { demino, DeminoLogger, type DeminoHandler } from "../demino.ts";
+import { demino, type DeminoLogger, type DeminoHandler } from "../demino.ts";
 import {
 	assertResp,
 	runTestServerTests,
 	startTestServer,
-	TestServerTestsParams,
+	type TestServerTestsParams,
 } from "./_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
@@ -589,6 +589,32 @@ runTestServerTests([
 			app.get("/", () => "hello");
 			app.get("/[slug]", (_r, _i, c) => c.route);
 			await assertResp(fetch(`${base}/a`), 200, "/[slug]");
+		},
+	},
+	{
+		name: "global middleware can be passed after local",
+		fn: async ({ app, base }: TestServerTestsParams) => {
+			app.get(
+				"/foo",
+				(_r, _i, c) => {
+					c.locals.local = 1;
+				},
+				(_r, _i, c) => c.locals
+			);
+
+			app.use("/foo", (_r, _i, c) => {
+				c.locals.routeGlobal = 1;
+			});
+
+			app.use("/foo", (_r, _i, c) => {
+				c.locals.global = 1;
+			});
+
+			await assertResp(fetch(`${base}/foo`), 200, {
+				local: 1,
+				routeGlobal: 1,
+				global: 1,
+			});
 		},
 	},
 ]);

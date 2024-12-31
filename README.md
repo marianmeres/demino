@@ -121,14 +121,11 @@ Middlewares can be registered as:
 - `app.use("/route", middleware)` - globally per route (will be invoked for every method on a given route),
 - `app.get("/route", middleware, handler)` - locally for given method and route.
 
-The global ones must be registered _before_ the local ones to take effect.
-
 ```typescript
-// GOOD - the globals are registered before the final handler
-app.use(someGlobal).use("/secret", authCheck).get("/secret", readSecret, handler);
-
-// BAD! neither `someGlobal` nor `authCheck` will be used for the `GET /secret` route
-app.get("/secret", readSecret, handler).use("/secret", authCheck).use(someGlobal);
+app
+    .use(someGlobal)
+    .use("/secret", authCheck)
+    .get("/secret", readSecret, handler);
 ```
 
 ## Context

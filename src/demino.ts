@@ -358,12 +358,11 @@ export function demino(
 				throw createHttpError(HTTP_STATUS.NOT_IMPLEMENTED);
 			}
 
-			const route = url.pathname;
-			let matched = _routers[method].exec(route);
+			let matched = _routers[method].exec(url.pathname);
 
 			// if not matched, try ALL as a second attempt
 			if (!matched && method !== "ALL") {
-				matched = _routers.ALL.exec(route);
+				matched = _routers.ALL.exec(url.pathname);
 			}
 
 			if (matched) {
@@ -376,10 +375,44 @@ export function demino(
 						info
 					);
 
+					// everything is a middleware...
+					const midwares: DeminoHandler[] = [
+						..._globalAppMws,
+						...(_globalRouteMws[matched.route] || []),
+						...[...matched.midwares],
+					]
+						.flat()
+						.filter(Boolean)
+						.map((mw, i, arr) => {
+							if (i === arr.length - 1) {
+								// handler: if sort order is not yet defined, make it big
+								mw.__midwarePreExecuteSortOrder ??= Infinity;
+							} else {
+								// middleware: let's create some magic value, so we have some known boundary...
+								// in other words, if we would ever need to manually set a mw position after normal ones,
+								// we'll know to set a value greater than 1_000
+								mw.__midwarePreExecuteSortOrder ??= 1_000;
+							}
+							return mw;
+						});
+
+					// this is likely a bug (while technically ok)
+					if (!midwares.length) {
+						throw new TypeError(`No DeminoHandler found`);
+					}
+
+					// create the midware
+					const midware = new Midware<DeminoHandlerArgs>(midwares, {
+						// we will sort the stack (see the dance above)
+						preExecuteSortEnabled: true,
+						// and we will check for duplicated middleware usage
+						duplicatesCheckEnabled: true,
+					});
+
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
 					// instance directly (unlike with Deno.ServeHandler)
-					let result = await matched.midware.execute([req, info, context]);
+					let result = await midware.execute([req, info, context]);
 
 					//
 					const headers = context?.headers || new Headers();
@@ -424,48 +457,14 @@ export function demino(
 	const _createRouteFn =
 		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
 		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): Demino => {
-			// everything is a middleware...
-			const midwares: DeminoHandler[] = [
-				..._globalAppMws,
-				...(_globalRouteMws[route] || []),
-				...args,
-			]
-				.flat()
-				.filter(Boolean)
-				.map((mw, i, arr) => {
-					if (i === arr.length - 1) {
-						// handler: if sort order is not yet defined, make it big
-						mw.__midwarePreExecuteSortOrder ??= Infinity;
-					} else {
-						// middleware: let's create some magic value, so we have some known boundary...
-						// in other words, if we would ever need to manually set a mw position after normal ones,
-						// we'll know to set a value greater than 1_000
-						mw.__midwarePreExecuteSortOrder ??= 1_000;
-					}
-					return mw;
-				});
-
 			try {
-				// this is likely a bug (while technically ok)
-				if (!midwares.length) {
-					throw new TypeError(`No DeminoHandler found`);
-				}
-
-				// create the midware
-				const midware = new Midware<DeminoHandlerArgs>(midwares, {
-					// we will sort the stack (see the dance above)
-					preExecuteSortEnabled: true,
-					// and we will check for duplicated middleware usage
-					duplicatesCheckEnabled: true,
-				});
-
 				//
 				const _fullRoute = mountPath + route;
 				_routers[method].assertIsValid(_fullRoute);
 
 				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
 					params,
-					midware,
+					midwares: args,
 					route: _fullRoute,
 				}));
 
