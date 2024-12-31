@@ -1,5 +1,4 @@
-import type { Midware } from "@marianmeres/midware";
-import type { DeminoHandler, DeminoHandlerArgs } from "../demino.ts";
+import type { DeminoHandler } from "../demino.ts";
 
 /** Internal on route match callback result type */
 export type DeminoRouterOnMatchResult = {
