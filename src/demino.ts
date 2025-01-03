@@ -48,6 +48,14 @@ export type DeminoRouteHandler = (
 	...args: (DeminoHandler | DeminoHandler[])[]
 ) => Demino;
 
+/** Info about regitered route and associated middleware count */
+export type DeminoRouteMiddlewareInfo = Partial<
+	Record<
+		DeminoMethod | "ALL",
+		{ localMiddlewaresCount: number; globalMiddlewaresCount: number }
+	>
+>;
+
 /** The Demino app public interface */
 export interface Demino extends Deno.ServeHandler {
 	/** Special case _every_ HTTP method route handler. */
@@ -101,6 +109,12 @@ export interface Demino extends Deno.ServeHandler {
 	) => Demino;
 	/** Will re/un/set application logger */
 	logger: (logger: DeminoLogger | null) => Demino;
+	/** Will return debug info about registered routes and associated middlewares.
+	 * Intended for debugging only. */
+	info: () => {
+		routes: Record<string, DeminoRouteMiddlewareInfo>;
+		globalAppMiddlewaresCount: number;
+	};
 }
 
 /** Demino supported method */
@@ -296,6 +310,12 @@ export function demino(
 		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
 	);
 
+	// see `app.info`
+	const _localMwsCounts: Record<
+		string,
+		Partial<Record<DeminoMethod | "ALL", number>>
+	> = {};
+
 	const _maybeSetXHeaders = (context: DeminoContext) => {
 		if (!options?.noXPoweredBy && !context.headers.has("X-Powered-By")) {
 			context.headers.set("X-Powered-By", `Demino`);
@@ -482,6 +502,9 @@ export function demino(
 					route: _fullRoute,
 				}));
 
+				_localMwsCounts[_fullRoute] ??= {};
+				_localMwsCounts[_fullRoute][method] = args.flat().length - 1;
+
 				if (options?.verbose) {
 					getLogger()?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
 				}
@@ -520,6 +543,7 @@ export function demino(
 		const mws = args.filter((v) => typeof v !== "string");
 		if (routes.length) {
 			routes.forEach((r) => {
+				r = mountPath + r;
 				_globalRouteMws[r] ??= [];
 				_globalRouteMws[r].push(...mws.flat());
 			});
@@ -578,5 +602,22 @@ export function demino(
 		return _app;
 	};
 
+	// prettier-ignore
+	// deno-fmt-ignore
+	_app.info = () => {
+		const routes: Record<string, DeminoRouteMiddlewareInfo> = {};
+		Object.entries(_routers).forEach((entry) => {
+			const [m, router] = entry as [DeminoMethod | "ALL", DeminoRouter];
+			router.info().forEach((r) => {
+				routes[r] ??= {};
+				routes[r][m] ??= { localMiddlewaresCount: 0, globalMiddlewaresCount: 0 };
+				routes[r][m].globalMiddlewaresCount = _globalRouteMws[r]?.length || 0;
+				routes[r][m].localMiddlewaresCount = _localMwsCounts?.[r]?.[m] || 0;
+			});
+		});
+		return { routes, globalAppMiddlewaresCount: _globalAppMws.length };
+	};
+
+	//
 	return _app;
 }

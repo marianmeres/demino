@@ -3,16 +3,12 @@
 import { sleep } from "@marianmeres/midware";
 import { serveFile } from "@std/http/file-server";
 import { proxy } from "../../middleware/proxy.ts";
-import {
-	assertResp,
-	runTestServerTests,
-	type TestServerTestsParams,
-} from "../_utils.ts";
+import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
 		name: "proxy works",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			app.get("/a", () => "a");
 			app.get("/b", (r) => new URL(r.url).search);
 			app.get("/c", proxy("/d"));

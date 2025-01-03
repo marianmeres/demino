@@ -1,14 +1,10 @@
 import { join } from "@std/path";
-import {
-	assertResp,
-	runTestServerTests,
-	type TestServerTestsParams,
-} from "../_utils.ts";
+import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
 		name: "serve static on route",
-		fn: async ({ base, app }: TestServerTestsParams) => {
+		fn: async ({ base, app }) => {
 			app.static("/", join(import.meta.dirname!, "../static"));
 			app.get("/hello", () => "world");
 
@@ -22,7 +18,7 @@ runTestServerTests([
 	},
 	{
 		name: "serve static on route",
-		fn: async ({ base, app }: TestServerTestsParams) => {
+		fn: async ({ base, app }) => {
 			app.get("/", () => "hello");
 			app.static("/files", join(import.meta.dirname!, "../static"));
 
@@ -36,7 +32,7 @@ runTestServerTests([
 	},
 	{
 		name: "serve static on inner route",
-		fn: async ({ base, app }: TestServerTestsParams) => {
+		fn: async ({ base, app }) => {
 			app.get("/", () => "hello");
 			app.static("/m/y/fil/es", join(import.meta.dirname!, "../static"));
 

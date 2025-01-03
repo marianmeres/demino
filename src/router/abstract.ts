@@ -1,4 +1,6 @@
-import type { DeminoHandler } from "../demino.ts";
+// deno-lint-ignore-file no-explicit-any
+
+import type { DeminoHandler, DeminoMethod } from "../demino.ts";
 
 /** Internal on route match callback result type */
 export type DeminoRouterOnMatchResult = {
@@ -28,5 +30,10 @@ export abstract class DeminoRouter {
 		if (!route.startsWith("/")) {
 			throw new TypeError(`Route must start with a forward slash`);
 		}
+	}
+
+	/** Return string of all registered route definitions */
+	info(): string[] {
+		throw new Error("Not implemented");
 	}
 }

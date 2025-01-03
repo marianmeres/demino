@@ -1,16 +1,12 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { redirect } from "../../middleware/redirect.ts";
-import {
-	assertResp,
-	runTestServerTests,
-	type TestServerTestsParams,
-} from "../_utils.ts";
+import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
 		name: "proxy works",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			app.use("/old", redirect("/new"));
 
 			app.get("/old", () => "old");

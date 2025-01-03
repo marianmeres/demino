@@ -3,16 +3,12 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { assertEquals } from "@std/assert";
 import { trailingSlash } from "../../middleware/trailing-slash.ts";
-import {
-	assertResp,
-	runTestServerTests,
-	type TestServerTestsParams,
-} from "../_utils.ts";
+import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
 		name: "trailing slash manual redirect check",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			const tsOn = trailingSlash(true);
 			const tsOff = trailingSlash(false);
 
@@ -39,7 +35,7 @@ runTestServerTests([
 	},
 	{
 		name: "trailing slash auto redirect",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			const _log: string[] = [];
 			const logger = (v: string) => _log.push(v);
 

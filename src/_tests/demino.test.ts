@@ -9,14 +9,10 @@ import {
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
 import { demino, type DeminoLogger, type DeminoHandler } from "../demino.ts";
-import {
-	assertResp,
-	runTestServerTests,
-	startTestServer,
-	type TestServerTestsParams,
-} from "./_utils.ts";
+import { assertResp, runTestServerTests, startTestServer } from "./_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
+const clog = console.log;
 
 const hello = (mountPath = "", midwares = [], options = {}) => {
 	const world = "world";
@@ -565,7 +561,7 @@ Deno.test("access log", async () => {
 runTestServerTests([
 	{
 		name: "context contains matched route definition",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			app.get("/", () => "hello");
 			app.get("/[slug]", (_r, _i, c) => c.route);
 			await assertResp(fetch(`${base}/a`), 200, "/[slug]");
@@ -573,7 +569,7 @@ runTestServerTests([
 	},
 	{
 		name: "global middleware can be passed after local",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			app.get(
 				"/foo",
 				(_r, _i, c) => {
@@ -599,7 +595,7 @@ runTestServerTests([
 	},
 	{
 		name: "context logger",
-		fn: async ({ app, base }: TestServerTestsParams) => {
+		fn: async ({ app, base }) => {
 			let _log: any[] = [];
 			const logger = { debug: (...args: any[]) => _log.push(...args) };
 
@@ -619,5 +615,36 @@ runTestServerTests([
 			await assertResp(fetch(`${base}/hey`), 200, "ho");
 			assertEquals(_log, []);
 		},
+	},
+	{
+		name: "app info",
+		raw: true,
+		fn: () => {
+			const noop = () => undefined;
+
+			const app = demino("/mount");
+			app.use(noop);
+			app.use("/foo", noop);
+			app.get("/foo", [noop, noop], () => "bar");
+			app.post("/foo", [noop, noop, noop], () => "bar");
+
+			app.use("/bar", noop); // no record as no route handler exists
+
+			app.all("/baz", noop);
+
+			assertEquals(app.info(), {
+				routes: {
+					"/mount/foo": {
+						GET: { localMiddlewaresCount: 2, globalMiddlewaresCount: 1 },
+						POST: { localMiddlewaresCount: 3, globalMiddlewaresCount: 1 },
+					},
+					"/mount/baz": {
+						ALL: { globalMiddlewaresCount: 0, localMiddlewaresCount: 0 },
+					},
+				},
+				globalAppMiddlewaresCount: 1,
+			});
+		},
+		// only: true,
 	},
 ]);

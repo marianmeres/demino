@@ -3,11 +3,7 @@
 import { assertEquals } from "@std/assert";
 import { join, relative } from "@std/path";
 import { deminoFileBased, routesCompare } from "../../misc/file-based.ts";
-import {
-	assertResp,
-	runTestServerTests,
-	type TestServerTestsParams,
-} from "../_utils.ts";
+import { assertResp, runTestServerTests } from "../_utils.ts";
 
 // absolute
 const _dirname = import.meta.dirname!;
@@ -21,7 +17,7 @@ const root2 = "./src/_tests/fixtures/_root2";
 runTestServerTests([
 	{
 		name: "file-based",
-		fn: async ({ base, app }: TestServerTestsParams) => {
+		fn: async ({ base, app }) => {
 			// GET /a/b/c (1 mws)
 			// GET /a/b (1 mws)
 			// ALL /a/b (1 mws)

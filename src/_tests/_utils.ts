@@ -60,22 +60,20 @@ export async function assertResp(
 	return resp;
 }
 
-export interface TestServerTestsParams {
-	srv: Awaited<ReturnType<typeof startTestServer>>;
-	base: string;
-	app: Demino;
-	get: ReturnType<typeof createHttpApi>["get"];
-	post: ReturnType<typeof createHttpApi>["post"];
-	put: ReturnType<typeof createHttpApi>["put"];
-	patch: ReturnType<typeof createHttpApi>["patch"];
-	del: ReturnType<typeof createHttpApi>["del"];
-}
-
 //
 export function runTestServerTests(
 	tests: {
 		name: string;
-		fn: CallableFunction;
+		fn: (opts: {
+			srv: Awaited<ReturnType<typeof startTestServer>>;
+			base: string;
+			app: Demino;
+			get: ReturnType<typeof createHttpApi>["get"];
+			post: ReturnType<typeof createHttpApi>["post"];
+			put: ReturnType<typeof createHttpApi>["put"];
+			patch: ReturnType<typeof createHttpApi>["patch"];
+			del: ReturnType<typeof createHttpApi>["del"];
+		}) => void | Promise<void>;
 		only?: boolean;
 		ignore?: boolean;
 		raw?: boolean;
@@ -88,7 +86,7 @@ export function runTestServerTests(
 		Deno.test(
 			{ name, ignore, only },
 			def.raw
-				? () => def.fn()
+				? () => def.fn({} as any)
 				: async () => {
 						let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
 						try {
@@ -101,7 +99,7 @@ export function runTestServerTests(
 								base: srv.base,
 								app,
 								...api,
-							} as TestServerTestsParams);
+							});
 						} catch (e) {
 							throw e;
 						} finally {
