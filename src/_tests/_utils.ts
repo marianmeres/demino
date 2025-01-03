@@ -93,6 +93,7 @@ export function runTestServerTests(
 						let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
 						try {
 							const app = demino("", [], def.appOptions);
+							app.logger(null);
 							srv = await startTestServer(app);
 							const api = createHttpApi(srv.base);
 							await def.fn({

@@ -329,9 +329,10 @@ export function demino(
 			);
 		}
 
-		// error log
-		if (getLogger()?.error) {
-			new Promise(() => {});
+		// always log all errors (except 404) unless not explicitly turned off via `.logger(null)`
+		// to see 404s use access log
+		if (r.status != 404) {
+			getLogger()?.error?.(context.error);
 		}
 
 		return r;

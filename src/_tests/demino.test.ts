@@ -315,6 +315,7 @@ Deno.test("error handler", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
+	app.logger(null);
 	app.get("/foo", () => {
 		const e: any = new Error("Bar");
 		e.code = 12345;
@@ -337,6 +338,7 @@ Deno.test("custom error handler", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
+	app.logger(null);
 
 	// return, not throw
 	app.get("/err", () => new Error("Boo"));
@@ -384,28 +386,6 @@ Deno.test("custom error handler", async () => {
 			ok: false,
 			message: "Boo",
 		});
-	} catch (e) {
-		throw e;
-	} finally {
-		srv?.ac?.abort();
-	}
-
-	return srv?.server?.finished;
-});
-
-Deno.test("error handler", async () => {
-	let srv: Srv | null = null;
-
-	const app = demino();
-	app.get("/foo", () => {
-		const e: any = new Error("Bar");
-		e.code = 12345;
-		throw e;
-	});
-
-	try {
-		srv = await startTestServer(app);
-		await assertResp(fetch(`${srv.base}/foo`), 500, /bar/i); // not 12345
 	} catch (e) {
 		throw e;
 	} finally {
