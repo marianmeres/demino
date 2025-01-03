@@ -142,6 +142,8 @@ Additionally, it also exposes:
 - `headers` - any headers to be optionally used in the final response,
 - `error` - to be used in a custom error handler.
 - `route` - currently matched route definition
+- `getLogger` - function to get the logger instance (if any) initially provided via 
+`DeminoOptions` or later via `app.logger(...)` api
 
 ```typescript
 const app = demino('/articles');
