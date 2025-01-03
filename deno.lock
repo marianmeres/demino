@@ -14,7 +14,7 @@
     "jsr:@std/net@^1.0.4": "1.0.4",
     "jsr:@std/path@^1.0.8": "1.0.8",
     "jsr:@std/streams@^1.0.8": "1.0.8",
-    "npm:@marianmeres/http-utils@^1.15.0": "1.15.0",
+    "npm:@marianmeres/http-utils@^1.18.0": "1.18.0",
     "npm:@marianmeres/simple-router@^2.0.1": "2.0.1",
     "npm:request-ip@*": "3.3.0",
     "npm:request-ip@3": "3.3.0",
@@ -78,8 +78,8 @@
     }
   },
   "npm": {
-    "@marianmeres/http-utils@1.15.0": {
-      "integrity": "sha512-5VQZ5nXh93ryjJTFGwcIZXpjyOSp2KxjaW+++Rg8tAJ4WK4CIyJDnfDUtUiBk6lCLH2bnCaxzCx4noALw+r5gQ==",
+    "@marianmeres/http-utils@1.18.0": {
+      "integrity": "sha512-UodNkQir0qRNf73i60uQCNtWlT2V+Mz9IqKbHvw5nn7p8DpC2npUsaxYdOES1SP5uMLUQES7BNeTQoMj0pHJvg==",
       "dependencies": [
         "dset"
       ]
@@ -102,7 +102,7 @@
       "jsr:@std/fs@^1.0.8",
       "jsr:@std/http@^1.0.12",
       "jsr:@std/path@^1.0.8",
-      "npm:@marianmeres/http-utils@^1.15.0",
+      "npm:@marianmeres/http-utils@^1.18.0",
       "npm:@marianmeres/simple-router@^2.0.1",
       "npm:request-ip@^3.3.0"
     ]
