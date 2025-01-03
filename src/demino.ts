@@ -32,6 +32,8 @@ export interface DeminoContext {
 	ip: string;
 	/** Matched route definition */
 	route: string;
+	/** Will retrieve the current application logger */
+	getLogger: () => DeminoLogger;
 }
 
 /** Arguments passed to DeminoHandler (a.k.a. middleware) */
@@ -199,7 +201,8 @@ function _createContext(
 	params: Record<string, string>,
 	route: string,
 	req: Request,
-	info: Deno.ServeHandlerInfo
+	info: Deno.ServeHandlerInfo,
+	getLogger: () => DeminoLogger
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -213,6 +216,7 @@ function _createContext(
 		status: HTTP_STATUS.OK,
 		ip: _clientIp || (info?.remoteAddr as any)?.hostname,
 		__start: new Date(start),
+		getLogger,
 	});
 }
 
@@ -271,8 +275,11 @@ export function demino(
 	// initialize and normalize...
 	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
-	let _log: DeminoLogger = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
+
+	//
+	let _log: DeminoLogger = options?.logger ?? console;
+	const getLogger = (): DeminoLogger => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
 	const _routerFactory =
@@ -321,7 +328,7 @@ export function demino(
 		}
 
 		// error log
-		if (_log?.error) {
+		if (getLogger()?.error) {
 			new Promise(() => {});
 		}
 
@@ -334,11 +341,11 @@ export function demino(
 		start: number;
 		ip: string;
 	}) => {
-		if (!_log?.access) return;
+		if (!getLogger()?.access) return;
 		const { req, status, start, ip } = data;
 		// make sure it is async, so it never effects responding
 		return new Promise(() => {
-			_log?.access?.({
+			getLogger()?.access?.({
 				timestamp: new Date(),
 				req,
 				status,
@@ -353,7 +360,7 @@ export function demino(
 		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
 		const start = Date.now();
-		let context = _createContext(start, {}, "", req, info);
+		let context = _createContext(start, {}, "", req, info, getLogger);
 
 		try {
 			if (!_routers[method]) {
@@ -374,7 +381,8 @@ export function demino(
 						matched.params,
 						matched.route,
 						req,
-						info
+						info,
+						getLogger
 					);
 
 					// everything is a middleware...
@@ -471,12 +479,14 @@ export function demino(
 				}));
 
 				if (options?.verbose) {
-					_log?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
+					getLogger()?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
 				}
 			} catch (e) {
 				// this is a friendly warning not a fatal condition (other routes may work
 				// fine, no need to die here)
-				_log?.warn?.(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
+				getLogger()?.warn?.(
+					red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`)
+				);
 			}
 
 			return _app;

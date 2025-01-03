@@ -617,4 +617,27 @@ runTestServerTests([
 			});
 		},
 	},
+	{
+		name: "context logger",
+		fn: async ({ app, base }: TestServerTestsParams) => {
+			let _log: any[] = [];
+			const logger = { debug: (...args: any[]) => _log.push(...args) };
+
+			app
+				.get("/hey", () => "ho")
+				.use((_r, _i, c) => {
+					c.getLogger()?.debug?.("foo", "bar", "baz");
+				})
+				.logger(logger);
+
+			await assertResp(fetch(`${base}/hey`), 200, "ho");
+			assertEquals(_log, ["foo", "bar", "baz"]);
+
+			// now reset and no more logs
+			app.logger(null);
+			_log = [];
+			await assertResp(fetch(`${base}/hey`), 200, "ho");
+			assertEquals(_log, []);
+		},
+	},
 ]);
