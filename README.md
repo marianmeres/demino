@@ -200,15 +200,15 @@ interface DeminoLogger {
 }
 ```
 
-The Demino logger, if not provided, defaults to `console`. You can provide a logger:
+The Demino logger, if not provided, defaults to `console`. You can provide a custom logger:
 - when creating the app via `DeminoOptions` (eg `demino("", [], { logger: myCustomLogger })`)
 - or anytime later via `app.logger(logger: DeminoLogger)`
 
-If you do now wish the default `console` to be active, you must turn it off explicitly via
+If you do not wish the default `console` to be active, you must turn it off explicitly via
 `app.logger(null)`
 
 The access log `logger.access` is not provided by the `console`, so if you wish to log access,
-you have to provide your own implementation.
+you have to provide your own implementation. For example:
 
 ```ts
 // example to log access to console as well
@@ -217,7 +217,7 @@ const app = demino("", [], {
 });
 ```
 
-You can use the application's logger anywhere via context.
+You can use the application's logger anywhere via context:
 
 ```ts
 app.use((r, i, ctx) => {
