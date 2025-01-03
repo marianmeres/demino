@@ -97,6 +97,8 @@ export interface Demino extends Deno.ServeHandler {
 		fsRoot: string,
 		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
 	) => Demino;
+	/** Will re/un/set application logger */
+	logger: (logger: DeminoLogger | null) => Demino;
 }
 
 /** Demino supported method */
@@ -269,7 +271,7 @@ export function demino(
 	// initialize and normalize...
 	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
-	const log: DeminoLogger = options?.logger ?? console;
+	let _log: DeminoLogger = options?.logger ?? console;
 	let _errorHandler: DeminoHandler;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
@@ -319,7 +321,7 @@ export function demino(
 		}
 
 		// error log
-		if (log?.error) {
+		if (_log?.error) {
 			new Promise(() => {});
 		}
 
@@ -332,11 +334,11 @@ export function demino(
 		start: number;
 		ip: string;
 	}) => {
-		if (!log?.access) return;
+		if (!_log?.access) return;
 		const { req, status, start, ip } = data;
 		// make sure it is async, so it never effects responding
 		return new Promise(() => {
-			log?.access?.({
+			_log?.access?.({
 				timestamp: new Date(),
 				req,
 				status,
@@ -469,12 +471,12 @@ export function demino(
 				}));
 
 				if (options?.verbose) {
-					log?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
+					_log?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
 				}
 			} catch (e) {
 				// this is a friendly warning not a fatal condition (other routes may work
 				// fine, no need to die here)
-				log?.warn?.(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
+				_log?.warn?.(red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`));
 			}
 
 			return _app;
@@ -555,6 +557,11 @@ export function demino(
 	if (options?.errorHandler) {
 		_app.error(options.errorHandler);
 	}
+
+	_app.logger = (logger: DeminoLogger | null) => {
+		_log = logger ?? console;
+		return _app;
+	};
 
 	return _app;
 }
