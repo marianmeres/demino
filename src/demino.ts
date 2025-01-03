@@ -32,8 +32,8 @@ export interface DeminoContext {
 	ip: string;
 	/** Matched route definition */
 	route: string;
-	/** Will retrieve the current application logger */
-	getLogger: () => DeminoLogger;
+	/** Will retrieve the current application logger (if any) */
+	getLogger: () => DeminoLogger | null;
 }
 
 /** Arguments passed to DeminoHandler (a.k.a. middleware) */
@@ -202,7 +202,7 @@ function _createContext(
 	route: string,
 	req: Request,
 	info: Deno.ServeHandlerInfo,
-	getLogger: () => DeminoLogger
+	getLogger: () => DeminoLogger | null
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -234,7 +234,8 @@ export interface DeminoOptions {
 	noXResponseTime?: boolean;
 	/** Will log some more details. (via DeminoLogger) */
 	verbose?: boolean;
-	/** Custom logger (default console) */
+	/** Application logger. Initially (if option not provided) will default to console.
+	 * But can be later un/re/set via `app.logger(...)`. */
 	logger?: DeminoLogger;
 	/** As a convenience shortcut, you can pass in custom error handler directly in options */
 	errorHandler?: DeminoHandler;
@@ -277,9 +278,10 @@ export function demino(
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
 	let _errorHandler: DeminoHandler;
 
-	//
-	let _log: DeminoLogger = options?.logger ?? console;
-	const getLogger = (): DeminoLogger => _log;
+	// initially we are falling back to console
+	let _log: DeminoLogger | null = options?.logger ?? console;
+	// but we can turn logging off altogether later if needed
+	const getLogger = (): DeminoLogger | null => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
 	const _routerFactory =
@@ -568,8 +570,9 @@ export function demino(
 		_app.error(options.errorHandler);
 	}
 
+	// un/re/set application logger
 	_app.logger = (logger: DeminoLogger | null) => {
-		_log = logger ?? console;
+		_log = logger;
 		return _app;
 	};
 

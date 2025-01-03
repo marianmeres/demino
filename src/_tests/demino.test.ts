@@ -633,7 +633,7 @@ runTestServerTests([
 			await assertResp(fetch(`${base}/hey`), 200, "ho");
 			assertEquals(_log, ["foo", "bar", "baz"]);
 
-			// now reset and no more logs
+			// now reset and no more logs...
 			app.logger(null);
 			_log = [];
 			await assertResp(fetch(`${base}/hey`), 200, "ho");
