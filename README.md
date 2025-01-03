@@ -178,6 +178,53 @@ app.error((req, info, ctx) => {
 });
 ```
 
+By default all errors (except `404`s) are logged using application's `logger.error(...)`.
+
+## Application log
+
+Demino application logger has the following interface:
+
+```ts
+interface DeminoLogger {
+    error?: (...args: any[]) => void;
+    warn?: (...args: any[]) => void;
+    log?: (...args: any[]) => void;
+    debug?: (...args: any[]) => void;
+    access?: (data: {
+        timestamp: Date;
+        status: number;
+        req: Request;
+        ip: string | undefined;
+        duration: number;
+    }) => void;
+}
+```
+
+The Demino logger, if not provided, defaults to `console`. You can provide a logger:
+- when creating the app via `DeminoOptions` (eg `demino("", [], { logger: myCustomLogger })`)
+- or anytime later via `app.logger(logger: DeminoLogger)`
+
+If you do now wish the default `console` to be active, you must turn it off explicitly via
+`app.logger(null)`
+
+The access log `logger.access` is not provided by the `console`, so if you wish to log access,
+you have to provide your own implementation.
+
+```ts
+// example to log access to console as well
+const app = demino("", [], {
+    logger: { ...console, access: (data) => console.log(data) }
+});
+```
+
+You can use the application's logger anywhere via context.
+
+```ts
+app.use((r, i, ctx) => {
+    ctx.getLogger()?.debug?.("Debug info logged from my middleware...")
+})
+```
+
 ## Serving static files
 
 Static files can be served through `.static(...)` method, internally implemented 
