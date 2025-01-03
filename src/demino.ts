@@ -279,7 +279,8 @@ export function demino(
 	let _errorHandler: DeminoHandler;
 
 	// initially we are falling back to console
-	let _log: DeminoLogger | null = options?.logger ?? console;
+	let _log: DeminoLogger | null =
+		options?.logger === undefined ? console : options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
 
