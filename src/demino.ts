@@ -250,7 +250,7 @@ export interface DeminoOptions {
 	verbose?: boolean;
 	/** Application logger. Initially (if option not provided) will default to console.
 	 * But can be later un/re/set via `app.logger(...)`. */
-	logger?: DeminoLogger;
+	logger?: DeminoLogger | undefined | null;
 	/** As a convenience shortcut, you can pass in custom error handler directly in options */
 	errorHandler?: DeminoHandler;
 }

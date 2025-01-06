@@ -16,7 +16,7 @@ export interface DeminoFileBasedOptions {
 	/** Will log details (via logger) about found file based routes (default true). */
 	verbose?: boolean;
 	/** Custom logger (default console) */
-	logger?: DeminoLogger;
+	logger?: DeminoLogger | null | undefined;
 }
 
 /**
