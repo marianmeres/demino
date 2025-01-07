@@ -332,6 +332,13 @@ export function demino(
 		}
 	};
 
+	const _doLog = (type: keyof DeminoLogger, value: any) => {
+		// make sure it is async, so it never effects responding
+		return new Promise(() => {
+			getLogger()?.[type]?.(value);
+		});
+	};
+
 	//
 	const _createErrorResponse = async (
 		req: Request,
@@ -353,7 +360,7 @@ export function demino(
 		// always log all errors (except 404) unless not explicitly turned off via `.logger(null)`
 		// to see 404s use access log
 		if (r.status != 404) {
-			getLogger()?.error?.(context.error);
+			_doLog("error", context.error);
 		}
 
 		return r;
@@ -365,17 +372,13 @@ export function demino(
 		start: number;
 		ip: string;
 	}) => {
-		if (!getLogger()?.access) return;
 		const { req, status, start, ip } = data;
-		// make sure it is async, so it never effects responding
-		return new Promise(() => {
-			getLogger()?.access?.({
-				timestamp: new Date(),
-				req,
-				status,
-				ip,
-				duration: Date.now() - start,
-			});
+		_doLog("access", {
+			timestamp: new Date(),
+			req,
+			status,
+			ip,
+			duration: Date.now() - start,
 		});
 	};
 
@@ -491,9 +494,9 @@ export function demino(
 	const _createRouteFn =
 		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
 		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): Demino => {
+			const _fullRoute = mountPath + route;
 			try {
 				//
-				const _fullRoute = mountPath + route;
 				_routers[method].assertIsValid(_fullRoute);
 
 				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
@@ -506,14 +509,11 @@ export function demino(
 				_localMwsCounts[_fullRoute][method] = args.flat().length - 1;
 
 				if (options?.verbose) {
-					getLogger()?.debug?.(green(` ✔ ${method} ${mountPath + route}`));
+					_doLog("debug", green(` ✔ ${method} ${mountPath + route}`));
 				}
 			} catch (e) {
-				// this is a friendly warning not a fatal condition (other routes may work
-				// fine, no need to die here)
-				getLogger()?.warn?.(
-					red(` ✘ [Invalid] ${method} ${mountPath + route} (${e})`)
-				);
+				// this is a friendly warning not a fatal condition (other routes may work fine)
+				_doLog("warn", red(` ✘ [Invalid] ${method} ${_fullRoute} (${e})`));
 			}
 
 			return _app;

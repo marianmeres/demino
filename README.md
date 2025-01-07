@@ -103,7 +103,7 @@ app.get("/json", () => ({ this: 'will', be: 'JSON', string: 'ified'}));
 
 // or return any other type (the `toString` method, if available, will be invoked by js)
 class MyRenderer {
-    constructor(private data) {...}
+    constructor(data) {...}
     toString() { return `...`; }
 }
 app.get('/templated', (r, i, c) => new MyRenderer(c.locals))
@@ -134,14 +134,12 @@ app
 
 ## Context
 
-Each middleware receives a `DeminoContext` sealed object as its last parameter 
+Each middleware receives a `DeminoContext` as its last parameter 
 which visibility and lifetime is limited to the scope and lifetime of the request handler. 
 
-It has these props:
+It consists of:
 - `params` - the readonly router parsed params,
 - `locals` - plain object, where each middleware can write and read arbitrary data.
-
-Additionally, it also exposes:
 - `status` - HTTP status number to be optionally used in the final response,
 - `headers` - any headers to be optionally used in the final response,
 - `error` - to be used in a custom error handler.
@@ -243,7 +241,7 @@ app.static('/files', '/path/to/my/files/dir', options?);
 ## Extras
 
 All features described below are extensions to the base framework.
-Some batteries are included after all.
+Some batteries _are_ included after all.
 
 ## Extra: Bundled middlewares
 
