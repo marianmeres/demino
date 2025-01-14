@@ -7,13 +7,13 @@ export function deminoCompose(
 	apps: Demino[],
 	notFoundHandler?: (
 		req: Request,
-		info: Deno.ServeHandlerInfo
-	) => Response | Promise<Response>
+		info: Deno.ServeHandlerInfo,
+	) => Response | Promise<Response>,
 ): Deno.ServeHandler {
 	// in case of the same mountPaths, the later wins
 	const mounts = apps.reduce(
 		(m, a) => ({ ...m, [a.mountPath() || "/"]: a }),
-		{} as Record<string, Demino>
+		{} as Record<string, Demino>,
 	);
 	// console.log(Object.keys(mounts));
 

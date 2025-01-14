@@ -17,12 +17,12 @@ export function trailingSlash(
 	options?: {
 		/** For debugging */
 		logger?: CallableFunction;
-	}
+	},
 ): DeminoHandler {
 	const midware: DeminoHandler = (
 		req: Request,
 		_i: Deno.ServeHandlerInfo,
-		_ctx: DeminoContext
+		_ctx: DeminoContext,
 	) => {
 		const url = new URL(req.url);
 
@@ -36,8 +36,7 @@ export function trailingSlash(
 			url.pathname += "/";
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`); // debug
 			return Response.redirect(url.toString(), HTTP_STATUS.MOVED_PERMANENTLY);
-		}
-		// remove slash
+		} // remove slash
 		else if (!flag && url.pathname.endsWith("/")) {
 			url.pathname = url.pathname.slice(0, -1);
 			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`);

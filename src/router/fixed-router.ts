@@ -34,8 +34,6 @@ export class DeminoFixedRouter extends DeminoRouter {
 		const params = {};
 
 		//
-		return this.#routes.has(pathname)
-			? this.#routes.get(pathname)!(params)
-			: null;
+		return this.#routes.has(pathname) ? this.#routes.get(pathname)!(params) : null;
 	}
 }

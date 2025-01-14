@@ -10,14 +10,14 @@ export const TEST_PORT = 9876;
 /** Start test server with custom return data suitable for testing */
 export async function startTestServer(
 	handler: Deno.ServeHandler,
-	port = TEST_PORT
+	port = TEST_PORT,
 ) {
 	const ac = new AbortController();
 	// By default `Deno.serve` prints the message ... If you like to
 	// change this behavior, you can specify a custom `onListen` callback.
 	const server = await Deno.serve(
 		{ port, signal: ac.signal, onListen(_) {} },
-		handler
+		handler,
 	);
 	// server.finished.then(() => console.log("Server closed"));
 	return { port, ac, server, base: `http://localhost:${port}` };
@@ -28,7 +28,7 @@ export async function assertResp(
 	resp: Response | Promise<Response>,
 	status: number = 200,
 	textCheck?: RegExp | object | boolean | string,
-	headersCheck?: Record<string, string | RegExp>
+	headersCheck?: Record<string, string | RegExp>,
 ) {
 	resp = await resp;
 	assertEquals(resp.status, status);
@@ -78,35 +78,33 @@ export function runTestServerTests(
 		ignore?: boolean;
 		raw?: boolean;
 		appOptions?: DeminoOptions;
-	}[]
+	}[],
 ) {
 	for (const def of tests) {
 		const { name, ignore, only } = def;
 		if (typeof def.fn !== "function") continue;
 		Deno.test(
 			{ name, ignore, only },
-			def.raw
-				? () => def.fn({} as any)
-				: async () => {
-						let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
-						try {
-							const app = demino("", [], def.appOptions);
-							app.logger(null);
-							srv = await startTestServer(app);
-							const api = createHttpApi(srv.base);
-							await def.fn({
-								srv,
-								base: srv.base,
-								app,
-								...api,
-							});
-						} catch (e) {
-							throw e;
-						} finally {
-							srv?.ac?.abort();
-						}
-						return srv?.server?.finished;
-				  }
+			def.raw ? () => def.fn({} as any) : async () => {
+				let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
+				try {
+					const app = demino("", [], def.appOptions);
+					app.logger(null);
+					srv = await startTestServer(app);
+					const api = createHttpApi(srv.base);
+					await def.fn({
+						srv,
+						base: srv.base,
+						app,
+						...api,
+					});
+				} catch (e) {
+					throw e;
+				} finally {
+					srv?.ac?.abort();
+				}
+				return srv?.server?.finished;
+			},
 		);
 	}
 }

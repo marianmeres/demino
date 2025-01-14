@@ -12,7 +12,7 @@ export type DeminoRouterOnMatchResult = {
 
 /** Internal on route match callback type */
 export type DeminoRouterOnMatch = (
-	params: Record<string, string>
+	params: Record<string, string>,
 ) => DeminoRouterOnMatchResult;
 
 /** DeminoRouter abstract class. */

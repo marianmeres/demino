@@ -54,7 +54,7 @@ Deno.test("composition", async () => {
 			fetch(`${base}/api`),
 			200,
 			{ hello: "world" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		await assertResp(fetch(`${base}/blog`), 200, /Blog root/i);

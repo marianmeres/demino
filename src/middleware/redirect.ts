@@ -14,7 +14,7 @@ import type { DeminoContext, DeminoHandler } from "../demino.ts";
  */
 export function redirect(
 	url: string | URL,
-	status: 301 | 302 | 303 | 307 | 308 = 302
+	status: 301 | 302 | 303 | 307 | 308 = 302,
 ): DeminoHandler {
 	return (req: Request, _info: Deno.ServeHandlerInfo, _ctx: DeminoContext) => {
 		return Response.redirect(new URL(url, new URL(req.url)), status);

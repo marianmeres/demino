@@ -29,7 +29,7 @@ export function proxy(
 		/** If non zero number of ms is provided, will set the watch clock for the proxy
 		 * request to complete. */
 		timeout: number;
-	}>
+	}>,
 ): DeminoHandler {
 	const { timeout = 60_000 } = options ?? {};
 	if (isNaN(timeout) || timeout < 0) {
@@ -49,8 +49,7 @@ export function proxy(
 			}
 			// also reuse search query if not exists
 			if (!_target.search) _target.search = url.search;
-		}
-		// but not with functions, they are fully manual
+		} // but not with functions, they are fully manual
 		else if (typeof target === "function") {
 			_target = await target(req, ctx);
 			if (typeof _target !== "string" || !_target) {
@@ -58,7 +57,7 @@ export function proxy(
 			}
 		} else {
 			throw new TypeError(
-				`Invalid target parameter, expecting string or a function`
+				`Invalid target parameter, expecting string or a function`,
 			);
 		}
 
@@ -78,7 +77,7 @@ export function proxy(
 		// Remove headers that might cause issues
 		// prettier-ignore
 		["connection", "keep-alive", "transfer-encoding", "upgrade", "expect"].forEach(
-			(name) => proxyHeaders.delete(name)
+			(name) => proxyHeaders.delete(name),
 		);
 
 		// X-Forwarded-* headers
@@ -101,7 +100,7 @@ export function proxy(
 		const respHeaders = new Headers(resp.headers);
 		// prettier-ignore
 		["connection", "keep-alive", "transfer-encoding"].forEach(
-			(name) => respHeaders.delete(name)
+			(name) => respHeaders.delete(name),
 		);
 
 		//

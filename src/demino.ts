@@ -1,10 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 
-import {
-	createHttpError,
-	getErrorMessage,
-	HTTP_STATUS,
-} from "@marianmeres/http-utils";
+import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
 import { serveDir, type ServeDirOptions } from "@std/http/file-server";
@@ -105,7 +101,7 @@ export interface Demino extends Deno.ServeHandler {
 	static: (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
 	) => Demino;
 	/** Will re/un/set application logger */
 	logger: (logger: DeminoLogger | null) => Demino;
@@ -173,7 +169,7 @@ export const CONTENT_TYPE = {
 function _createResponseFrom(
 	body: any,
 	headers: Headers = new Headers(),
-	status = HTTP_STATUS.OK
+	status = HTTP_STATUS.OK,
 ) {
 	status ||= HTTP_STATUS.OK;
 
@@ -181,8 +177,7 @@ function _createResponseFrom(
 	if (body === undefined) {
 		body = null;
 		status = HTTP_STATUS.NO_CONTENT;
-	}
-	// JSON.stringify
+	} // JSON.stringify
 	else if (
 		// considering NULL a common DTO use case
 		body === null ||
@@ -196,8 +191,7 @@ function _createResponseFrom(
 		if (!headers.has("content-type")) {
 			headers.set("content-type", CONTENT_TYPE.JSON);
 		}
-	}
-	// maybe any other auto detection here?
+	} // maybe any other auto detection here?
 	// otherwise not much to guess anymore, simply cast to string
 	else {
 		body = `${body}`;
@@ -216,7 +210,7 @@ function _createContext(
 	route: string,
 	req: Request,
 	info: Deno.ServeHandlerInfo,
-	getLogger: () => DeminoLogger | null
+	getLogger: () => DeminoLogger | null,
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -268,22 +262,22 @@ export interface DeminoOptions {
 export function demino(
 	mountPath: string = "",
 	middleware: DeminoHandler | DeminoHandler[] = [],
-	options?: DeminoOptions
+	options?: DeminoOptions,
 ): Demino {
 	// forcing conventional and composable behavior (see `deminoCompose` and URL.pathname)
 	if (mountPath !== "" && !mountPath.startsWith("/")) {
 		throw new TypeError(
-			`Mount path must be either empty or must start with a slash (path: ${mountPath})`
+			`Mount path must be either empty or must start with a slash (path: ${mountPath})`,
 		);
 	}
 	if (mountPath.endsWith("/")) {
 		throw new TypeError(
-			`Mount path must not end with a slash (path: ${mountPath})`
+			`Mount path must not end with a slash (path: ${mountPath})`,
 		);
 	}
 	if (/[\[\]:\*]/.test(mountPath)) {
 		throw new TypeError(
-			`Mount path must not contain dynamic segments (path: ${mountPath})`
+			`Mount path must not contain dynamic segments (path: ${mountPath})`,
 		);
 	}
 
@@ -293,21 +287,21 @@ export function demino(
 	let _errorHandler: DeminoHandler;
 
 	// initially we are falling back to console
-	let _log: DeminoLogger | null =
-		options?.logger === undefined ? console : options.logger;
+	let _log: DeminoLogger | null = options?.logger === undefined
+		? console
+		: options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
-	const _routerFactory =
-		typeof options?.routerFactory === "function"
-			? options.routerFactory
-			: () => new DeminoSimpleRouter();
+	const _routerFactory = typeof options?.routerFactory === "function"
+		? options.routerFactory
+		: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
 	const _routers = ["ALL", ...supportedMethods].reduce(
 		(m, k) => ({ ...m, [k]: _routerFactory() }),
-		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
+		{} as Record<"ALL" | DeminoMethod, DeminoRouter>,
 	);
 
 	// see `app.info`
@@ -327,7 +321,7 @@ export function demino(
 		) {
 			context.headers.set(
 				"X-Response-Time",
-				`${Date.now() - context.__start.valueOf()}ms`
+				`${Date.now() - context.__start.valueOf()}ms`,
 			);
 		}
 	};
@@ -343,7 +337,7 @@ export function demino(
 	const _createErrorResponse = async (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		context: DeminoContext
+		context: DeminoContext,
 	): Promise<Response> => {
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
@@ -353,7 +347,7 @@ export function demino(
 			r = _createResponseFrom(
 				r || getErrorMessage(context.error),
 				context.headers,
-				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
+				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
 			);
 		}
 
@@ -409,7 +403,7 @@ export function demino(
 						matched.route,
 						req,
 						info,
-						getLogger
+						getLogger,
 					);
 
 					// everything is a middleware...
@@ -463,8 +457,7 @@ export function demino(
 					if (result instanceof Error) {
 						context.error = result;
 						result = await _createErrorResponse(req, info, context);
-					}
-					// we need Response instance eventually...
+					} // we need Response instance eventually...
 					else if (!(result instanceof Response)) {
 						result = _createResponseFrom(result, headers, context?.status);
 					}
@@ -560,12 +553,12 @@ export function demino(
 	_app.static = (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
 	) => {
 		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
 		if (/[\[\]:\*]/.test(route)) {
 			throw new TypeError(
-				`Static route must not contain dynamic segments (route: ${route})`
+				`Static route must not contain dynamic segments (route: ${route})`,
 			);
 		}
 		let urlRoot: string;

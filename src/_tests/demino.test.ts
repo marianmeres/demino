@@ -8,7 +8,7 @@ import {
 } from "@marianmeres/http-utils";
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
-import { demino, type DeminoLogger, type DeminoHandler } from "../demino.ts";
+import { demino, type DeminoHandler, type DeminoLogger } from "../demino.ts";
 import { assertResp, runTestServerTests, startTestServer } from "./_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
@@ -92,7 +92,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}`, { method: "POST" }),
 			200,
-			/world/i
+			/world/i,
 		);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
@@ -106,7 +106,7 @@ Deno.test("mounted hello world", async () => {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method }),
 				200,
-				method === "head" ? "" : method
+				method === "head" ? "" : method,
 			);
 		}
 
@@ -137,16 +137,13 @@ Deno.test("middlewares and various return types", async () => {
 		// return nothing, just set context, the get handler returns
 		if (context.params.id == "foo") {
 			context.locals.some = await Promise.resolve("bar");
-		}
-		// return JSON serializable object ASAP (final handler will not be invoked)
+		} // return JSON serializable object ASAP (final handler will not be invoked)
 		else if (context.params.id == "bar") {
 			return { toJSON: () => ({ baz: "bat" }) };
-		}
-		// return plain string ASAP (final handler will not be invoked)
+		} // return plain string ASAP (final handler will not be invoked)
 		else if (context.params.id == "hey") {
 			return { toString: () => "ho" };
-		}
-		// not found (intentionally not throwing, just returning, which must also work)
+		} // not found (intentionally not throwing, just returning, which must also work)
 		else if (context.params.id) {
 			return new HTTP_ERROR.NotFound("Some not found");
 		}
@@ -174,7 +171,7 @@ Deno.test("middlewares and various return types", async () => {
 			{
 				"X-VERSION": "1.2.3",
 				"content-type": /json/,
-			}
+			},
 		);
 
 		// "bar" return via toJSON as json
@@ -182,7 +179,7 @@ Deno.test("middlewares and various return types", async () => {
 			fetch(`${srv.base}/some/bar`),
 			200,
 			{ baz: "bat" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// "bar" return via toJSON as json
@@ -199,7 +196,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/no-content`),
 			HTTP_STATUS.NO_CONTENT,
-			""
+			"",
 		);
 
 		// mirror post data
@@ -207,7 +204,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/echo`, { method: "POST", body: JSON.stringify(hey) }),
 			200,
-			hey
+			hey,
 		);
 
 		// check html content-type
@@ -353,7 +350,7 @@ Deno.test("custom error handler", async () => {
 		await assertResp(
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
-			"Forbidden"
+			"Forbidden",
 		);
 
 		// now register custom error handler which will talk always in json
@@ -366,7 +363,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
 			{ ok: false, message: "Forbidden" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// repeat, and expect json
@@ -374,7 +371,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}`),
 			404,
 			{ ok: false, message: "Not Found" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// err
@@ -425,7 +422,7 @@ Deno.test("catch all fallback route", async () => {
 		await assertResp(
 			fetch(`${srv.base}/${Math.random()}`, { method: "POST" }),
 			200,
-			/hey/i
+			/hey/i,
 		);
 	} catch (e) {
 		throw e;
@@ -575,7 +572,7 @@ runTestServerTests([
 				(_r, _i, c) => {
 					c.locals.local = 1;
 				},
-				(_r, _i, c) => c.locals
+				(_r, _i, c) => c.locals,
 			);
 
 			app.use("/foo", (_r, _i, c) => {
