@@ -304,6 +304,18 @@ with provided optional `status`.
 app.use("/old", redirect("/new"));
 ```
 
+## RateLimit
+
+Will create a [token bucket](https://en.wikipedia.org/wiki/Token_bucket) based rate limit 
+middleware which will throw `429 Too Many Requests` if the allowed rate is exceeded.
+
+First argument is a `getClientId(req, info, ctx)` function, which must return a non empty 
+`id` (otherwise a no-op). The `id` can be anything, typically some auth token.
+
+```ts
+app.use('/api', rateLimit((req) => req.headers.get('Authorization'), options));
+```
+
 ## Extra: URL Pattern router
 
 In addition to the default [simple-router](https://github.com/marianmeres/simple-router),

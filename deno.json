@@ -7,12 +7,12 @@
 		"test": "deno test -A --watch"
 	},
 	"imports": {
-		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.19.0",
+		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.21.0",
 		"@marianmeres/midware": "jsr:@marianmeres/midware@^1.1.0",
 		"@marianmeres/simple-router": "npm:@marianmeres/simple-router@^2.1.0",
-		"@std/assert": "jsr:@std/assert@^1.0.10",
+		"@std/assert": "jsr:@std/assert@^1.0.11",
 		"@std/fmt": "jsr:@std/fmt@^1.0.4",
-		"@std/fs": "jsr:@std/fs@^1.0.9",
+		"@std/fs": "jsr:@std/fs@^1.0.10",
 		"@std/http": "jsr:@std/http@^1.0.12",
 		"@std/path": "jsr:@std/path@^1.0.8",
 		"request-ip": "npm:request-ip@^3.3.0"
