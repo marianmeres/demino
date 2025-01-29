@@ -304,7 +304,7 @@ with provided optional `status`.
 app.use("/old", redirect("/new"));
 ```
 
-## RateLimit
+### RateLimit
 
 Will create a [token bucket](https://en.wikipedia.org/wiki/Token_bucket) based rate limit 
 middleware which will throw `429 Too Many Requests` if the allowed rate is exceeded.
