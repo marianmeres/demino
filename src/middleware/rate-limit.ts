@@ -1,5 +1,5 @@
 import { HTTP_ERROR } from "@marianmeres/http-utils";
-import type { DeminoContext, DeminoLogger } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoLogger } from "../demino.ts";
 import { TokenBucket } from "../mod.ts";
 
 /** Option passed to `rateLimit` middleware. */
@@ -40,7 +40,7 @@ export function rateLimit(
 		ctx: DeminoContext
 	) => Promise<unknown>,
 	options?: Partial<RateLimitOptions>
-) {
+): DeminoHandler {
 	const {
 		maxSize = 20,
 		refillSizePerSecond = 10,
