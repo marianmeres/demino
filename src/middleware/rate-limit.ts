@@ -19,6 +19,8 @@ export interface RateLimitOptions {
 	 * How often should we collect garbage? Garbage collect here means that we simply
 	 * delete old clients records continually as we go, so it will not slowly consume memory.
 	 *
+	 * Value is expected to be on scale from 0 to 1.
+	 *
 	 * Default value is 0.001 (that is every "one in a thousand" requests we'll do the cleanup).
 	 * Zero means no cleanup, 1 means cleanup on every request.
 	 */

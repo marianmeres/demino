@@ -24,21 +24,19 @@ runTestServerTests([
 							return 1;
 						},
 					}
-				)
+				),
+				() => ""
 			);
 
 			// normaly, 2 per sec are allowed
-			await assertResp(fetch(`${base}/`), HTTP_STATUS.NO_CONTENT);
-			await assertResp(fetch(`${base}/`), HTTP_STATUS.NO_CONTENT);
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.OK);
 			await assertResp(fetch(`${base}/`), HTTP_STATUS.TOO_MANY_REQUESTS);
 
 			// but only 1 expensive
+			await assertResp(fetch(`${base}/?id=x&type=login`), HTTP_STATUS.OK);
 			await assertResp(
-				fetch(`${base}/?id=some&type=login`),
-				HTTP_STATUS.NO_CONTENT
-			);
-			await assertResp(
-				fetch(`${base}/?id=some&type=login`),
+				fetch(`${base}/?id=x&type=login`),
 				HTTP_STATUS.TOO_MANY_REQUESTS
 			);
 
@@ -46,20 +44,20 @@ runTestServerTests([
 			await sleep(1_001);
 
 			// now only 1 is available (the max burst 2 were already consumed)
-			await assertResp(fetch(`${base}/`), HTTP_STATUS.NO_CONTENT);
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.OK);
 			await assertResp(fetch(`${base}/`), HTTP_STATUS.TOO_MANY_REQUESTS);
 
 			// this must still NOT be allowed (we would need to wait another second)
 			await assertResp(
-				fetch(`${base}/?id=some&type=login`),
+				fetch(`${base}/?id=x&type=login`),
 				HTTP_STATUS.TOO_MANY_REQUESTS
 			);
 
 			// but different clients must be allowed
-			await assertResp(fetch(`${base}/?id=bar`), HTTP_STATUS.NO_CONTENT);
-			await assertResp(fetch(`${base}/?id=baz`), HTTP_STATUS.NO_CONTENT);
-			await assertResp(fetch(`${base}/?id=hey`), HTTP_STATUS.NO_CONTENT);
-			await assertResp(fetch(`${base}/?id=ho`), HTTP_STATUS.NO_CONTENT);
+			await assertResp(fetch(`${base}/?id=bar`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/?id=baz`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/?id=hey`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/?id=ho`), HTTP_STATUS.OK);
 		},
 	},
 ]);
