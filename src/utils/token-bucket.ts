@@ -66,7 +66,15 @@ export class TokenBucket {
 		// First refill the bucket based on time passed
 		this.refill();
 
-		// Check if we have enough tokens, if so, decrease and return true
+		// sanitize
+		if (Number.isNaN(quantity) || quantity < 0) {
+			this._logger?.warn?.(
+				`[TokenBucket] Invalid consume quantity '${quantity}'`
+			);
+			return false;
+		}
+
+		// Check if we have enough capacity, if so, decrease and return true
 		if (this.#currentSize >= quantity) {
 			this.#currentSize -= quantity;
 			return true;

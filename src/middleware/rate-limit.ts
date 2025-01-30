@@ -4,18 +4,36 @@ import { TokenBucket } from "../mod.ts";
 
 /** Option passed to `rateLimit` middleware. */
 export interface RateLimitOptions {
-	/** Max bucket size. Default is 20 */
+	/**
+	 * What is the maximum number of requests one client is allowed to hit per second?
+	 * This can be higher than the `refillSizePerSecond` to allow legit bursting.
+	 * Default is 20.
+	 */
 	maxSize: number;
-	/** Default is 10 */
+	/**
+	 * What size (capacity) to refill per second?
+	 * Default is 10
+	 */
 	refillSizePerSecond: number;
 	/**
-	 * How often should we collect garbage? Garbage collect here means, that we simply
+	 * How often should we collect garbage? Garbage collect here means that we simply
 	 * delete old clients records continually as we go, so it will not slowly consume memory.
 	 *
-	 * Default value is 0.001 (that is every one in a thousand requests we'll do the cleanup).
-	 * Zero means no cleanup, 1 means cleanup on every request (which makes no sense).
+	 * Default value is 0.001 (that is every "one in a thousand" requests we'll do the cleanup).
+	 * Zero means no cleanup, 1 means cleanup on every request.
 	 */
 	cleanupProbability: number;
+	/**
+	 * What size (capacity) should the current request consume? Point here is that certain
+	 * requests (e.g. login attempts) may need to be limited with higher pressure...
+	 *
+	 * If not provided, size of 1 is assumed.
+	 */
+	getConsumeSize: (
+		req: Request,
+		info: Deno.ServeHandlerInfo,
+		ctx: DeminoContext
+	) => number | Promise<number>;
 }
 
 /**
@@ -24,10 +42,13 @@ export interface RateLimitOptions {
  * Uses token bucket algorithm internally with default options of allowing
  * 10 requests per second with a burst capacity of 20.
  *
+ * For it to work, a `getClientId` function must be provided as a first argument, so it can
+ * identify the source request and apply the limit. e.g. Auth Bearer token.
+ *
  * Currently suitable only for single-server setups.
  * @todo support for distributes system (with Redis or similar)
  *
- * @example
+ * @example Using `Authorization` header as a client id
  * ```ts
  * app.use('/api', rateLimit((req) => req.headers.get('Authorization')));
  * ```
@@ -38,13 +59,14 @@ export function rateLimit(
 		req: Request,
 		info: Deno.ServeHandlerInfo,
 		ctx: DeminoContext
-	) => Promise<unknown>,
+	) => unknown | Promise<unknown>,
 	options?: Partial<RateLimitOptions>
 ): DeminoHandler {
 	const {
 		maxSize = 20,
 		refillSizePerSecond = 10,
 		cleanupProbability = 0.001,
+		getConsumeSize,
 	} = options ?? {};
 	const clients = new Map<unknown, { bucket: TokenBucket; lastAccess: Date }>();
 
@@ -54,19 +76,19 @@ export function rateLimit(
 
 	/**  */
 	const _maybeCleanup = (logger: DeminoLogger | null) => {
-		if (Math.random() <= cleanupProbability) {
+		if (Math.random() < cleanupProbability) {
 			let counter = 0;
 			for (const [id, row] of clients.entries()) {
 				if (
 					(new Date().valueOf() - row.lastAccess.valueOf()) / 1_000 >=
-					// calculate threshold automatically - anything older will be fully refilled anyway
+					// calculate threshold automatically (anything older will be fully refilled anyway)
 					maxSize / refillSizePerSecond
 				) {
 					clients.delete(id);
 					counter++;
 				}
 			}
-			logger?.debug?.(`[rateLimit] Cleaned up '${counter}`);
+			logger?.debug?.(`[rateLimit] Cleaned up: ${counter}`);
 		}
 	};
 
@@ -80,7 +102,7 @@ export function rateLimit(
 
 		const clientId = await getClientId(req, info, ctx);
 
-		// return no-op if we can't recognize
+		// return no-op if we can't recognize the source
 		if (!clientId) return;
 
 		// initialize on the first request
@@ -93,7 +115,13 @@ export function rateLimit(
 
 		const { bucket } = clients.get(clientId)!;
 
-		if (!bucket.consume(1)) {
+		// what rate capacity size are we going to consume for this request?
+		let consumeSize = 1;
+		if (typeof getConsumeSize === "function") {
+			consumeSize = await getConsumeSize(req, info, ctx);
+		}
+
+		if (!bucket.consume(consumeSize)) {
 			throw new HTTP_ERROR.TooManyRequests();
 		}
 	};

@@ -313,7 +313,11 @@ First argument is a `getClientId(req, info, ctx)` function, which must return a 
 `id` (otherwise a no-op). The `id` can be anything, typically some auth token.
 
 ```ts
-app.use('/api', rateLimit((req) => req.headers.get('Authorization'), options));
+app.use('/api', rateLimit(
+	// As a simple example, using raw `Authorization` header as a client id
+	(req) => req.headers.get('Authorization'), 
+	options // see RateLimitOptions
+));
 ```
 
 ## Extra: URL Pattern router
