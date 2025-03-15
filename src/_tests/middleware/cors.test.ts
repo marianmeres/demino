@@ -1,4 +1,4 @@
-import { assert } from "@std/assert/assert";
+import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { cors } from "../../mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -65,6 +65,28 @@ runTestServerTests([
 				200,
 				undefined,
 				{ "Access-Control-Allow-Origin": false }
+			);
+		},
+	},
+	{
+		name: "options app wide",
+		fn: async ({ app, base }) => {
+			app.options("*", cors()); // must allow options explicitly
+			// app.use(cors());
+
+			app.get("/my/foo/bar", () => "baz");
+
+			await assertResp(
+				fetch(`${base}/`, { method: "OPTIONS" }),
+				HTTP_STATUS.NO_CONTENT,
+				undefined,
+				{
+					"Access-Control-Allow-Origin": "*",
+					"Access-Control-Allow-Methods": true,
+					"Access-Control-Allow-Headers": true,
+					"Access-Control-Allow-Credentials": true,
+					"Access-Control-Max-Age": true,
+				}
 			);
 		},
 	},

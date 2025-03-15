@@ -257,9 +257,10 @@ included after all.
 ### CORS
 
 Will create the "Cross-origin resource sharing" ("CORS") headers in the response
-based on the provided config.
+based on the provided config. Be aware that the default config is quite relaxed (allows
+wildcards and credentials by default).
 
-Base wildcard * defaults example
+Basic example
 ```ts
 app.use(cors());
 ```
@@ -273,6 +274,13 @@ app.use(cors({
     },
 	allowCredentials: true
 }));
+```
+
+Note that you may need to explicitly allow the `OPTIONS` request handlers. You may use a wildcard
+route definition for convenience:
+
+```ts
+app.options("*", cors());
 ```
 
 ### Trailing slash

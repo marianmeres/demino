@@ -43,9 +43,10 @@ export interface CorsOptions {
 export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 	const {
 		allowOrigin = "*",
-		allowMethods = "GET,HEAD,PUT,PATCH,POST,DELETE",
-		allowHeaders = "Content-Type,Authorization",
-		allowCredentials = false,
+		allowMethods = "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+		// allowHeaders = "Content-Type,Authorization", // '*'
+		allowHeaders = "*",
+		allowCredentials = true,
 		maxAge = 86_400, // 24 hours
 	} = options ?? {};
 
@@ -77,7 +78,7 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 			origin = allowOrigin;
 		}
 		if (origin) {
-			// browsers do not support wildcard with allow-credentials, so:
+			// browsers may not support wildcard with allow-credentials, so:
 			if (credentials && origin === "*" && requestOrigin) {
 				origin = requestOrigin;
 			}
