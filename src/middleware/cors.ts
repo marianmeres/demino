@@ -44,13 +44,12 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 	const {
 		allowOrigin = "*",
 		allowMethods = "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-		// allowHeaders = "Content-Type,Authorization", // '*'
-		allowHeaders = "*",
+		allowHeaders = "Content-Type,Authorization", // '*'
 		allowCredentials = true,
 		maxAge = 86_400, // 24 hours
 	} = options ?? {};
 
-	return async (
+	const midware: DeminoHandler = async (
 		req: Request,
 		_info: Deno.ServeHandlerInfo,
 		ctx: DeminoContext
@@ -126,4 +125,9 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 			return;
 		}
 	};
+
+	// cors is duplicable
+	midware.__midwareDuplicable = true;
+
+	return midware;
 }
