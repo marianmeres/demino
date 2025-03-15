@@ -254,6 +254,27 @@ included after all.
 
 ## Extra: Bundled middlewares
 
+### CORS
+
+Will create the "Cross-origin resource sharing" ("CORS") headers in the response
+based on the provided config.
+
+Base wildcard * defaults example
+```ts
+app.use(cors());
+```
+
+Dynamic evaluation example
+```ts
+app.use(cors({
+	// string | string[] | ((orig, hdr) => string | string[] | Promise<string | string[]>)
+    allowOrigin: (origin: string, reqHeaders: Headers) => {
+        return (myWhitelist.includes(origin)) ? origin : "";
+    },
+	allowCredentials: true
+}));
+```
+
 ### Trailing slash
 
 The default router, by design, sees `/foo` and `/foo/` as the same routes, which may not
