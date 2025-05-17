@@ -4,7 +4,8 @@
 	"exports": "./src/mod.ts",
 	"tasks": {
 		"dev": "deno run --watch ./src/mod.ts",
-		"test": "deno test -A --watch"
+		"test": "deno test -A --watch",
+		"test:no-watch": "deno test -A"
 	},
 	"imports": {
 		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.21.0",
