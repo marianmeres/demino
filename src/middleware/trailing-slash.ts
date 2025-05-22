@@ -27,7 +27,11 @@ export function trailingSlash(
 		const url = new URL(req.url);
 
 		// no-op if not GET or can't say explicitly or we are at the root
-		if (req.method !== "GET" || flag === undefined || "/" === url.pathname) {
+		if (
+			!["GET", "HEAD"].includes(req.method) ||
+			flag === undefined ||
+			"/" === url.pathname
+		) {
 			return;
 		}
 
