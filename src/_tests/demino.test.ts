@@ -32,8 +32,8 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 		.post("/post", () => "post")
 		.patch("/patch", () => "patch")
 		.put("/put", () => "put")
-		.delete("/delete", () => "delete")
-		.head("/head", () => "head");
+		.delete("/delete", () => "delete");
+	// .head("/head", () => "head");
 
 	return app;
 };
@@ -84,6 +84,7 @@ Deno.test("mounted hello world", async () => {
 	try {
 		const mount = "/hello";
 		const app = hello(mount, [], { verbose: false });
+		app.logger(null);
 
 		//
 		srv = await startTestServer(app);
@@ -92,7 +93,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}`, { method: "POST" }),
 			200,
-			/world/i,
+			/world/i
 		);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
@@ -101,14 +102,36 @@ Deno.test("mounted hello world", async () => {
 		// midware returns awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/4`), 200, /world/i);
 
-		const names = ["post", "patch", "put", "delete", "head"];
+		const names = ["post", "patch", "put", "delete"];
 		for (const method of names) {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method }),
 				200,
-				method === "head" ? "" : method,
+				method
+			);
+			// head must return 405 for not get registered routes
+			await assertResp(
+				fetch(`${srv.base}${mount}/${method}`, { method: "HEAD" }),
+				405,
+				""
 			);
 		}
+
+		// HEAD for existing GET must work out-of-the-box
+		for (const p of ["", 2, 3, 4]) {
+			await assertResp(
+				fetch(`${srv.base}${mount}/${p}`, { method: "HEAD" }),
+				200,
+				""
+			);
+		}
+
+		// but not for 404s
+		await assertResp(
+			fetch(`${srv.base}${mount}/asdf`, { method: "HEAD" }),
+			404,
+			false
+		);
 
 		// case sensitivity check
 		await assertResp(fetch(`${srv.base}${mount}/PoSt`), 404);
@@ -171,7 +194,7 @@ Deno.test("middlewares and various return types", async () => {
 			{
 				"X-VERSION": "1.2.3",
 				"content-type": /json/,
-			},
+			}
 		);
 
 		// "bar" return via toJSON as json
@@ -179,7 +202,7 @@ Deno.test("middlewares and various return types", async () => {
 			fetch(`${srv.base}/some/bar`),
 			200,
 			{ baz: "bat" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// "bar" return via toJSON as json
@@ -196,7 +219,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/no-content`),
 			HTTP_STATUS.NO_CONTENT,
-			"",
+			""
 		);
 
 		// mirror post data
@@ -204,7 +227,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/echo`, { method: "POST", body: JSON.stringify(hey) }),
 			200,
-			hey,
+			hey
 		);
 
 		// check html content-type
@@ -350,7 +373,7 @@ Deno.test("custom error handler", async () => {
 		await assertResp(
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
-			"Forbidden",
+			"Forbidden"
 		);
 
 		// now register custom error handler which will talk always in json
@@ -363,7 +386,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
 			{ ok: false, message: "Forbidden" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// repeat, and expect json
@@ -371,7 +394,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}`),
 			404,
 			{ ok: false, message: "Not Found" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// err
@@ -422,7 +445,7 @@ Deno.test("catch all fallback route", async () => {
 		await assertResp(
 			fetch(`${srv.base}/${Math.random()}`, { method: "POST" }),
 			200,
-			/hey/i,
+			/hey/i
 		);
 	} catch (e) {
 		throw e;
@@ -572,7 +595,7 @@ runTestServerTests([
 				(_r, _i, c) => {
 					c.locals.local = 1;
 				},
-				(_r, _i, c) => c.locals,
+				(_r, _i, c) => c.locals
 			);
 
 			app.use("/foo", (_r, _i, c) => {
@@ -633,10 +656,12 @@ runTestServerTests([
 				routes: {
 					"/mount/foo": {
 						GET: { localMiddlewaresCount: 2, globalMiddlewaresCount: 1 },
+						HEAD: { localMiddlewaresCount: 2, globalMiddlewaresCount: 1 },
 						POST: { localMiddlewaresCount: 3, globalMiddlewaresCount: 1 },
 					},
 					"/mount/baz": {
 						ALL: { globalMiddlewaresCount: 0, localMiddlewaresCount: 0 },
+						HEAD: { localMiddlewaresCount: 0, globalMiddlewaresCount: 0 },
 					},
 				},
 				globalAppMiddlewaresCount: 1,

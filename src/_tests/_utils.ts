@@ -2,7 +2,7 @@
 
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { isPlainObject } from "../utils/is-plain-object.ts";
-import { Demino, demino, DeminoOptions } from "../demino.ts";
+import { type Demino, demino, type DeminoOptions } from "../demino.ts";
 import { createHttpApi } from "@marianmeres/http-utils";
 
 export const TEST_PORT = 9876;

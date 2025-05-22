@@ -171,6 +171,7 @@ export const CONTENT_TYPE = {
 
 /** Creates Response based on body type */
 function _createResponseFrom(
+	req: Request,
 	body: any,
 	headers: Headers = new Headers(),
 	status = HTTP_STATUS.OK
@@ -202,6 +203,13 @@ function _createResponseFrom(
 		if (!headers.has("content-type")) {
 			headers.set("content-type", CONTENT_TYPE.HTML);
 		}
+	}
+
+	// if we have a HEAD, do empty the body... (but no other changes). Intentionally
+	// doing this step at the very bottom. Point is that we might have added the HEAD handler
+	// automatically (byt "cloning" GET or ALL), so make sure we're not outputing anything.
+	if (req.method === "HEAD") {
+		body = null;
 	}
 
 	return new Response(body, { status, headers });
@@ -349,6 +357,7 @@ export function demino(
 			// make sure to reset any content-type we might have (the factory below will set the proper one)
 			context.headers.delete("content-type");
 			r = _createResponseFrom(
+				req,
 				r || getErrorMessage(context.error),
 				context.headers,
 				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
@@ -387,6 +396,8 @@ export function demino(
 		const start = Date.now();
 		let context = _createContext(start, {}, "", req, info, getLogger);
 
+		// console.log("_app METHOD", method);
+
 		try {
 			if (!_routers[method]) {
 				throw createHttpError(HTTP_STATUS.NOT_IMPLEMENTED);
@@ -399,16 +410,19 @@ export function demino(
 				matched = _routers.ALL.exec(url.pathname);
 			}
 
+			// special case not match for HEAD - if handler for some other method exist, we want 405, not 404
+			if (!matched && method === "HEAD") {
+				// prettier-ignore
+				const ms: DeminoMethod[] = ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"];
+				if (ms.some((m) => _routers[m].exec(url.pathname))) {
+					throw createHttpError(HTTP_STATUS.METHOD_NOT_ALLOWED);
+				}
+			}
+
 			if (matched) {
 				try {
-					context = _createContext(
-						start,
-						matched.params,
-						matched.route,
-						req,
-						info,
-						getLogger
-					);
+					// prettier-ignore
+					context = _createContext(start, matched.params, matched.route, req, info, getLogger);
 
 					// everything is a middleware...
 					const midwares: DeminoHandler[] = [
@@ -463,7 +477,7 @@ export function demino(
 						result = await _createErrorResponse(req, info, context);
 					} // we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						result = _createResponseFrom(result, headers, context?.status);
+						result = _createResponseFrom(req, result, headers, context?.status);
 					}
 
 					//
@@ -488,40 +502,60 @@ export function demino(
 	};
 
 	//
-	const _createRouteFn =
-		(method: "ALL" | DeminoMethod): DeminoRouteHandler =>
-		(route: string, ...args: (DeminoHandler | DeminoHandler[])[]): Demino => {
+	const _createRouteFn = (method: "ALL" | DeminoMethod): DeminoRouteHandler => {
+		return (
+			route: string,
+			...args: (DeminoHandler | DeminoHandler[])[]
+		): Demino => {
 			const _fullRoute = mountPath + route;
-			try {
-				//
-				_routers[method].assertIsValid(_fullRoute);
 
-				_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
-					params,
-					midwares: args,
-					route: _fullRoute,
-				}));
+			// wrap the provided as array, so we can DRY handle "head" special case below
+			const _methods = [method];
 
-				_localMwsCounts[_fullRoute] ??= {};
-				_localMwsCounts[_fullRoute][method] = args.flat().length - 1;
+			// so, for every GET auto add HEAD
+			if (["GET", "ALL"].includes(method)) {
+				_methods.push("HEAD");
+			}
 
-				if (options?.verbose) {
-					_doLog("debug", green(` ✔ ${method} ${mountPath + route}`));
+			for (const method of _methods) {
+				try {
+					//
+					_routers[method].assertIsValid(_fullRoute);
+
+					_routers[method].on(_fullRoute, (params: Record<string, string>) => ({
+						params,
+						midwares: args,
+						route: _fullRoute,
+					}));
+
+					_localMwsCounts[_fullRoute] ??= {};
+					_localMwsCounts[_fullRoute][method] = args.flat().length - 1;
+
+					if (options?.verbose) {
+						_doLog("debug", green(` ✔ ${method} ${mountPath + route}`));
+					}
+				} catch (e) {
+					// this is a friendly warning not a fatal condition (other routes may work fine)
+					_doLog("warn", red(` ✘ [Invalid] ${method} ${_fullRoute} (${e})`));
 				}
-			} catch (e) {
-				// this is a friendly warning not a fatal condition (other routes may work fine)
-				_doLog("warn", red(` ✘ [Invalid] ${method} ${_fullRoute} (${e})`));
 			}
 
 			return _app;
 		};
+	};
 
 	// userland method api
 	_app.all = _createRouteFn("ALL");
 	_app.connect = _createRouteFn("CONNECT");
 	_app.delete = _createRouteFn("DELETE");
 	_app.get = _createRouteFn("GET");
-	_app.head = _createRouteFn("HEAD");
+	_app.head = (...args) => {
+		console.warn(
+			"WARN: Are you sure to implement a custom HEAD request handler? " +
+				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists)."
+		);
+		return _createRouteFn("HEAD")(...args);
+	};
 	_app.options = _createRouteFn("OPTIONS");
 	_app.patch = _createRouteFn("PATCH");
 	_app.post = _createRouteFn("POST");
