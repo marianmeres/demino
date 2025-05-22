@@ -17,19 +17,23 @@ export function trailingSlash(
 	options?: {
 		/** For debugging */
 		logger?: CallableFunction;
-	},
+	}
 ): DeminoHandler {
 	const midware: DeminoHandler = (
 		req: Request,
 		_i: Deno.ServeHandlerInfo,
-		_ctx: DeminoContext,
+		_ctx: DeminoContext
 	) => {
 		const url = new URL(req.url);
 
-		// no-op if can't say explicitly or we are at the root
-		if (flag === undefined || "/" === url.pathname) {
+		// no-op if not GET or can't say explicitly or we are at the root
+		if (req.method !== "GET" || flag === undefined || "/" === url.pathname) {
 			return;
 		}
+
+		// pick last segment, and if it (naively) looks like file (includes dot), noop as well
+		const last = url.pathname.split("/").at(-1);
+		if (last?.includes(".")) return;
 
 		// add slash
 		if (flag && !url.pathname.endsWith("/")) {

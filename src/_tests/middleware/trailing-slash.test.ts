@@ -57,4 +57,38 @@ runTestServerTests([
 			assertEquals(_log.length, 2);
 		},
 	},
+	{
+		name: "trailing slash is inactive on other than GET or file-like endpoints",
+		fn: async ({ app, base }) => {
+			let _log: string[] = [];
+			const logger = (v: string) => _log.push(v);
+
+			const tsOn = trailingSlash(true, { logger });
+
+			app.use(tsOn);
+
+			app.all("/foo", () => "foo");
+			app.all("/foo/bar.baz", () => "bar.baz");
+			app.all("/file.txt", () => "file.txt");
+
+			// normal get must work
+			await assertResp(fetch(`${base}/foo`), 200, "foo");
+			assertEquals(_log.length, 1);
+
+			// any other than get must be a noop
+			for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+				_log = [];
+				await assertResp(fetch(`${base}/foo`, { method }), 200, "foo");
+				assertEquals(_log.length, 0);
+			}
+
+			// if it looks like a file, noop
+			await assertResp(fetch(`${base}/foo/bar.baz`), 200, "bar.baz");
+			assertEquals(_log.length, 0);
+
+			await assertResp(fetch(`${base}/file.txt`), 200, "file.txt");
+			assertEquals(_log.length, 0);
+		},
+		// only: true,
+	},
 ]);
