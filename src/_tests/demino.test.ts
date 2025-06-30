@@ -179,6 +179,8 @@ Deno.test("middlewares and various return types", async () => {
 
 	app.get("/no-content", () => {});
 
+	app.get("/array", () => [1, 2, 3]);
+
 	app.post("/echo", (req) => (req.body ? req.text() : undefined));
 
 	app.get("/html", () => `<html><body>html content</body></html>`);
@@ -204,6 +206,11 @@ Deno.test("middlewares and various return types", async () => {
 			{ baz: "bat" },
 			{ "content-type": /json/ }
 		);
+
+		// array
+		await assertResp(fetch(`${srv.base}/array`), 200, [1, 2, 3], {
+			"content-type": /json/,
+		});
 
 		// "bar" return via toJSON as json
 		await assertResp(fetch(`${srv.base}/some/hey`), 200, "ho", {

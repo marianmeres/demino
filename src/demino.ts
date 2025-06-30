@@ -188,6 +188,8 @@ function _createResponseFrom(
 		body === null ||
 		// toJSON aware
 		isFn(body?.toJSON) ||
+		// plain array
+		Array.isArray(body) ||
 		// plain object without its own `toString` method
 		(isPlainObject(body) &&
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
