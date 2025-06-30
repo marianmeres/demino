@@ -1,6 +1,6 @@
 {
 	"name": "@marianmeres/demino",
-	"version": "1.0.50",
+	"version": "1.0.51",
 	"exports": "./src/mod.ts",
 	"tasks": {
 		"dev": "deno run --watch ./src/mod.ts",
@@ -14,7 +14,7 @@
 		"@std/assert": "jsr:@std/assert@^1.0.13",
 		"@std/fmt": "jsr:@std/fmt@^1.0.8",
 		"@std/fs": "jsr:@std/fs@^1.0.18",
-		"@std/http": "jsr:@std/http@^1.0.17",
+		"@std/http": "jsr:@std/http@^1.0.18",
 		"@std/path": "jsr:@std/path@^1.1.0",
 		"request-ip": "npm:request-ip@^3.3.0"
 	},
