@@ -16,6 +16,12 @@ export interface DeminoFileBasedOptions {
 	verbose?: boolean;
 	/** Custom logger (default console) */
 	logger?: DeminoLogger | null | undefined;
+	/**
+	 * https://docs.deno.com/deploy/api/dynamic-import/
+	 * This hoisted importer is only required if the imported module is using other relative
+	 * imports.
+	 */
+	doImport?: (modulePath: string) => Promise<any>;
 }
 
 /**
@@ -52,12 +58,14 @@ export async function deminoFileBased(
 	> = {};
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
-	const doImport = async (modulePath: string) => {
+	const _defatulImporter = async (modulePath: string) => {
 		// https://docs.deno.com/deploy/api/dynamic-import/
 		const type = /\.ts$/i.test(modulePath) ? "typescript" : "javascript";
 		const jsSource = encodeBase64(Deno.readTextFileSync(modulePath));
 		return await import(`data:text/${type};base64,${jsSource}`);
 	};
+
+	const doImport = options?.doImport ?? _defatulImporter;
 
 	for (const rootDir of rootDirs) {
 		for (const dirEntry of walkSync(rootDir, {

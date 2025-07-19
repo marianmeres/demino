@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
+import { join, relative } from "@std/path";
 import { deminoFileBased, routesCompare } from "../../misc/file-based.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -23,7 +23,10 @@ runTestServerTests([
 			// GET /a (0 mws)
 			// GET /[b] (0 mws)
 			// GET / (1 mws)
-			await deminoFileBased(app, [root1, root2], { verbose: false });
+			await deminoFileBased(app, [root1, root2], {
+				verbose: false,
+				doImport: (mod) => import(`./${relative(import.meta.dirname!, mod)}`),
+			});
 
 			// note that the root2 / middleware is taking affect in root1 as well, which is
 			// expected

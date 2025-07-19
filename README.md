@@ -401,7 +401,12 @@ import { demino, deminoFileBased } from "@marianmeres/demino";
 import { join, relative } from "@std/path";
 
 const app = demino();
-await deminoFileBased(app, "./routes");
+await deminoFileBased(app, "./routes", {
+    // due to the Deno's dynamic import limitations, you may need to provide hoisted
+    // importer fn (only if using modules which themselves import from relative paths)... 
+    // @see https://docs.deno.com/deploy/api/dynamic-import/
+    doImport: (mod) => import(`./${relative(import.meta.dirname!, mod)}`)
+});
 ```
 
 Note that this feature is designed to work **with the default router only**.
