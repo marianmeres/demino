@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { isPlainObject } from "../utils/is-plain-object.ts";
 import { type Demino, demino, type DeminoOptions } from "../demino.ts";

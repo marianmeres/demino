@@ -1,6 +1,4 @@
-// deno-lint-ignore-file no-explicit-any
-
-import type { DeminoHandler, DeminoMethod } from "../demino.ts";
+import type { DeminoHandler } from "../demino.ts";
 
 /** Internal on route match callback result type */
 export type DeminoRouterOnMatchResult = {
@@ -12,7 +10,7 @@ export type DeminoRouterOnMatchResult = {
 
 /** Internal on route match callback type */
 export type DeminoRouterOnMatch = (
-	params: Record<string, string>,
+	params: Record<string, string>
 ) => DeminoRouterOnMatchResult;
 
 /** DeminoRouter abstract class. */

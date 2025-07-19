@@ -1,7 +1,5 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { assertEquals } from "@std/assert";
-import { join, relative } from "@std/path";
+import { join } from "@std/path";
 import { deminoFileBased, routesCompare } from "../../misc/file-based.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -25,12 +23,7 @@ runTestServerTests([
 			// GET /a (0 mws)
 			// GET /[b] (0 mws)
 			// GET / (1 mws)
-			await deminoFileBased(
-				app,
-				[root1, root2],
-				(mod) => import(`./${relative(import.meta.dirname!, mod)}`),
-				{ verbose: false },
-			);
+			await deminoFileBased(app, [root1, root2], { verbose: false });
 
 			// note that the root2 / middleware is taking affect in root1 as well, which is
 			// expected
@@ -42,7 +35,7 @@ runTestServerTests([
 			await assertResp(
 				fetch(`${base}/a/b`, { method: "POST" }),
 				200,
-				"ALL:a/b|/,A/B",
+				"ALL:a/b|/,A/B"
 			); // root1
 			// /c/d
 			await assertResp(fetch(`${base}/c/d`), 200, "c/d|/,C,C/D,self:C/D"); // root2
@@ -68,13 +61,13 @@ runTestServerTests([
 			routes = ["/a/z", "/a/y", "/a/[x]", "/a/x"];
 			assertEquals(
 				routes.toSorted(routesCompare).join(),
-				"/a/x,/a/y,/a/z,/a/[x]",
+				"/a/x,/a/y,/a/z,/a/[x]"
 			);
 
 			routes = ["/z", "/y", "/[x]", "/x", "/x/y", "/x/y/z"];
 			assertEquals(
 				routes.toSorted(routesCompare).join(),
-				"/x/y/z,/x/y,/x,/y,/z,/[x]",
+				"/x/y/z,/x/y,/x,/y,/z,/[x]"
 			);
 		},
 		raw: true,

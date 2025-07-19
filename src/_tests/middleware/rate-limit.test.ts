@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { rateLimit, sleep } from "../../mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";

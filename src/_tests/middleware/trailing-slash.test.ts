@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { assertEquals } from "@std/assert";
 import { trailingSlash } from "../../middleware/trailing-slash.ts";

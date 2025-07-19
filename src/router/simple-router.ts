@@ -1,12 +1,9 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { SimpleRouter } from "@marianmeres/simple-router";
 import {
 	DeminoRouter,
 	type DeminoRouterOnMatch,
 	type DeminoRouterOnMatchResult,
 } from "./abstract.ts";
-import { DeminoMethod } from "../demino.ts";
 
 /** Default router based on https://github.com/marianmeres/simple-router */
 export class DeminoSimpleRouter extends DeminoRouter {
@@ -35,7 +32,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 			(!route.startsWith("/") || route.includes("//"))
 		) {
 			throw new TypeError(
-				`Route must be either empty, or start with a slash (and must not contain double slashes).`,
+				`Route must be either empty, or start with a slash (and must not contain double slashes).`
 			);
 		}
 	}

@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 /** Error used in the Promise.race rejection */
 export class TimeoutError extends Error {}
 
@@ -10,7 +8,7 @@ export class TimeoutError extends Error {}
 export function withTimeout<T>(
 	fn: CallableFunction,
 	timeout: number = 1_000,
-	errMessage?: string,
+	errMessage?: string
 ): (...args: any[]) => Promise<T> {
 	return (...args: any[]) => {
 		const _promise = fn(...args);

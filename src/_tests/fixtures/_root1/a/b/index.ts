@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import type { DeminoContext, DeminoHandler } from "../../../../../demino.ts";
 
 export function GET(_r: Request, _i: Deno.ServeHandlerInfo, c: DeminoContext) {

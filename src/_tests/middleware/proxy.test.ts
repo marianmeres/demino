@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { sleep } from "@marianmeres/midware";
 import { serveFile } from "@std/http/file-server";
 import { proxy } from "../../middleware/proxy.ts";
@@ -53,7 +51,7 @@ runTestServerTests([
 				proxy((r) => {
 					const path = new URL(r.url).pathname.slice("/old".length);
 					return `/new${path}`;
-				}),
+				})
 			);
 			app.get("/new/*", (r) => new URL(r.url).pathname);
 

@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 /** Checks if value is a plain object */
 export function isPlainObject(v: any): boolean {
 	return (

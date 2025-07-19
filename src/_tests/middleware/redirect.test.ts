@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import { redirect } from "../../middleware/redirect.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 

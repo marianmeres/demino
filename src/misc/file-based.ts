@@ -1,8 +1,7 @@
-// deno-lint-ignore-file no-explicit-any
-
+import { encodeBase64 } from "@std/encoding";
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
-import { dirname, join, normalize, parse, relative } from "@std/path";
+import { dirname, normalize } from "@std/path";
 import {
 	type Demino,
 	type DeminoHandler,
@@ -28,28 +27,19 @@ export interface DeminoFileBasedOptions {
  * - none of the path segments starts with "_" or "."
  * - the leaf index.[j|t]s file exists and exports at least one known symbol
  *
- * @see https://docs.deno.com/deploy/api/dynamic-import/
- *
  * @example
  * ```ts
  * import { relative } from "@std/path";
  *
  * const app = demino();
  *
- * await deminoFileBased(
- *     app,
- *     '/my/routes/dir/',
- *     // due to the limitations of dynamic imports, we must explicitly provide the hoisted
- *     // import worker function (must be located in the local project scope)
- *     (mod) => import(`./${relative(import.meta.dirname!, mod)}`)
- * );
+ * await deminoFileBased(app, '/my/routes/dir/');
  * ```
  */
 export async function deminoFileBased(
 	app: Demino,
 	rootDirs: string | string[],
-	doImport: (modulePath: string) => Promise<any>,
-	options?: DeminoFileBasedOptions,
+	options?: DeminoFileBasedOptions
 ): Promise<Demino> {
 	if (!Array.isArray(rootDirs)) rootDirs = [rootDirs];
 	rootDirs = rootDirs.map(normalize);
@@ -62,14 +52,19 @@ export async function deminoFileBased(
 	> = {};
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
+	const doImport = async (modulePath: string) => {
+		// https://docs.deno.com/deploy/api/dynamic-import/
+		const type = /\.ts$/i.test(modulePath) ? "typescript" : "javascript";
+		const jsSource = encodeBase64(Deno.readTextFileSync(modulePath));
+		return await import(`data:text/${type};base64,${jsSource}`);
+	};
+
 	for (const rootDir of rootDirs) {
-		for (
-			const dirEntry of walkSync(rootDir, {
-				includeDirs: false,
-				// we are cosuming only ts/js here
-				exts: ["js", "ts"],
-			})
-		) {
+		for (const dirEntry of walkSync(rootDir, {
+			includeDirs: false,
+			// we are cosuming only ts/js here
+			exts: ["js", "ts"],
+		})) {
 			// ignore dotfiles quickly
 			if (dirEntry.name.startsWith(".")) continue;
 			const filepath = dirEntry.path;
@@ -94,14 +89,14 @@ export async function deminoFileBased(
 				routes[route] = await _importRouteHandlers(
 					await doImport(filepath),
 					filepath,
-					options?.verbose ? log?.debug : undefined,
+					options?.verbose ? log?.debug : undefined
 				);
 			} else if (type === "middleware") {
 				options?.verbose && log?.debug?.(green(`${filepath}`));
 				middlewares[route] = await _importMiddlewares(
 					await doImport(filepath),
 					filepath,
-					options?.verbose ? log?.debug : undefined,
+					options?.verbose ? log?.debug : undefined
 				);
 			}
 		}
@@ -139,7 +134,8 @@ export async function deminoFileBased(
 		return out.filter(Boolean);
 	};
 
-	const defs: [string, "ALL" | DeminoMethod, DeminoHandler[], DeminoHandler][] = [];
+	const defs: [string, "ALL" | DeminoMethod, DeminoHandler[], DeminoHandler][] =
+		[];
 
 	routesSorted.forEach((route: string) => {
 		const mws = collectMiddlewaresFor(route);
@@ -158,7 +154,7 @@ export async function deminoFileBased(
 						handler[method],
 					]);
 				}
-			},
+			}
 		);
 	});
 
@@ -229,7 +225,7 @@ function _isMiddlewareValidFilename(filename: string) {
 function _importRouteHandlers(
 	module: any,
 	fileDebugLabel: string,
-	debugLog?: CallableFunction,
+	debugLog?: CallableFunction
 ): Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> {
 	// https://docs.deno.com/deploy/api/dynamic-import/
 	// filepath = relative(import.meta.dirname!, filepath);
@@ -244,12 +240,12 @@ function _importRouteHandlers(
 				out[method] = module[method];
 				found++;
 			}
-		},
+		}
 	);
 
 	if (!found) {
 		throw new TypeError(
-			`No expected route handlers found in ${fileDebugLabel}. (Hint: file must export HTTP method named functions.)`,
+			`No expected route handlers found in ${fileDebugLabel}. (Hint: file must export HTTP method named functions.)`
 		);
 	} else {
 		debugLog?.(` ✔ found: ${Object.keys(out).join(", ")}`);
@@ -262,7 +258,7 @@ function _importRouteHandlers(
 function _importMiddlewares(
 	module: any,
 	fileDebugLabel: string,
-	debugLog?: CallableFunction,
+	debugLog?: CallableFunction
 ): DeminoHandler[] {
 	// https://docs.deno.com/deploy/api/dynamic-import/
 	// filepath = relative(import.meta.dirname!, filepath);
@@ -270,7 +266,8 @@ function _importMiddlewares(
 
 	//
 	const out: DeminoHandler[] = [];
-	const hint = "(Hint: file must default export array of middleware functions.)";
+	const hint =
+		"(Hint: file must default export array of middleware functions.)";
 
 	if (!Array.isArray(module.default)) {
 		throw new TypeError(`Invalid middleware file ${fileDebugLabel}. ${hint}`);
@@ -281,7 +278,7 @@ function _importMiddlewares(
 			out.push(v);
 		} else {
 			throw new TypeError(
-				`Not a function middleware type in ${fileDebugLabel}. ${hint}`,
+				`Not a function middleware type in ${fileDebugLabel}. ${hint}`
 			);
 		}
 	});
