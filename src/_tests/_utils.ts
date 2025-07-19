@@ -110,9 +110,9 @@ export function runTestServerTests(
 							const api = createHttpApi(srv.base);
 							await def.fn({
 								srv,
-								base: srv.base,
 								app,
 								...api,
+								base: srv.base,
 							});
 						} catch (e) {
 							throw e;
