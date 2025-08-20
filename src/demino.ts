@@ -142,10 +142,10 @@ export const supportedMethods: DeminoMethod[] = [
 
 /** Internal logger inteface (experimental)... */
 export interface DeminoLogger {
-	error?: (...args: any[]) => void;
-	warn?: (...args: any[]) => void;
-	log?: (...args: any[]) => void;
 	debug?: (...args: any[]) => void;
+	log?: (...args: any[]) => void;
+	warn?: (...args: any[]) => void;
+	error?: (...args: any[]) => void;
 	access?: (data: {
 		timestamp: Date;
 		status: number;
