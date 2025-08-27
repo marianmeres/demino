@@ -113,6 +113,8 @@ export interface Demino extends Deno.ServeHandler {
 		routes: Record<string, DeminoRouteMiddlewareInfo>;
 		globalAppMiddlewaresCount: number;
 	};
+	/** Will return initial constructor options */
+	getOptions: () => DeminoOptions;
 }
 
 /** Demino supported method */
@@ -648,6 +650,8 @@ export function demino(
 		});
 		return { routes, globalAppMiddlewaresCount: _globalAppMws.length };
 	};
+
+	_app.getOptions = () => options ?? {};
 
 	//
 	return _app;

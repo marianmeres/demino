@@ -674,4 +674,15 @@ runTestServerTests([
 		},
 		// only: true,
 	},
+	{
+		name: "app getOptions",
+		fn: ({ app, base }) => {
+			assertEquals(app.getOptions().noXPoweredBy, true);
+			assertEquals(app.getOptions().errorHandler, undefined);
+		},
+		// only: true,
+		appOptions: {
+			noXPoweredBy: true,
+		},
+	},
 ]);
