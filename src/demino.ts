@@ -32,6 +32,8 @@ export interface DeminoContext {
 	route: string;
 	/** Will retrieve the current application logger (if any) */
 	getLogger: () => DeminoLogger | null;
+	/** Userland app locals (arbitrary object available on the app instance /not just within one request/) */
+	appLocals: DeminoAppLocals;
 }
 
 /** Arguments passed to DeminoHandler (a.k.a. middleware) */
@@ -53,6 +55,9 @@ export type DeminoRouteMiddlewareInfo = Partial<
 		{ localMiddlewaresCount: number; globalMiddlewaresCount: number }
 	>
 >;
+
+/** Optional, arbitrary "locals" object provided to app instance. Note: don't mix with context.locals */
+export type DeminoAppLocals = any;
 
 /** The Demino app public interface */
 export interface Demino extends Deno.ServeHandler {
@@ -115,6 +120,9 @@ export interface Demino extends Deno.ServeHandler {
 	};
 	/** Will return initial constructor options */
 	getOptions: () => DeminoOptions;
+
+	/** Will return the "locals" object */
+	locals: DeminoAppLocals;
 }
 
 /** Demino supported method */
@@ -224,7 +232,8 @@ function _createContext(
 	route: string,
 	req: Request,
 	info: Deno.ServeHandlerInfo,
-	getLogger: () => DeminoLogger | null
+	getLogger: () => DeminoLogger | null,
+	appLocals: DeminoAppLocals
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -239,6 +248,7 @@ function _createContext(
 		ip: _clientIp || (info?.remoteAddr as any)?.hostname,
 		__start: new Date(start),
 		getLogger,
+		appLocals,
 	});
 }
 
@@ -276,7 +286,8 @@ export interface DeminoOptions {
 export function demino(
 	mountPath: string = "",
 	middleware: DeminoHandler | DeminoHandler[] = [],
-	options?: DeminoOptions
+	options?: DeminoOptions,
+	appLocals: DeminoAppLocals = {}
 ): Demino {
 	// forcing conventional and composable behavior (see `deminoCompose` and URL.pathname)
 	if (mountPath !== "" && !mountPath.startsWith("/")) {
@@ -396,7 +407,15 @@ export function demino(
 		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
 		const url = new URL(req.url);
 		const start = Date.now();
-		let context = _createContext(start, {}, "", req, info, getLogger);
+		let context = _createContext(
+			start,
+			{},
+			"",
+			req,
+			info,
+			getLogger,
+			appLocals
+		);
 
 		// console.log("_app METHOD", method);
 
@@ -423,8 +442,15 @@ export function demino(
 
 			if (matched) {
 				try {
-					// prettier-ignore
-					context = _createContext(start, matched.params, matched.route, req, info, getLogger);
+					context = _createContext(
+						start,
+						matched.params,
+						matched.route,
+						req,
+						info,
+						getLogger,
+						appLocals
+					);
 
 					// everything is a middleware...
 					const midwares: DeminoHandler[] = [
@@ -652,6 +678,9 @@ export function demino(
 	};
 
 	_app.getOptions = () => options ?? {};
+
+	//
+	_app.locals = appLocals;
 
 	//
 	return _app;

@@ -1,6 +1,11 @@
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { isPlainObject } from "../utils/is-plain-object.ts";
-import { type Demino, demino, type DeminoOptions } from "../demino.ts";
+import {
+	type Demino,
+	demino,
+	DeminoAppLocals,
+	type DeminoOptions,
+} from "../demino.ts";
 import { createHttpApi } from "@marianmeres/http-utils";
 
 export const TEST_PORT = 9876;
@@ -90,6 +95,7 @@ export function runTestServerTests(
 		ignore?: boolean;
 		raw?: boolean;
 		appOptions?: DeminoOptions;
+		appLocals?: DeminoAppLocals;
 	}[]
 ) {
 	for (const def of tests) {
@@ -102,7 +108,7 @@ export function runTestServerTests(
 				: async () => {
 						let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
 						try {
-							const app = demino("", [], def.appOptions);
+							const app = demino("", [], def.appOptions, def.appLocals);
 							app.logger(null);
 							srv = await startTestServer(app);
 							const api = createHttpApi(srv.base);

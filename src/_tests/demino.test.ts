@@ -685,4 +685,35 @@ runTestServerTests([
 			noXPoweredBy: true,
 		},
 	},
+	{
+		name: "app locals",
+		fn: async ({ app, base }) => {
+			//
+			let log: any[] = [];
+			app.get("/", (r, i, c) => {
+				// visible from inside the handler
+				log.push(c.appLocals);
+			});
+
+			// read
+			assertEquals(app.locals.foo, "bar");
+			assertEquals(app.locals.baz, undefined);
+
+			await assertResp(fetch(`${base}/`), 204);
+			assertEquals(log, [{ foo: "bar" }]);
+
+			// write
+			app.locals.baz = "bat";
+			assertEquals(app.locals.baz, "bat");
+
+			//
+			log = []; // reset
+			await assertResp(fetch(`${base}/`), 204);
+			assertEquals(log, [{ foo: "bar", baz: "bat" }]);
+		},
+		// only: true,
+		appLocals: {
+			foo: "bar",
+		},
+	},
 ]);
