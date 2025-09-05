@@ -352,10 +352,11 @@ export function demino(
 	};
 
 	const _doLog = (type: keyof DeminoLogger, value: any) => {
+		getLogger()?.[type]?.(value);
 		// make sure it is async, so it never effects responding
-		return new Promise(() => {
-			getLogger()?.[type]?.(value);
-		});
+		// return new Promise(() => {
+		// getLogger()?.[type]?.(value);
+		// });
 	};
 
 	//
@@ -515,6 +516,7 @@ export function demino(
 					//
 					return result as Response;
 				} catch (e: any) {
+					_doLog("error", `${e.stack ?? e}`);
 					const status = e.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
 					throw createHttpError(status, null, null, e);
 				}
