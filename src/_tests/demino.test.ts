@@ -464,7 +464,7 @@ Deno.test("catch all fallback route", async () => {
 Deno.test("same route different method", async () => {
 	let srv: Srv | null = null;
 
-	const methods = ["get", "post", "patch", "put", "delete"];
+	const methods = ["get", "post", "put", "delete", "patch"];
 	const app = demino();
 	for (const method of methods) {
 		(app as any)[method]("/", () => method);

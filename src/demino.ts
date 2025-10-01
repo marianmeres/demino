@@ -405,7 +405,10 @@ export function demino(
 
 	//
 	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
-		const method: "ALL" | DeminoMethod = req.method as "ALL" | DeminoMethod;
+		// make sure it's uppercase (internally we're keeping the uppercase version)
+		const method: "ALL" | DeminoMethod = req.method.toUpperCase() as
+			| "ALL"
+			| DeminoMethod;
 		const url = new URL(req.url);
 		const start = Date.now();
 		let context = _createContext(
