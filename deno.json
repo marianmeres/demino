@@ -11,11 +11,11 @@
 		"@marianmeres/http-utils": "npm:@marianmeres/http-utils@^1.23.0",
 		"@marianmeres/midware": "jsr:@marianmeres/midware@^1.1.0",
 		"@marianmeres/simple-router": "npm:@marianmeres/simple-router@^2.1.0",
-		"@std/assert": "jsr:@std/assert@^1.0.14",
+		"@std/assert": "jsr:@std/assert@^1.0.15",
 		"@std/encoding": "jsr:@std/encoding@^1.0.10",
 		"@std/fmt": "jsr:@std/fmt@^1.0.8",
 		"@std/fs": "jsr:@std/fs@^1.0.19",
-		"@std/http": "jsr:@std/http@^1.0.20",
+		"@std/http": "jsr:@std/http@^1.0.21",
 		"@std/path": "jsr:@std/path@^1.1.2",
 		"request-ip": "npm:request-ip@^3.3.0"
 	},
