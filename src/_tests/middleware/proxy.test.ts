@@ -51,7 +51,7 @@ runTestServerTests([
 				proxy((r) => {
 					const path = new URL(r.url).pathname.slice("/old".length);
 					return `/new${path}`;
-				})
+				}),
 			);
 			app.get("/new/*", (r) => new URL(r.url).pathname);
 

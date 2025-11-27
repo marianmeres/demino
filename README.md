@@ -132,9 +132,9 @@ Middlewares can be registered as:
 
 ```typescript
 app
-    .use(someGlobal)
-    .use("/secret", authCheck)
-    .get("/secret", readSecret, handler);
+	.use(someGlobal)
+	.use("/secret", authCheck)
+	.get("/secret", readSecret, handler);
 ```
 
 ## Context
@@ -158,14 +158,14 @@ const app = demino("/articles");
 
 // example middleware loading article (from DB, let's say)...
 app.use(async (req: Request, info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
-    // eg any route which will have an `/[articleId]/` segment, we automatically read
-    // article data (which also means, it will auto validate the parameter)
-    if (ctx.params.articleId) {
-        ctx.locals.article = await Article.find(ctx.params.articleId);
-        if (!ctx.locals.article) {
-            throw new ArticleNotFound(`Article ${ctx.params.articleId} not found`);
-        }
-    }
+	// eg any route which will have an `/[articleId]/` segment, we automatically read
+	// article data (which also means, it will auto validate the parameter)
+	if (ctx.params.articleId) {
+		ctx.locals.article = await Article.find(ctx.params.articleId);
+		if (!ctx.locals.article) {
+			throw new ArticleNotFound(`Article ${ctx.params.articleId} not found`);
+		}
+	}
 });
 
 // ...and route handler acting as a pure renderer. This handler will not
@@ -181,8 +181,8 @@ replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
 ```typescript
 // example: customized json response error handler
 app.error((req, info, ctx) => {
-    ctx.status = ctx.error?.status || 500;
-    return { ok: false, message: ctx.error.message };
+	ctx.status = ctx.error?.status || 500;
+	return { ok: false, message: ctx.error.message };
 });
 ```
 
@@ -194,17 +194,17 @@ Demino application logger has the following interface:
 
 ```ts
 interface DeminoLogger {
-    error?: (...args: any[]) => void;
-    warn?: (...args: any[]) => void;
-    log?: (...args: any[]) => void;
-    debug?: (...args: any[]) => void;
-    access?: (data: {
-        timestamp: Date;
-        status: number;
-        req: Request;
-        ip: string | undefined;
-        duration: number;
-    }) => void;
+	error?: (...args: any[]) => void;
+	warn?: (...args: any[]) => void;
+	log?: (...args: any[]) => void;
+	debug?: (...args: any[]) => void;
+	access?: (data: {
+		timestamp: Date;
+		status: number;
+		req: Request;
+		ip: string | undefined;
+		duration: number;
+	}) => void;
 }
 ```
 
@@ -224,7 +224,7 @@ access, you have to provide your own implementation. For example:
 ```ts
 // example to log access to console as well
 const app = demino("", [], {
-    logger: { ...console, access: (data) => console.log(data) },
+	logger: { ...console, access: (data) => console.log(data) },
 });
 ```
 
@@ -232,7 +232,7 @@ You can use the application's logger anywhere via context:
 
 ```ts
 app.use((r, i, ctx) => {
-    ctx.getLogger()?.debug?.("Debug info logged from my middleware...");
+	ctx.getLogger()?.debug?.("Debug info logged from my middleware...");
 });
 ```
 
@@ -256,28 +256,30 @@ included after all.
 
 ### CORS
 
-Will create the "Cross-origin resource sharing" ("CORS") headers in the response
-based on the provided config. Be aware that the default config is quite relaxed (allows
-wildcards and credentials by default).
+Will create the "Cross-origin resource sharing" ("CORS") headers in the response based on
+the provided config. Be aware that the default config is quite relaxed (allows wildcards
+and credentials by default).
 
 Basic example
+
 ```ts
 app.use(cors());
 ```
 
 Dynamic evaluation example
+
 ```ts
 app.use(cors({
-    // string | string[] | ((orig, hdr) => string | string[] | Promise<string | string[]>)
-    allowOrigin: (origin: string, reqHeaders: Headers) => {
-        return (myWhitelist.includes(origin)) ? origin : "";
-    },
-    allowCredentials: true
+	// string | string[] | ((orig, hdr) => string | string[] | Promise<string | string[]>)
+	allowOrigin: (origin: string, reqHeaders: Headers) => {
+		return (myWhitelist.includes(origin)) ? origin : "";
+	},
+	allowCredentials: true,
 }));
 ```
 
-Note that you may need to explicitly allow the `OPTIONS` request handlers. You may use a wildcard
-route definition for convenience:
+Note that you may need to explicitly allow the `OPTIONS` request handlers. You may use a
+wildcard route definition for convenience:
 
 ```ts
 app.options("*", cors());
@@ -305,8 +307,8 @@ Signature:
 
 ```ts
 function proxy(
-    target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
-    options?: Partial<{ timeout: number }>,
+	target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
+	options?: Partial<{ timeout: number }>,
 ): DeminoHandler;
 ```
 
@@ -319,8 +321,8 @@ app.get("/foo/*", proxy((r) => `http://some/${new URL(r.url).pathname.slice(4)}`
 
 // fn target using context: GET /search/foo -> GET https://google.com/?q=foo
 app.get(
-    "/search/[keyword]",
-    proxy((r, c) => `https://google.com/?q=${c.params.keyword}`),
+	"/search/[keyword]",
+	proxy((r, c) => `https://google.com/?q=${c.params.keyword}`),
 );
 ```
 
@@ -335,18 +337,21 @@ app.use("/old", redirect("/new"));
 
 ### RateLimit
 
-Will create a [token bucket](https://en.wikipedia.org/wiki/Token_bucket) based rate limit 
+Will create a [token bucket](https://en.wikipedia.org/wiki/Token_bucket) based rate limit
 middleware which will throw `429 Too Many Requests` if the allowed rate is exceeded.
 
-First argument is a `getClientId(req, info, ctx)` function, which must return a non empty 
+First argument is a `getClientId(req, info, ctx)` function, which must return a non empty
 `id` (otherwise a no-op). The `id` can be anything, typically some auth token.
 
 ```ts
-app.use('/api', rateLimit(
-    // As a simple example, using raw `Authorization` header as a client id
-    (req) => req.headers.get('Authorization'), 
-    options // see RateLimitOptions
-));
+app.use(
+	"/api",
+	rateLimit(
+		// As a simple example, using raw `Authorization` header as a client id
+		(req) => req.headers.get("Authorization"),
+		options, // see RateLimitOptions
+	),
+);
 ```
 
 ## Extra: URL Pattern router
@@ -402,10 +407,10 @@ import { join, relative } from "@std/path";
 
 const app = demino();
 await deminoFileBased(app, "./routes", {
-    // due to the Deno's dynamic import limitations, you may need to provide hoisted
-    // importer fn (only if using modules which themselves import from relative paths)... 
-    // @see https://docs.deno.com/deploy/api/dynamic-import/
-    doImport: (mod) => import(`./${relative(import.meta.dirname!, mod)}`)
+	// due to the Deno's dynamic import limitations, you may need to provide hoisted
+	// importer fn (only if using modules which themselves import from relative paths)...
+	// @see https://docs.deno.com/deploy/api/dynamic-import/
+	doImport: (mod) => import(`./${relative(import.meta.dirname!, mod)}`),
 });
 ```
 

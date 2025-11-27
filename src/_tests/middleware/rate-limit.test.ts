@@ -21,9 +21,9 @@ runTestServerTests([
 							}
 							return 1;
 						},
-					}
+					},
 				),
-				() => ""
+				() => "",
 			);
 
 			// normaly, 2 per sec are allowed
@@ -35,7 +35,7 @@ runTestServerTests([
 			await assertResp(fetch(`${base}/?id=x&type=login`), HTTP_STATUS.OK);
 			await assertResp(
 				fetch(`${base}/?id=x&type=login`),
-				HTTP_STATUS.TOO_MANY_REQUESTS
+				HTTP_STATUS.TOO_MANY_REQUESTS,
 			);
 
 			// refill resolution is in seconds... so sleep one
@@ -48,7 +48,7 @@ runTestServerTests([
 			// this must still NOT be allowed (we would need to wait another second)
 			await assertResp(
 				fetch(`${base}/?id=x&type=login`),
-				HTTP_STATUS.TOO_MANY_REQUESTS
+				HTTP_STATUS.TOO_MANY_REQUESTS,
 			);
 
 			// but different clients must be allowed

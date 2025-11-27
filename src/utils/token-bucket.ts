@@ -26,7 +26,7 @@ export class TokenBucket {
 	constructor(
 		maxSize: number,
 		refillPerSecond: number,
-		protected _logger?: DeminoLogger | null
+		protected _logger?: DeminoLogger | null,
 	) {
 		[maxSize, refillPerSecond].forEach((v) => {
 			if (v <= 0) {
@@ -69,7 +69,7 @@ export class TokenBucket {
 		// sanitize
 		if (Number.isNaN(quantity) || quantity < 0) {
 			this._logger?.warn?.(
-				`[TokenBucket] Invalid consume quantity '${quantity}'`
+				`[TokenBucket] Invalid consume quantity '${quantity}'`,
 			);
 			return false;
 		}

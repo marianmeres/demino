@@ -32,7 +32,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 			(!route.startsWith("/") || route.includes("//"))
 		) {
 			throw new TypeError(
-				`Route must be either empty, or start with a slash (and must not contain double slashes).`
+				`Route must be either empty, or start with a slash (and must not contain double slashes).`,
 			);
 		}
 	}

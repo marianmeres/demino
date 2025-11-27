@@ -38,7 +38,7 @@ runTestServerTests([
 			await assertResp(
 				fetch(`${base}/a/b`, { method: "POST" }),
 				200,
-				"ALL:a/b|/,A/B"
+				"ALL:a/b|/,A/B",
 			); // root1
 			// /c/d
 			await assertResp(fetch(`${base}/c/d`), 200, "c/d|/,C,C/D,self:C/D"); // root2
@@ -64,13 +64,13 @@ runTestServerTests([
 			routes = ["/a/z", "/a/y", "/a/[x]", "/a/x"];
 			assertEquals(
 				routes.toSorted(routesCompare).join(),
-				"/a/x,/a/y,/a/z,/a/[x]"
+				"/a/x,/a/y,/a/z,/a/[x]",
 			);
 
 			routes = ["/z", "/y", "/[x]", "/x", "/x/y", "/x/y/z"];
 			assertEquals(
 				routes.toSorted(routesCompare).join(),
-				"/x/y/z,/x/y,/x,/y,/z,/[x]"
+				"/x/y/z,/x/y,/x,/y,/z,/[x]",
 			);
 		},
 		raw: true,

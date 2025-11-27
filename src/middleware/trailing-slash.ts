@@ -17,12 +17,12 @@ export function trailingSlash(
 	options?: {
 		/** For debugging */
 		logger?: CallableFunction;
-	}
+	},
 ): DeminoHandler {
 	const midware: DeminoHandler = (
 		req: Request,
 		_i: Deno.ServeHandlerInfo,
-		_ctx: DeminoContext
+		_ctx: DeminoContext,
 	) => {
 		const url = new URL(req.url);
 

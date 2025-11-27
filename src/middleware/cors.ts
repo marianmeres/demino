@@ -52,7 +52,7 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 	const midware: DeminoHandler = async (
 		req: Request,
 		_info: Deno.ServeHandlerInfo,
-		ctx: DeminoContext
+		ctx: DeminoContext,
 	) => {
 		const requestOrigin = req.headers.get("origin") || "";
 

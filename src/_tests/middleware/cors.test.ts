@@ -41,7 +41,7 @@ runTestServerTests([
 						return "";
 					},
 				}),
-				() => ""
+				() => "",
 			);
 
 			const origin = "http://hey.ho";
@@ -50,21 +50,21 @@ runTestServerTests([
 				fetch(`${base}/`, { headers: { origin } }),
 				200,
 				undefined,
-				{ "Access-Control-Allow-Origin": false }
+				{ "Access-Control-Allow-Origin": false },
 			);
 
 			await assertResp(
 				fetch(`${base}/withcors`, { headers: { origin } }),
 				200,
 				undefined,
-				{ "Access-Control-Allow-Origin": origin }
+				{ "Access-Control-Allow-Origin": origin },
 			);
 
 			await assertResp(
 				fetch(`${base}/withcors`, { headers: { origin: "http://bad" } }),
 				200,
 				undefined,
-				{ "Access-Control-Allow-Origin": false }
+				{ "Access-Control-Allow-Origin": false },
 			);
 		},
 	},
@@ -86,7 +86,7 @@ runTestServerTests([
 					"Access-Control-Allow-Headers": true,
 					"Access-Control-Allow-Credentials": true,
 					"Access-Control-Max-Age": true,
-				}
+				},
 			);
 		},
 	},

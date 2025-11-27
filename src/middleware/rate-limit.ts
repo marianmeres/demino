@@ -34,7 +34,7 @@ export interface RateLimitOptions {
 	getConsumeSize: (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		ctx: DeminoContext
+		ctx: DeminoContext,
 	) => number | Promise<number>;
 }
 
@@ -60,9 +60,9 @@ export function rateLimit(
 	getClientId: (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		ctx: DeminoContext
+		ctx: DeminoContext,
 	) => unknown | Promise<unknown>,
-	options?: Partial<RateLimitOptions>
+	options?: Partial<RateLimitOptions>,
 ): DeminoHandler {
 	const {
 		maxSize = 20,
@@ -83,8 +83,8 @@ export function rateLimit(
 			for (const [id, row] of clients.entries()) {
 				if (
 					(new Date().valueOf() - row.lastAccess.valueOf()) / 1_000 >=
-					// calculate threshold automatically (anything older will be fully refilled anyway)
-					maxSize / refillSizePerSecond
+						// calculate threshold automatically (anything older will be fully refilled anyway)
+						maxSize / refillSizePerSecond
 				) {
 					clients.delete(id);
 					counter++;
@@ -97,7 +97,7 @@ export function rateLimit(
 	return async (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		ctx: DeminoContext
+		ctx: DeminoContext,
 	) => {
 		const logger = ctx.getLogger();
 		_maybeCleanup(logger);
