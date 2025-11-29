@@ -356,16 +356,21 @@ app.use(
 
 ### ETag
 
-Wraps a route handler to automatically generate ETags and handle conditional requests. Returns `304 Not Modified` when the client's cached version matches the server's version, saving bandwidth and processing time.
+Wraps a route handler to automatically generate ETags and handle conditional requests.
+Returns `304 Not Modified` when the client's cached version matches the server's version,
+saving bandwidth and processing time.
 
 ```ts
 import { withETag } from "@marianmeres/demino";
 
 // Basic usage - generates strong ETag from response body hash
-app.get("/api/users", withETag(async () => {
-  const users = await db.getUsers();
-  return users;
-}));
+app.get(
+	"/api/users",
+	withETag(async () => {
+		const users = await db.getUsers();
+		return users;
+	}),
+);
 
 // First request: 200 with ETag: "abc123..."
 // Second request with If-None-Match: "abc123..." -> 304 Not Modified (no body)
@@ -374,7 +379,8 @@ app.get("/api/users", withETag(async () => {
 app.get("/data", withETag(() => "content", { weak: true }));
 ```
 
-Only processes GET/HEAD requests with 2xx responses. Note: reads entire response body into memory to compute the hash.
+Only processes GET/HEAD requests with 2xx responses. Note: reads entire response body into
+memory to compute the hash.
 
 ## Extra: URL Pattern router
 

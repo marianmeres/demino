@@ -2,20 +2,46 @@ import { HTTP_STATUS } from "@marianmeres/http-utils";
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
 
 /**
- * Will create the tralingSlash middleware which will redirect to the new location
- * (via 301 moved permanently) if needed, either WITH the trailing slash, or WITHOUT it.
+ * Creates a middleware that enforces trailing slash policy with 301 redirects.
  *
- * If flag is TRUE: `/foo/bar` -> `/foo/bar/`
- * If flag is FALSE: `/foo/bar/` -> `/foo/bar`
+ * Helps maintain consistent URL structure for SEO purposes. By default, routers
+ * treat `/foo` and `/foo/` as the same route, but search engines see them as different.
  *
- * If there is nothing to do, will do nothing. This middleware will try to position itself
- * at the beginning of the middlewares stack, to potentially terminate the chain ASAP.
+ * Smart behavior:
+ * - Only affects GET/HEAD requests
+ * - Skips root path `/`
+ * - Skips paths that look like files (contain a dot in last segment)
+ * - Positions itself at the start of middleware stack for efficiency
+ *
+ * @param flag - true to add trailing slashes, false to remove them
+ * @param options - Optional configuration
+ * @returns Middleware handler that redirects to enforce trailing slash policy
+ *
+ * @example Enforce trailing slashes
+ * ```ts
+ * import { trailingSlash } from "@marianmeres/demino";
+ *
+ * app.use(trailingSlash(true));
+ * // /foo/bar -> 301 redirect to /foo/bar/
+ * ```
+ *
+ * @example Remove trailing slashes
+ * ```ts
+ * app.use(trailingSlash(false));
+ * // /foo/bar/ -> 301 redirect to /foo/bar
+ * ```
+ *
+ * @example With debug logging
+ * ```ts
+ * app.use(trailingSlash(true, {
+ *   logger: (msg) => console.log(msg)
+ * }));
+ * ```
  */
 export function trailingSlash(
-	/** The master flag - TRUE: add slash, FALSE: remove slash */
 	flag: boolean,
 	options?: {
-		/** For debugging */
+		/** Optional logger for debugging redirect behavior */
 		logger?: CallableFunction;
 	},
 ): DeminoHandler {

@@ -2,7 +2,10 @@ import { HTTP_ERROR } from "@marianmeres/http-utils";
 import type { DeminoContext, DeminoHandler, DeminoLogger } from "../demino.ts";
 import { TokenBucket } from "../mod.ts";
 
-/** Option passed to `rateLimit` middleware. */
+/**
+ * Configuration options for rate limit middleware.
+ * Uses token bucket algorithm for efficient rate limiting.
+ */
 export interface RateLimitOptions {
 	/**
 	 * What is the maximum number of requests one client is allowed to hit per second?
@@ -39,24 +42,64 @@ export interface RateLimitOptions {
 }
 
 /**
- * Will create a rate limit middleware which will throw "429 Too Many Requests" if rate is exceeded.
+ * Creates a rate limiting middleware using token bucket algorithm.
  *
- * Uses token bucket algorithm internally with default options of allowing
- * 10 requests per second with a burst capacity of 20.
+ * Throws HTTP 429 (Too Many Requests) when rate limit is exceeded.
+ * Each client gets their own token bucket that refills over time.
  *
- * For it to work, a `getClientId` function must be provided as a first argument, so it can
- * identify the source request and apply the limit. e.g. Auth Bearer token.
+ * Default limits: 10 requests/second sustained, 20 requests burst capacity.
  *
- * Currently suitable only for single-server setups.
- * @todo support for distributes system (with Redis or similar)
+ * Requirements:
+ * - Must provide `getClientId` function to identify clients
+ * - Returns nothing if client ID is empty (no-op)
+ * - Currently in-memory only (single-server setups)
  *
- * @example Using `Authorization` header as a client id
+ * @param getClientId - Function to extract client identifier (e.g., auth token, IP address)
+ * @param options - Optional rate limit configuration
+ * @returns Middleware handler that enforces rate limits per client
+ *
+ * @example Using Authorization header
  * ```ts
- * app.use('/api', rateLimit((req) => req.headers.get('Authorization')));
+ * import { rateLimit } from "@marianmeres/demino";
+ *
+ * app.use("/api", rateLimit(
+ *   (req) => req.headers.get("Authorization")
+ * ));
  * ```
+ *
+ * @example Using client IP
+ * ```ts
+ * app.use("/api", rateLimit(
+ *   (req, info, ctx) => ctx.ip
+ * ));
+ * ```
+ *
+ * @example Custom limits
+ * ```ts
+ * app.use("/api", rateLimit(
+ *   (req) => req.headers.get("X-API-Key"),
+ *   {
+ *     maxSize: 100,           // Allow burst of 100 requests
+ *     refillSizePerSecond: 50 // Sustained 50 requests/sec
+ *   }
+ * ));
+ * ```
+ *
+ * @example Higher cost for expensive endpoints
+ * ```ts
+ * app.post("/login", rateLimit(
+ *   (req, info, ctx) => ctx.ip,
+ *   {
+ *     maxSize: 5,
+ *     refillSizePerSecond: 1,
+ *     getConsumeSize: () => 2 // Login attempts cost 2 tokens
+ *   }
+ * ));
+ * ```
+ *
+ * @todo Add support for distributed systems (Redis, etc.)
  */
 export function rateLimit(
-	/** Function to identify current client making the request. */
 	getClientId: (
 		req: Request,
 		info: Deno.ServeHandlerInfo,

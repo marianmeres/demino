@@ -1,15 +1,30 @@
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
 
 /**
- * Will create a redirect middleware, which will `Response.redirect` to the provided `url`
- * with provided redirect `status` code.
+ * Creates a redirect middleware that redirects requests to a different URL.
  *
- * Only advantage over manual `Response.redirect` is that you can pass relative urls which
- * will otherwise be considered invalid.
+ * Supports both relative and absolute URLs. Relative URLs are resolved against
+ * the current request URL, which is more convenient than Response.redirect().
  *
- * @example
+ * @param url - Target URL (relative or absolute)
+ * @param status - HTTP redirect status code (default: 302 Found)
+ * @returns Middleware handler that performs the redirect
+ *
+ * @example Permanent redirect
  * ```ts
- * app.use('/old', redirect('/new', 301));
+ * import { redirect } from "@marianmeres/demino";
+ *
+ * app.use("/old-path", redirect("/new-path", 301));
+ * ```
+ *
+ * @example Temporary redirect (default)
+ * ```ts
+ * app.use("/temp", redirect("/current"));
+ * ```
+ *
+ * @example Absolute URL redirect
+ * ```ts
+ * app.use("/external", redirect("https://example.com", 302));
  * ```
  */
 export function redirect(

@@ -9,7 +9,21 @@ import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
 import type { Logger } from "@marianmeres/clog";
 
-/** Well known object passed to middlewares */
+/**
+ * Context object passed to every middleware and route handler.
+ * Contains request-scoped data including parsed params, headers, and application state.
+ *
+ * @example
+ * ```ts
+ * app.get("/users/[id]", (req, info, ctx) => {
+ *   const userId = ctx.params.id; // Parsed route parameter
+ *   ctx.locals.user = await fetchUser(userId); // Store data for other middlewares
+ *   ctx.status = 200; // Set response status
+ *   ctx.headers.set("X-Custom", "value"); // Add response header
+ *   return ctx.locals.user;
+ * });
+ * ```
+ */
 export interface DeminoContext {
 	/** Route's parsed params (if available). */
 	params: Record<string, string>;
@@ -33,19 +47,48 @@ export interface DeminoContext {
 	appLocals: DeminoAppLocals;
 }
 
-/** Arguments passed to DeminoHandler (a.k.a. middleware) */
+/**
+ * Arguments tuple passed to every DeminoHandler (middleware and route handlers).
+ * Matches Deno.ServeHandler signature with additional DeminoContext parameter.
+ */
 export type DeminoHandlerArgs = [Request, Deno.ServeHandlerInfo, DeminoContext];
 
-/** Demino route handler AND middlware fn (both are of the same type) */
+/**
+ * Function signature for route handlers and middlewares.
+ * Can return Response, any JSON-serializable value, string, or void.
+ *
+ * @example
+ * ```ts
+ * const myMiddleware: DeminoHandler = (req, info, ctx) => {
+ *   // Validate or transform request
+ *   if (!req.headers.get("Authorization")) {
+ *     throw new Error("Unauthorized");
+ *   }
+ *   // Return nothing to continue to next middleware
+ * };
+ *
+ * const myHandler: DeminoHandler = (req, info, ctx) => {
+ *   return { message: "Hello" }; // Auto-converted to JSON Response
+ * };
+ * ```
+ */
 export interface DeminoHandler extends MidwareUseFn<DeminoHandlerArgs> {}
 
-/** Route handler signature */
+/**
+ * Function signature for route registration methods (get, post, etc).
+ * @param route - The route pattern (e.g., "/users/[id]")
+ * @param args - Middlewares and final handler (last argument is the handler)
+ * @returns The Demino app instance for chaining
+ */
 export type DeminoRouteHandler = (
 	route: string,
 	...args: (DeminoHandler | DeminoHandler[])[]
 ) => Demino;
 
-/** Info about regitered route and associated middleware count */
+/**
+ * Debug information about registered routes and their middleware counts.
+ * Returned by app.info() for debugging purposes.
+ */
 export type DeminoRouteMiddlewareInfo = Partial<
 	Record<
 		DeminoMethod | "ALL",
@@ -53,10 +96,23 @@ export type DeminoRouteMiddlewareInfo = Partial<
 	>
 >;
 
-/** Optional, arbitrary "locals" object provided to app instance. Note: don't mix with context.locals */
+/**
+ * Application-wide locals object accessible from any context via ctx.appLocals.
+ * Unlike ctx.locals (request-scoped), this persists across all requests.
+ */
 export type DeminoAppLocals = any;
 
-/** The Demino app public interface */
+/**
+ * The main Demino application interface.
+ * Extends Deno.ServeHandler so it can be passed directly to Deno.serve().
+ *
+ * @example
+ * ```ts
+ * const app = demino();
+ * app.get("/", () => "Hello World");
+ * Deno.serve(app); // Works because Demino extends Deno.ServeHandler
+ * ```
+ */
 export interface Demino extends Deno.ServeHandler {
 	/** Special case _every_ HTTP method route handler. */
 	all: DeminoRouteHandler;
@@ -122,7 +178,10 @@ export interface Demino extends Deno.ServeHandler {
 	locals: DeminoAppLocals;
 }
 
-/** Demino supported method */
+/**
+ * HTTP methods supported by Demino.
+ * Standard HTTP methods that can be used for route registration.
+ */
 export type DeminoMethod =
 	| "CONNECT"
 	| "DELETE"
@@ -134,7 +193,10 @@ export type DeminoMethod =
 	| "PUT"
 	| "TRACE";
 
-/** Internal list of supported methods */
+/**
+ * List of all supported HTTP methods.
+ * Used internally for routing and file-based routing.
+ */
 export const supportedMethods: DeminoMethod[] = [
 	"CONNECT",
 	"DELETE",
@@ -147,8 +209,27 @@ export const supportedMethods: DeminoMethod[] = [
 	"TRACE",
 ];
 
-/** Internal logger inteface (experimental)... */
+/**
+ * Logger interface for Demino applications.
+ * Extends standard Logger with optional access log method.
+ *
+ * @example
+ * ```ts
+ * const customLogger: DeminoLogger = {
+ *   error: (...args) => console.error(...args),
+ *   warn: (...args) => console.warn(...args),
+ *   log: (...args) => console.log(...args),
+ *   debug: (...args) => console.debug(...args),
+ *   access: (data) => {
+ *     console.log(`${data.status} ${data.req.method} ${data.req.url} ${data.duration}ms`);
+ *   }
+ * };
+ *
+ * const app = demino("", [], { logger: customLogger });
+ * ```
+ */
 export interface DeminoLogger extends Logger {
+	/** Optional access log handler called after each request completes */
 	access?: (data: {
 		timestamp: Date;
 		status: number;
@@ -163,24 +244,65 @@ function isFn(v: any): boolean {
 	return typeof v === "function";
 }
 
-/** Export few well known ones, for easier consumption in apps */
+/**
+ * Common content-type header values for convenience.
+ *
+ * @example
+ * ```ts
+ * import { CONTENT_TYPE } from "@marianmeres/demino";
+ *
+ * app.get("/api/data", (req, info, ctx) => {
+ *   ctx.headers.set("content-type", CONTENT_TYPE.JSON);
+ *   return { data: "value" };
+ * });
+ * ```
+ */
 export const CONTENT_TYPE = {
-	JSON: "application/json", // default encoding is utf-8
+	/** application/json (default encoding is utf-8) */
+	JSON: "application/json",
+	/** text/plain; charset=utf-8 */
 	TEXT: "text/plain; charset=utf-8",
+	/** text/html; charset=utf-8 */
 	HTML: "text/html; charset=utf-8",
 };
 
 /**
- * Creates Response based on body type.
- * This is the internal helper that converts various return types to Response instances.
- * Exported for use in middlewares that need to mimic Demino's response creation logic.
+ * Creates a Response instance from various body types.
+ * This is Demino's core response creation logic, exported for use in custom middlewares.
+ *
+ * Conversion rules:
+ * - `undefined` → 204 No Content
+ * - Plain objects, arrays, null, toJSON-aware → JSON stringified with application/json
+ * - Everything else → toString() with text/html
+ * - HEAD requests → empty body
+ *
+ * @param req - The incoming request (used to detect HEAD method)
+ * @param body - The body to convert (any type)
+ * @param headers - Response headers (content-type set if not present)
+ * @param status - HTTP status code (defaults to 200)
+ * @returns Response instance ready to return from handler
+ *
+ * @example
+ * ```ts
+ * import { createResponseFrom } from "@marianmeres/demino";
+ *
+ * export function withCustomLogic(handler: DeminoHandler): DeminoHandler {
+ *   return async (req, info, ctx) => {
+ *     const result = await handler(req, info, ctx);
+ *     if (!(result instanceof Response)) {
+ *       return createResponseFrom(req, result, ctx.headers, ctx.status);
+ *     }
+ *     return result;
+ *   };
+ * }
+ * ```
  */
 export function createResponseFrom(
 	req: Request,
 	body: any,
 	headers: Headers = new Headers(),
 	status = HTTP_STATUS.OK,
-) {
+): Response {
 	status ||= HTTP_STATUS.OK;
 
 	// make no assumptions - empty body is technically valid
@@ -249,7 +371,19 @@ function _createContext(
 	});
 }
 
-/** Demino app factory options. */
+/**
+ * Configuration options for creating a Demino application.
+ *
+ * @example
+ * ```ts
+ * const app = demino("", [], {
+ *   verbose: true,
+ *   logger: customLogger,
+ *   noXPoweredBy: true,
+ *   errorHandler: (req, info, ctx) => ({ error: ctx.error.message })
+ * });
+ * ```
+ */
 export interface DeminoOptions {
 	/** Function to return custom DeminoRouter instance. */
 	routerFactory?: () => DeminoRouter;
@@ -271,13 +405,39 @@ export interface DeminoOptions {
 }
 
 /**
- * Creates the Demino app.
+ * Creates a new Demino application instance.
  *
- * Demino app is a valid `Deno.serve` handler function.
+ * The Demino app is a valid Deno.ServeHandler that can be passed directly to Deno.serve().
+ * It provides routing, middleware support, error handling, and logging capabilities.
  *
- * @example
+ * @param mountPath - Optional base path for all routes (default: ""). Must start with "/" if not empty.
+ * @param middleware - Optional global middleware(s) to run on every request
+ * @param options - Optional configuration for the application
+ * @param appLocals - Optional application-wide data accessible via ctx.appLocals
+ * @returns Demino application instance ready to serve requests
+ *
+ * @example Basic usage
  * ```ts
- * Deno.serve(demino()); // this will return 404 for every request
+ * const app = demino();
+ * app.get("/", () => "Hello World");
+ * Deno.serve(app);
+ * ```
+ *
+ * @example With mount path and middleware
+ * ```ts
+ * const api = demino("/api", [authMiddleware, loggerMiddleware]);
+ * api.get("/users", getUsers);
+ * api.post("/users", createUser);
+ * Deno.serve(api);
+ * ```
+ *
+ * @example With options
+ * ```ts
+ * const app = demino("", [], {
+ *   verbose: true,
+ *   logger: customLogger,
+ *   errorHandler: customErrorHandler
+ * });
  * ```
  */
 export function demino(

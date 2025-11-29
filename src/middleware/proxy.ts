@@ -2,32 +2,58 @@ import { withTimeout } from "@marianmeres/midware";
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
 
 /**
- * Will create a proxy middleware which will proxy the current request to the specified
- * target.
+ * Creates a proxy middleware that forwards requests to a different server.
  *
- * Target can be relative or absolute. If specified as a plain string, search query params
- * will be appended automatically.
+ * Automatically handles request forwarding, header management, and response streaming.
+ * Supports both static and dynamic target URLs.
  *
- * Currently does NOT support websockets.
+ * Features:
+ * - Preserves request method and body
+ * - Sets X-Forwarded-* headers automatically
+ * - Supports wildcard paths with automatic pathname appending
+ * - Configurable timeout (default: 60 seconds)
+ * - Prevents self-proxying
  *
- * @example
+ * Note: Does NOT support WebSocket proxying.
+ *
+ * @param target - Target URL (string or function). Strings ending with `/*` append the request pathname.
+ * @param options - Optional configuration
+ * @returns Middleware handler that proxies the request
+ *
+ * @example Static proxy with wildcard
  * ```ts
- * app.get('/search', proxy({ target: 'https://google.com' }));
- * // or as a function for dynamic target
- * app.get(
- *     '/search/[keyword]',
- *     proxy({ target: (req, ctx) => `https://google.com/?q=${ctx.params.keyword}` })
- * );
+ * import { proxy } from "@marianmeres/demino";
+ *
+ * // GET /api/users -> GET https://backend.example.com/api/users
+ * app.get("/api/*", proxy("https://backend.example.com/*"));
+ * ```
+ *
+ * @example Dynamic proxy using route params
+ * ```ts
+ * app.get("/search/[keyword]", proxy((req, ctx) =>
+ *   `https://google.com/?q=${ctx.params.keyword}`
+ * ));
+ * ```
+ *
+ * @example With custom timeout
+ * ```ts
+ * app.get("/slow-api/*", proxy("https://slow-backend.com/*", {
+ *   timeout: 120_000 // 2 minutes
+ * }));
+ * ```
+ *
+ * @example Full request proxy
+ * ```ts
+ * // Preserves query params, headers, and body
+ * app.all("/proxy/*", proxy("https://api.example.com/*"));
  * ```
  */
 export function proxy(
-	/** Either plain url string or a function resolving to one. */
 	target:
 		| string
 		| ((req: Request, ctx: DeminoContext) => string | Promise<string>),
 	options?: Partial<{
-		/** If non zero number of ms is provided, will set the watch clock for the proxy
-		 * request to complete. */
+		/** Timeout in milliseconds for the proxy request (default: 60000) */
 		timeout: number;
 	}>,
 ): DeminoHandler {

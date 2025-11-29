@@ -8,7 +8,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.get(
 				"/data",
-				withETag(() => ({ message: "hello world" }))
+				withETag(() => ({ message: "hello world" })),
 			);
 
 			// First request - should get 200 with ETag
@@ -36,7 +36,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.get(
 				"/data",
-				withETag(() => "test data", { weak: true })
+				withETag(() => "test data", { weak: true }),
 			);
 
 			const res = await fetch(`${base}/data`);
@@ -51,7 +51,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.post(
 				"/data",
-				withETag(() => ({ message: "created" }))
+				withETag(() => ({ message: "created" })),
 			);
 
 			const res = await fetch(`${base}/data`, {
@@ -71,7 +71,7 @@ runTestServerTests([
 					return new Response("data", {
 						headers: { etag: '"custom-etag"' },
 					});
-				})
+				}),
 			);
 
 			const res = await fetch(`${base}/data`);
@@ -85,7 +85,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.get(
 				"/data",
-				withETag(() => "hello")
+				withETag(() => "hello"),
 			);
 
 			// Get the actual ETag

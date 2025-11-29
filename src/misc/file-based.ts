@@ -1,3 +1,4 @@
+import type { Logger } from "@marianmeres/clog";
 import { encodeBase64 } from "@std/encoding";
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
@@ -9,9 +10,10 @@ import {
 	type DeminoMethod,
 	supportedMethods,
 } from "../demino.ts";
-import { Logger } from "@marianmeres/clog";
 
-/** `deminoFileBased` options */
+/**
+ * Configuration options for file-based routing.
+ */
 export interface DeminoFileBasedOptions {
 	/** Will log details (via logger) about found file based routes (default true). */
 	verbose?: boolean;
@@ -26,21 +28,61 @@ export interface DeminoFileBasedOptions {
 }
 
 /**
- * Will scan the provided root dirs for handlers (index.ts) and middlewares along the way (_middleware.ts),
- * and apply to the app. Each relative path for found index.ts file will be used as a route.
- * The path can contain named segments.
+ * Enables directory-based routing by scanning filesystem for route handlers.
  *
- * A file path is considered as a **valid route** when:
- * - none of the path segments starts with "_" or "."
- * - the leaf index.[j|t]s file exists and exports at least one known symbol
+ * Automatically discovers and registers routes from directory structure:
+ * - `index.(j|t)s` files define route handlers (must export HTTP method functions)
+ * - `_middleware.(j|t)s` files define middlewares (must default export array)
+ * - Directory names become route segments (e.g., `/users/[id]/`)
+ * - Directories starting with `_` or `.` are ignored
+ * - Named segments use bracket notation: `[paramName]`
  *
- * @example
+ * Route validity requirements:
+ * - No path segment may start with `_` or `.`
+ * - `index.(j|t)s` must export at least one HTTP method function (GET, POST, etc.)
+ *
+ * @param app - Demino application instance to register routes on
+ * @param rootDirs - Directory or directories to scan for routes
+ * @param options - Optional configuration
+ * @returns The same app instance (for chaining)
+ *
+ * @example Basic usage
  * ```ts
- * import { relative } from "@std/path";
+ * import { demino, deminoFileBased } from "@marianmeres/demino";
  *
  * const app = demino();
+ * await deminoFileBased(app, "./routes");
+ * Deno.serve(app);
+ * ```
  *
- * await deminoFileBased(app, '/my/routes/dir/');
+ * @example Directory structure
+ * ```
+ * routes/
+ * ├── _middleware.ts           # Global middleware
+ * ├── index.ts                 # GET / handler
+ * ├── users/
+ * │   ├── _middleware.ts       # Middleware for /users/*
+ * │   ├── index.ts             # GET /users handler
+ * │   └── [userId]/
+ * │       └── index.ts         # GET /users/[userId] handler
+ * ```
+ *
+ * @example Route handler file (index.ts)
+ * ```ts
+ * // Export HTTP method named functions
+ * export function GET(req, info, ctx) {
+ *   return { users: [...] };
+ * }
+ *
+ * export function POST(req, info, ctx) {
+ *   return { created: true };
+ * }
+ * ```
+ *
+ * @example Middleware file (_middleware.ts)
+ * ```ts
+ * // Must default export array of middlewares
+ * export default [authMiddleware, loggingMiddleware];
  * ```
  */
 export async function deminoFileBased(
@@ -179,13 +221,26 @@ export async function deminoFileBased(
 }
 
 /**
- * Internal utility to sort routes, where route **specificity** is being compared.
- * Point is that since the first route match wins, we need to add dynamic routes after the
- * fixed ones.
+ * Comparator function to sort routes by specificity.
  *
- * Routes specificity:
- * - depth (the higher depth, the more specific)
- * - named vs fixed segments /x vs /[x] (the dynamic must come last)
+ * Ensures static routes are matched before dynamic ones, since first match wins.
+ *
+ * Specificity rules:
+ * 1. Deeper routes are more specific (more segments = higher priority)
+ * 2. Static segments beat dynamic segments at same position
+ * 3. Alphabetically sorted when specificity is equal
+ *
+ * @param a - First route path
+ * @param b - Second route path
+ * @returns Negative if a is more specific, positive if b is more specific, 0 if equal
+ *
+ * @example
+ * ```ts
+ * const routes = ["/users/[id]", "/users/admin", "/api", "/api/v2/users"];
+ * routes.sort(routesCompare);
+ * // Result: ["/api/v2/users", "/api", "/users/admin", "/users/[id]"]
+ * // Deeper first, then static before dynamic
+ * ```
  */
 export function routesCompare(a: string, b: string): number {
 	const s = "/";
