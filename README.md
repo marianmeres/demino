@@ -299,25 +299,15 @@ app.use(trailingSlash(true));
 
 ### Proxy
 
-Will proxy the current request to `target`. Target can be specified either as a plain url
-string (absolute or relative) or a function resolving to one. Currently does NOT support
-websockets.
+Proxies requests to a different server with comprehensive features including SSRF protection,
+host whitelisting, header/body transformation, and custom error handling. Target can be
+specified as a URL string (absolute or relative) or a function. Does NOT support WebSockets.
 
-Signature:
-
-```ts
-function proxy(
-	target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
-	options?: Partial<{ timeout: number }>,
-): DeminoHandler;
-```
+Basic usage:
 
 ```ts
 // string target: GET /foo/bar?x=y -> GET http://some/foo/bar?x=y
 app.get("/foo/*", proxy("http://some/*"));
-
-// fn target using req: GET /foo/bar?x=y -> GET http://some/bar (no query)
-app.get("/foo/*", proxy((r) => `http://some/${new URL(r.url).pathname.slice(4)}`));
 
 // fn target using context: GET /search/foo -> GET https://google.com/?q=foo
 app.get(
@@ -325,6 +315,16 @@ app.get(
 	proxy((r, c) => `https://google.com/?q=${c.params.keyword}`),
 );
 ```
+
+Advanced features include:
+- SSRF protection (blocks private IPs, localhost)
+- Host whitelisting with wildcard support
+- Request/response header transformation
+- Response body transformation
+- Configurable timeout and caching
+- Custom error handling
+
+See [proxy.ts](src/middleware/proxy.ts) for full API documentation and examples.
 
 ### Redirect
 
