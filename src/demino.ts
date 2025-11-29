@@ -7,6 +7,7 @@ import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
+import type { Logger } from "@marianmeres/clog";
 
 /** Well known object passed to middlewares */
 export interface DeminoContext {
@@ -147,11 +148,7 @@ export const supportedMethods: DeminoMethod[] = [
 ];
 
 /** Internal logger inteface (experimental)... */
-export interface DeminoLogger {
-	debug?: (...args: any[]) => void;
-	log?: (...args: any[]) => void;
-	warn?: (...args: any[]) => void;
-	error?: (...args: any[]) => void;
+export interface DeminoLogger extends Logger {
 	access?: (data: {
 		timestamp: Date;
 		status: number;
@@ -173,8 +170,12 @@ export const CONTENT_TYPE = {
 	HTML: "text/html; charset=utf-8",
 };
 
-/** Creates Response based on body type */
-function _createResponseFrom(
+/**
+ * Creates Response based on body type.
+ * This is the internal helper that converts various return types to Response instances.
+ * Exported for use in middlewares that need to mimic Demino's response creation logic.
+ */
+export function createResponseFrom(
 	req: Request,
 	body: any,
 	headers: Headers = new Headers(),
@@ -309,7 +310,7 @@ export function demino(
 
 	// initially we are falling back to console
 	let _log: DeminoLogger | null = options?.logger === undefined
-		? console
+		? (console as unknown as DeminoLogger)
 		: options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
@@ -348,7 +349,7 @@ export function demino(
 	};
 
 	const _doLog = (type: keyof DeminoLogger, value: any) => {
-		getLogger()?.[type]?.(value);
+		(getLogger() as any)?.[type]?.(value);
 		// make sure it is async, so it never effects responding
 		// return new Promise(() => {
 		// getLogger()?.[type]?.(value);
@@ -366,7 +367,7 @@ export function demino(
 			_maybeSetXHeaders(context);
 			// make sure to reset any content-type we might have (the factory below will set the proper one)
 			context.headers.delete("content-type");
-			r = _createResponseFrom(
+			r = createResponseFrom(
 				req,
 				r || getErrorMessage(context.error),
 				context.headers,
@@ -512,7 +513,7 @@ export function demino(
 						result = await _createErrorResponse(req, info, context);
 					} // we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						result = _createResponseFrom(
+						result = createResponseFrom(
 							req,
 							result,
 							headers,

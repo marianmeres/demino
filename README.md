@@ -416,17 +416,38 @@ await deminoFileBased(app, "./routes", {
 
 Note that this feature is designed to work **with the default router only**.
 
-## Extra: Apps composition
+## Extra: Apps composition (Route groups)
 
-Multiple apps on a different mount paths can be composed into a single app. For example:
+Multiple Demino apps on different mount paths can be composed into a single app. This is
+useful for organizing routes into logical groups (e.g., API routes, admin routes, public
+routes) where each group has its own isolated middleware stack.
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
 
-// skipping routes setup here...
-const home = demino("", loadMetaOgData);
-const api = demino("/api", [addJsonHeader, validateBearerToken]);
+// Main app for public routes
+const app = demino();
+app.get("/", () => "Home");
+app.get("/about", () => "About");
 
-// compose all together, and serve as a one handler
-Deno.serve(deminoCompose([home, api]));
+// API routes group - all routes will be prefixed with /api
+const api = demino("/api");
+api.use(validateToken); // Applies to all /api/* routes
+api.get("/users", getUsers); // GET /api/users
+api.post("/users", createUser); // POST /api/users
+api.get("/users/[id]", getUser); // GET /api/users/123
+api.delete("/users/[id]", deleteUser); // DELETE /api/users/123
+
+// Admin routes group - all routes will be prefixed with /admin
+const admin = demino("/admin");
+admin.use(requireAdmin); // Applies to all /admin/* routes
+admin.get("/dashboard", getDashboard); // GET /admin/dashboard
+admin.get("/users", getAllUsersWithDetails); // GET /admin/users
+admin.delete("/users/[id]", permanentlyDeleteUser); // DELETE /admin/users/123
+
+// Compose all apps together and serve as a single handler
+Deno.serve(deminoCompose([app, api, admin]));
 ```
+
+Each group has its own isolated middleware stack, making it easy to apply authentication,
+validation, or logging to specific route groups without affecting others.

@@ -1,4 +1,4 @@
-import { SimpleRouter } from "@marianmeres/simple-router";
+import { type RouteCallback, SimpleRouter } from "@marianmeres/simple-router";
 import {
 	DeminoRouter,
 	type DeminoRouterOnMatch,
@@ -11,7 +11,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 	#router: SimpleRouter = new SimpleRouter();
 
 	/** Stores a callback to be executed on a given route. */
-	on(route: string, callback: DeminoRouterOnMatch): void {
+	on(route: string, callback: DeminoRouterOnMatch & RouteCallback): void {
 		this.#router.on(route, callback);
 	}
 
@@ -32,7 +32,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 			(!route.startsWith("/") || route.includes("//"))
 		) {
 			throw new TypeError(
-				`Route must be either empty, or start with a slash (and must not contain double slashes).`,
+				`Route must be either empty, or start with a slash (and must not contain double slashes).`
 			);
 		}
 	}

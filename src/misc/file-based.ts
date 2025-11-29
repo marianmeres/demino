@@ -9,6 +9,7 @@ import {
 	type DeminoMethod,
 	supportedMethods,
 } from "../demino.ts";
+import { Logger } from "@marianmeres/clog";
 
 /** `deminoFileBased` options */
 export interface DeminoFileBasedOptions {
@@ -45,12 +46,12 @@ export interface DeminoFileBasedOptions {
 export async function deminoFileBased(
 	app: Demino,
 	rootDirs: string | string[],
-	options?: DeminoFileBasedOptions,
+	options?: DeminoFileBasedOptions
 ): Promise<Demino> {
 	if (!Array.isArray(rootDirs)) rootDirs = [rootDirs];
 	rootDirs = rootDirs.map(normalize);
 
-	const log: DeminoLogger = options?.logger ?? console;
+	const log: DeminoLogger = options?.logger ?? (console as unknown as Logger);
 
 	const routes: Record<
 		string,
@@ -68,13 +69,11 @@ export async function deminoFileBased(
 	const doImport = options?.doImport ?? _defatulImporter;
 
 	for (const rootDir of rootDirs) {
-		for (
-			const dirEntry of walkSync(rootDir, {
-				includeDirs: false,
-				// we are cosuming only ts/js here
-				exts: ["js", "ts"],
-			})
-		) {
+		for (const dirEntry of walkSync(rootDir, {
+			includeDirs: false,
+			// we are cosuming only ts/js here
+			exts: ["js", "ts"],
+		})) {
 			// ignore dotfiles quickly
 			if (dirEntry.name.startsWith(".")) continue;
 			const filepath = dirEntry.path;
@@ -99,14 +98,14 @@ export async function deminoFileBased(
 				routes[route] = await _importRouteHandlers(
 					await doImport(filepath),
 					filepath,
-					options?.verbose ? log?.debug : undefined,
+					options?.verbose ? log?.debug : undefined
 				);
 			} else if (type === "middleware") {
 				options?.verbose && log?.debug?.(green(`${filepath}`));
 				middlewares[route] = await _importMiddlewares(
 					await doImport(filepath),
 					filepath,
-					options?.verbose ? log?.debug : undefined,
+					options?.verbose ? log?.debug : undefined
 				);
 			}
 		}
@@ -144,7 +143,8 @@ export async function deminoFileBased(
 		return out.filter(Boolean);
 	};
 
-	const defs: [string, "ALL" | DeminoMethod, DeminoHandler[], DeminoHandler][] = [];
+	const defs: [string, "ALL" | DeminoMethod, DeminoHandler[], DeminoHandler][] =
+		[];
 
 	routesSorted.forEach((route: string) => {
 		const mws = collectMiddlewaresFor(route);
@@ -163,7 +163,7 @@ export async function deminoFileBased(
 						handler[method],
 					]);
 				}
-			},
+			}
 		);
 	});
 
@@ -234,7 +234,7 @@ function _isMiddlewareValidFilename(filename: string) {
 function _importRouteHandlers(
 	module: any,
 	fileDebugLabel: string,
-	debugLog?: CallableFunction,
+	debugLog?: CallableFunction
 ): Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> {
 	// https://docs.deno.com/deploy/api/dynamic-import/
 	// filepath = relative(import.meta.dirname!, filepath);
@@ -249,12 +249,12 @@ function _importRouteHandlers(
 				out[method] = module[method];
 				found++;
 			}
-		},
+		}
 	);
 
 	if (!found) {
 		throw new TypeError(
-			`No expected route handlers found in ${fileDebugLabel}. (Hint: file must export HTTP method named functions.)`,
+			`No expected route handlers found in ${fileDebugLabel}. (Hint: file must export HTTP method named functions.)`
 		);
 	} else {
 		debugLog?.(` ✔ found: ${Object.keys(out).join(", ")}`);
@@ -267,7 +267,7 @@ function _importRouteHandlers(
 function _importMiddlewares(
 	module: any,
 	fileDebugLabel: string,
-	debugLog?: CallableFunction,
+	debugLog?: CallableFunction
 ): DeminoHandler[] {
 	// https://docs.deno.com/deploy/api/dynamic-import/
 	// filepath = relative(import.meta.dirname!, filepath);
@@ -275,7 +275,8 @@ function _importMiddlewares(
 
 	//
 	const out: DeminoHandler[] = [];
-	const hint = "(Hint: file must default export array of middleware functions.)";
+	const hint =
+		"(Hint: file must default export array of middleware functions.)";
 
 	if (!Array.isArray(module.default)) {
 		throw new TypeError(`Invalid middleware file ${fileDebugLabel}. ${hint}`);
@@ -286,7 +287,7 @@ function _importMiddlewares(
 			out.push(v);
 		} else {
 			throw new TypeError(
-				`Not a function middleware type in ${fileDebugLabel}. ${hint}`,
+				`Not a function middleware type in ${fileDebugLabel}. ${hint}`
 			);
 		}
 	});
