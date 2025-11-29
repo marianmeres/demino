@@ -354,6 +354,32 @@ app.use(
 );
 ```
 
+### Cookies
+
+Parses request cookies and provides helpers for setting/deleting response cookies.
+Accepts optional default options applied to all `setCookie` calls.
+
+```ts
+// Configure secure defaults once
+app.use(cookies({ httpOnly: true, secure: true, sameSite: "Lax", path: "/" }));
+
+app.get("/", (req, info, ctx) => {
+	// Read cookies from request
+	const sessionId = ctx.locals.cookies.session;
+
+	// Set a cookie (defaults are applied automatically)
+	ctx.locals.setCookie("session", "abc123", { maxAge: 3600 });
+
+	// Override defaults when needed
+	ctx.locals.setCookie("theme", "dark", { httpOnly: false });
+
+	// Delete a cookie (uses path/domain from defaults)
+	ctx.locals.deleteCookie("session");
+
+	return { ok: true };
+});
+```
+
 ### ETag
 
 Wraps a route handler to automatically generate ETags and handle conditional requests.

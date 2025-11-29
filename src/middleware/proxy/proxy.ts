@@ -1,11 +1,11 @@
 import { withTimeout } from "@marianmeres/midware";
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler } from "../../demino.ts";
 import {
 	isHostAllowed,
 	isPrivateHost,
 	PROXY_REQUEST_REMOVE_HEADERS,
 	PROXY_RESPONSE_REMOVE_HEADERS,
-} from "./proxy/utils.ts";
+} from "./utils.ts";
 
 export interface ProxyOptions {
 	/** Timeout in milliseconds for the proxy request (default: 60000) */
@@ -20,17 +20,17 @@ export interface ProxyOptions {
 	transformRequestHeaders: (
 		headers: Headers,
 		req: Request,
-		ctx: DeminoContext,
+		ctx: DeminoContext
 	) => Headers | Promise<Headers>;
 	/** Function to transform response headers before returning */
 	transformResponseHeaders: (
 		headers: Headers,
-		resp: Response,
+		resp: Response
 	) => Headers | Promise<Headers>;
 	/** Function to transform response body before returning */
 	transformResponseBody: (
 		body: BodyInit | null,
-		resp: Response,
+		resp: Response
 	) => BodyInit | null | Promise<BodyInit | null>;
 	/** Cache strategy for the proxy request (default: "no-store") */
 	cache: RequestCache;
@@ -38,7 +38,7 @@ export interface ProxyOptions {
 	onError: (
 		error: Error,
 		req: Request,
-		ctx: DeminoContext,
+		ctx: DeminoContext
 	) => Response | Promise<Response>;
 	/** Additional headers to remove from proxy requests */
 	removeRequestHeaders: string[];
@@ -128,7 +128,7 @@ export function proxy(
 	target:
 		| string
 		| ((req: Request, ctx: DeminoContext) => string | Promise<string>),
-	options?: Partial<ProxyOptions>,
+	options?: Partial<ProxyOptions>
 ): DeminoHandler {
 	const {
 		timeout = 60_000,
@@ -170,7 +170,7 @@ export function proxy(
 				}
 			} else {
 				throw new TypeError(
-					`Invalid target parameter, expecting string or a function`,
+					`Invalid target parameter, expecting string or a function`
 				);
 			}
 
@@ -184,14 +184,14 @@ export function proxy(
 			// SSRF protection
 			if (preventSSRF && isPrivateHost(targetUrl.hostname)) {
 				throw new Error(
-					`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`,
+					`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`
 				);
 			}
 
 			// Host whitelist validation
 			if (!isHostAllowed(targetUrl.hostname, allowedHosts)) {
 				throw new Error(
-					`Host '${targetUrl.hostname}' is not in the allowed hosts list`,
+					`Host '${targetUrl.hostname}' is not in the allowed hosts list`
 				);
 			}
 
@@ -203,7 +203,7 @@ export function proxy(
 
 			// Remove standard problematic headers
 			[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
-				(name) => proxyHeaders.delete(name),
+				(name) => proxyHeaders.delete(name)
 			);
 
 			// X-Forwarded-* headers
@@ -212,7 +212,7 @@ export function proxy(
 			proxyHeaders.set("x-forwarded-for", ctx.ip);
 			proxyHeaders.set(
 				"x-forwarded-port",
-				url.port || (url.protocol === "https:" ? "443" : "80"),
+				url.port || (url.protocol === "https:" ? "443" : "80")
 			);
 			proxyHeaders.set("x-real-ip", ctx.ip);
 
@@ -242,7 +242,7 @@ export function proxy(
 			// Create response with cleaned headers
 			let respHeaders = new Headers(resp.headers);
 			[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
-				(name) => respHeaders.delete(name),
+				(name) => respHeaders.delete(name)
 			);
 
 			// Apply response header transformation if provided

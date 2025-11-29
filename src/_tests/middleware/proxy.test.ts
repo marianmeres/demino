@@ -1,7 +1,7 @@
 import { sleep } from "@marianmeres/midware";
 import { serveFile } from "@std/http/file-server";
 import { assertEquals } from "@std/assert";
-import { proxy } from "../../middleware/proxy.ts";
+import { proxy } from "../../middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
