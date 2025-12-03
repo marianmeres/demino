@@ -29,6 +29,10 @@ occasionally change.
 deno add jsr:@marianmeres/demino
 ```
 
+## API Documentation
+
+For complete API reference, see [API.md](API.md).
+
 ## Basic usage
 
 ```ts

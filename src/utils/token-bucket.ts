@@ -1,16 +1,41 @@
 import type { DeminoLogger } from "../demino.ts";
 
 /**
- * Inspired from https://lucia-auth.com/rate-limit/token-bucket
+ * Token bucket algorithm implementation for rate limiting.
  *
- * Imagine a bucket that holds tokens. Tokens are added to the bucket at a fixed rate
- * (e.g. 10 tokens per second). Each API request consumes one or more tokens.
- * If there are enough tokens, the request is allowed and tokens are removed.
- * If there aren't enough tokens, the request is rejected.
- * The bucket has a maximum capacity to prevent token hoarding.
+ * The token bucket is a simple but effective rate limiting strategy:
+ * - Tokens are added to the bucket at a fixed rate (e.g., 10 tokens/second)
+ * - Each request consumes one or more tokens
+ * - If enough tokens exist, the request proceeds and tokens are removed
+ * - If insufficient tokens, the request is rejected
+ * - Maximum capacity prevents token hoarding
+ *
+ * This allows for bursting (up to maxSize requests instantly) while maintaining
+ * a sustainable rate limit (refillPerSecond requests/second on average).
+ *
+ * @see https://lucia-auth.com/rate-limit/token-bucket
+ *
+ * @example Basic usage
+ * ```ts
+ * const bucket = new TokenBucket(20, 10); // 20 burst, 10/sec sustained
+ *
+ * if (bucket.consume()) {
+ *   // Request allowed
+ * } else {
+ *   // Rate limited - reject with 429
+ * }
+ * ```
+ *
+ * @example Higher cost operations
+ * ```ts
+ * // Login attempts cost 5 tokens
+ * if (bucket.consume(5)) {
+ *   // Proceed with login
+ * }
+ * ```
  */
 export class TokenBucket {
-	/** Max allowed (burst) capacity*/
+	/** Max allowed (burst) capacity */
 	#maxSize: number;
 
 	/** Current quantity in the bucket */
@@ -22,7 +47,23 @@ export class TokenBucket {
 	/** How much capacity will be refilled per second */
 	#refillSizePerSec: number;
 
-	/** */
+	/**
+	 * Creates a new TokenBucket instance.
+	 *
+	 * @param maxSize - Maximum bucket capacity (burst limit). Must be positive.
+	 * @param refillPerSecond - Tokens added per second (sustained rate). Must be positive.
+	 * @param _logger - Optional logger for debugging token bucket operations
+	 * @throws {TypeError} If maxSize or refillPerSecond is not a positive number
+	 *
+	 * @example
+	 * ```ts
+	 * // Allow 20 request burst, sustain 10 requests/second
+	 * const bucket = new TokenBucket(20, 10);
+	 *
+	 * // With debug logging
+	 * const bucket = new TokenBucket(20, 10, console);
+	 * ```
+	 */
 	constructor(
 		maxSize: number,
 		refillPerSecond: number,
@@ -40,7 +81,12 @@ export class TokenBucket {
 		this.#refillSizePerSec = refillPerSecond;
 	}
 
-	/** Will "refill" quantity if enough seconds elapsed since last time. */
+	/**
+	 * Refills the bucket based on time elapsed since last refill.
+	 * Called automatically by `consume()` and `size` getter.
+	 *
+	 * @returns This TokenBucket instance for chaining
+	 */
 	refill(): TokenBucket {
 		const now = new Date();
 		const secondsPassed = (now.valueOf() - this.#lastRefill.valueOf()) / 1000;
@@ -61,7 +107,13 @@ export class TokenBucket {
 		return this;
 	}
 
-	/** Will "consume" quantity from available capacity. */
+	/**
+	 * Attempts to consume tokens from the bucket.
+	 * Automatically refills before checking capacity.
+	 *
+	 * @param quantity - Number of tokens to consume (default: 1)
+	 * @returns true if tokens were consumed, false if insufficient capacity
+	 */
 	consume(quantity = 1): boolean {
 		// First refill the bucket based on time passed
 		this.refill();
@@ -83,7 +135,10 @@ export class TokenBucket {
 		return false;
 	}
 
-	/** Will get current available capacity */
+	/**
+	 * Gets the current available token capacity.
+	 * Automatically refills before returning the value.
+	 */
 	get size(): number {
 		this.refill();
 		return this.#currentSize;
