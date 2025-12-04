@@ -8,7 +8,7 @@
 		"test:no-watch": "deno test -A"
 	},
 	"imports": {
-		"@marianmeres/clog": "jsr:@marianmeres/clog@^3.2.3",
+		"@marianmeres/clog": "jsr:@marianmeres/clog@^3.2.4",
 		"@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.0.2",
 		"@marianmeres/midware": "jsr:@marianmeres/midware@^1.3.0",
 		"@marianmeres/simple-router": "jsr:@marianmeres/simple-router@^2.2.3",
