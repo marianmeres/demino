@@ -5,7 +5,8 @@
 	"tasks": {
 		"dev": "deno run --watch ./src/mod.ts",
 		"test": "deno test -A",
-		"test:watch": "deno test -A --watch"
+		"test:watch": "deno test -A --watch",
+		"release": "deno run -A jsr:@marianmeres/deno-release"
 	},
 	"imports": {
 		"@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.0.2",
@@ -20,12 +21,11 @@
 		"request-ip": "npm:request-ip@^3.3.0"
 	},
 	"publish": {
-		"exclude": [".*", "src/_tests/**", ".editorconfig"]
+		"exclude": [".*", "tests/**"]
 	},
 	"fmt": {
 		"useTabs": true,
 		"lineWidth": 90,
 		"indentWidth": 4
-	},
-	"lint": {}
+	}
 }

@@ -13,13 +13,18 @@ import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
 
 /**
- * see @marianmeres/clog
+ * This must be typed as any so it is console compatible.
+ * Read more at: https://github.com/marianmeres/clog
  */
 export interface Logger {
-	debug: (...args: unknown[]) => unknown;
-	log: (...args: unknown[]) => unknown;
-	warn: (...args: unknown[]) => unknown;
-	error: (...args: unknown[]) => unknown;
+	// deno-lint-ignore no-explicit-any
+	debug: (...args: any[]) => any;
+	// deno-lint-ignore no-explicit-any
+	log: (...args: any[]) => any;
+	// deno-lint-ignore no-explicit-any
+	warn: (...args: any[]) => any;
+	// deno-lint-ignore no-explicit-any
+	error: (...args: any[]) => any;
 }
 
 /**
