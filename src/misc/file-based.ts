@@ -1,4 +1,3 @@
-import type { Logger } from "@marianmeres/clog";
 import { encodeBase64 } from "@std/encoding";
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
@@ -8,6 +7,7 @@ import {
 	type DeminoHandler,
 	type DeminoLogger,
 	type DeminoMethod,
+	type Logger,
 	supportedMethods,
 } from "../demino.ts";
 
@@ -24,7 +24,7 @@ export interface DeminoFileBasedOptions {
 	 * This hoisted importer is only required if the imported module is using other relative
 	 * imports.
 	 */
-	doImport?: (modulePath: string) => Promise<any>;
+	doImport?: (modulePath: string) => Promise<Record<string, unknown>>;
 }
 
 /**
@@ -191,12 +191,12 @@ export async function deminoFileBased(
 	routesSorted.forEach((route: string) => {
 		const mws = collectMiddlewaresFor(route);
 		const handler = routes[route];
-		[...(supportedMethods as any), "ALL"].forEach(
+		([...supportedMethods, "ALL"] as const).forEach(
 			(method: "ALL" | DeminoMethod) => {
 				if (handler[method]) {
 					// allow to set mws on the fn itself, eg: "GET.middlewares"
 					let selfMws: DeminoHandler[] =
-						(handler[method] as any)?.middlewares ?? [];
+						(handler[method] as DeminoHandler & { middlewares?: DeminoHandler | DeminoHandler[] })?.middlewares as DeminoHandler[] ?? [];
 					if (!Array.isArray(selfMws)) selfMws = [selfMws];
 					defs.push([
 						route,
@@ -214,7 +214,8 @@ export async function deminoFileBased(
 		options?.verbose &&
 			log?.debug?.(green(` ✔ ${method} ${route} (${mws.length} mws)`));
 		// console.log(method.toLocaleLowerCase(), handler);
-		(app as any)[method.toLocaleLowerCase()](route, mws, handler);
+		const methodName = method.toLowerCase() as Lowercase<typeof method>;
+		(app[methodName] as Demino["get"])(route, mws, handler);
 	});
 
 	return app;
@@ -287,7 +288,7 @@ function _isMiddlewareValidFilename(filename: string) {
 
 /** Will import filepath as a js module and look for known exports */
 function _importRouteHandlers(
-	module: any,
+	module: Record<string, unknown>,
 	fileDebugLabel: string,
 	debugLog?: CallableFunction
 ): Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> {
@@ -298,10 +299,10 @@ function _importRouteHandlers(
 	const out: Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> = {};
 
 	let found = 0;
-	[...(supportedMethods as any), "ALL"].forEach(
+	([...supportedMethods, "ALL"] as const).forEach(
 		(method: "ALL" | DeminoMethod) => {
 			if (typeof module[method] === "function") {
-				out[method] = module[method];
+				out[method] = module[method] as DeminoHandler;
 				found++;
 			}
 		}
@@ -320,7 +321,7 @@ function _importRouteHandlers(
 
 /** Will import filepath as a js module and look for known exports */
 function _importMiddlewares(
-	module: any,
+	module: Record<string, unknown>,
 	fileDebugLabel: string,
 	debugLog?: CallableFunction
 ): DeminoHandler[] {
@@ -337,9 +338,9 @@ function _importMiddlewares(
 		throw new TypeError(`Invalid middleware file ${fileDebugLabel}. ${hint}`);
 	}
 
-	module.default.forEach((v: any) => {
+	module.default.forEach((v: unknown) => {
 		if (typeof v === "function") {
-			out.push(v);
+			out.push(v as DeminoHandler);
 		} else {
 			throw new TypeError(
 				`Not a function middleware type in ${fileDebugLabel}. ${hint}`

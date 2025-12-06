@@ -6,12 +6,17 @@ import {
 } from "@marianmeres/http-utils";
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
-import { demino, type DeminoHandler, type DeminoLogger } from "../demino.ts";
+import {
+	demino,
+	type Demino,
+	type DeminoHandler,
+	type DeminoLogger,
+	type Logger,
+} from "../demino.ts";
 import { assertResp, runTestServerTests, startTestServer } from "./_utils.ts";
-import { createClog, Logger } from "@marianmeres/clog";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
-const clog = console.log;
+const _clog = console.log;
 
 const hello = (mountPath = "", midwares = [], options = {}) => {
 	const world = "world";
@@ -92,7 +97,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}`, { method: "POST" }),
 			200,
-			/world/i,
+			/world/i
 		);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
@@ -106,13 +111,13 @@ Deno.test("mounted hello world", async () => {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method }),
 				200,
-				method,
+				method
 			);
 			// head must return 405 for not get registered routes
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method: "HEAD" }),
 				405,
-				"",
+				""
 			);
 		}
 
@@ -121,7 +126,7 @@ Deno.test("mounted hello world", async () => {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${p}`, { method: "HEAD" }),
 				200,
-				"",
+				""
 			);
 		}
 
@@ -129,7 +134,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}/asdf`, { method: "HEAD" }),
 			404,
-			false,
+			false
 		);
 
 		// case sensitivity check
@@ -195,7 +200,7 @@ Deno.test("middlewares and various return types", async () => {
 			{
 				"X-VERSION": "1.2.3",
 				"content-type": /json/,
-			},
+			}
 		);
 
 		// "bar" return via toJSON as json
@@ -203,7 +208,7 @@ Deno.test("middlewares and various return types", async () => {
 			fetch(`${srv.base}/some/bar`),
 			200,
 			{ baz: "bat" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// array
@@ -225,7 +230,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/no-content`),
 			HTTP_STATUS.NO_CONTENT,
-			"",
+			""
 		);
 
 		// mirror post data
@@ -233,7 +238,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/echo`, { method: "POST", body: JSON.stringify(hey) }),
 			200,
-			hey,
+			hey
 		);
 
 		// check html content-type
@@ -339,7 +344,7 @@ Deno.test("error handler", async () => {
 	const app = demino();
 	app.logger(null);
 	app.get("/foo", () => {
-		const e: any = new Error("Bar");
+		const e = new Error("Bar") as Error & { code: number };
 		e.code = 12345;
 		throw e;
 	});
@@ -379,7 +384,7 @@ Deno.test("custom error handler", async () => {
 		await assertResp(
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
-			"Forbidden",
+			"Forbidden"
 		);
 
 		// now register custom error handler which will talk always in json
@@ -392,7 +397,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
 			{ ok: false, message: "Forbidden" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// repeat, and expect json
@@ -400,7 +405,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}`),
 			404,
 			{ ok: false, message: "Not Found" },
-			{ "content-type": /json/ },
+			{ "content-type": /json/ }
 		);
 
 		// err
@@ -451,7 +456,7 @@ Deno.test("catch all fallback route", async () => {
 		await assertResp(
 			fetch(`${srv.base}/${Math.random()}`, { method: "POST" }),
 			200,
-			/hey/i,
+			/hey/i
 		);
 	} catch (e) {
 		throw e;
@@ -465,10 +470,10 @@ Deno.test("catch all fallback route", async () => {
 Deno.test("same route different method", async () => {
 	let srv: Srv | null = null;
 
-	const methods = ["get", "post", "put", "delete", "patch"];
+	const methods = ["get", "post", "put", "delete", "patch"] as const;
 	const app = demino();
 	for (const method of methods) {
-		(app as any)[method]("/", () => method);
+		(app[method] as Demino["get"])("/", () => method);
 	}
 
 	try {
@@ -515,12 +520,12 @@ Deno.test("first route match wins", async () => {
 
 	const app = demino();
 
-	app.get("/a/static", (_r, _i, c) => "a/static");
+	app.get("/a/static", (_r, _i, _c) => "a/static");
 	app.get("/a/[name]", (_r, _i, c) => "a/name: " + c.params.name);
 
 	// parametrized will always win as "static" is validly resolved as param
 	app.get("/b/[name]", (_r, _i, c) => "b/name: " + c.params.name);
-	app.get("/b/static", (_r, _i, c) => "b/static"); // never reached
+	app.get("/b/static", (_r, _i, _c) => "b/static"); // never reached
 
 	try {
 		srv = await startTestServer(app);
@@ -602,7 +607,7 @@ runTestServerTests([
 				(_r, _i, c) => {
 					c.locals.local = 1;
 				},
-				(_r, _i, c) => c.locals,
+				(_r, _i, c) => c.locals
 			);
 
 			app.use("/foo", (_r, _i, c) => {
@@ -623,9 +628,9 @@ runTestServerTests([
 	{
 		name: "context logger",
 		fn: async ({ app, base }) => {
-			let _log: any[] = [];
+			let _log: unknown[] = [];
 			const logger = {
-				debug: (...args: any[]) => _log.push(...args),
+				debug: (...args: unknown[]) => _log.push(...args),
 			} as unknown as DeminoLogger;
 
 			app
@@ -680,7 +685,7 @@ runTestServerTests([
 	},
 	{
 		name: "app getOptions",
-		fn: ({ app, base }) => {
+		fn: ({ app, base: _base }) => {
 			assertEquals(app.getOptions().noXPoweredBy, true);
 			assertEquals(app.getOptions().errorHandler, undefined);
 		},
@@ -693,8 +698,8 @@ runTestServerTests([
 		name: "app locals",
 		fn: async ({ app, base }) => {
 			//
-			let log: any[] = [];
-			app.get("/", (r, i, c) => {
+			let log: unknown[] = [];
+			app.get("/", (_r, _i, c) => {
 				// visible from inside the handler
 				log.push(c.appLocals);
 			});

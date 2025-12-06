@@ -22,7 +22,7 @@ export interface CorsOptions {
 	allowMethods:
 		| string
 		| string[]
-		| ((origin: string, headers: Headers) => string | Promise<string>);
+		| ((origin: string, headers: Headers) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Allowed request headers.
@@ -31,7 +31,7 @@ export interface CorsOptions {
 	allowHeaders:
 		| string
 		| string[]
-		| ((origin: string, headers: Headers) => string | Promise<string>);
+		| ((origin: string, headers: Headers) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Whether to allow credentials (cookies, authorization headers).
@@ -123,10 +123,13 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 
 		// origin
 		let origin;
+		let originVaries = false;
 		if (typeof allowOrigin === "function") {
 			origin = await allowOrigin(requestOrigin, req.headers);
+			originVaries = true;
 		} else if (Array.isArray(allowOrigin)) {
 			origin = allowOrigin.includes(requestOrigin) ? requestOrigin : null;
+			originVaries = true;
 		} else {
 			origin = allowOrigin;
 		}
@@ -134,15 +137,19 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 			// browsers may not support wildcard with allow-credentials, so:
 			if (credentials && origin === "*" && requestOrigin) {
 				origin = requestOrigin;
+				originVaries = true;
 			}
 			ctx.headers.set("Access-Control-Allow-Origin", origin);
+			if (originVaries) {
+				ctx.headers.append("Vary", "Origin");
+			}
 		}
 
 		// methods
 		let methods: string;
 		if (typeof allowMethods === "function") {
-			methods = await allowMethods(requestOrigin, req.headers);
-			if (Array.isArray(methods)) methods = methods.join(",");
+			const result = await allowMethods(requestOrigin, req.headers);
+			methods = Array.isArray(result) ? result.join(",") : result;
 		} else if (Array.isArray(allowMethods)) {
 			methods = allowMethods.join(",");
 		} else {
@@ -153,8 +160,8 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 		// headers
 		let headers: string;
 		if (typeof allowHeaders === "function") {
-			headers = await allowHeaders(requestOrigin, req.headers);
-			if (Array.isArray(headers)) headers = headers.join(",");
+			const result = await allowHeaders(requestOrigin, req.headers);
+			headers = Array.isArray(result) ? result.join(",") : result;
 		} else if (Array.isArray(allowHeaders)) {
 			headers = allowHeaders.join(",");
 		} else {

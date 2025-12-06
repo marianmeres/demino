@@ -54,8 +54,8 @@ export function withTimeout<T>(
 	fn: CallableFunction,
 	timeout: number = 1_000,
 	errMessage?: string,
-): (...args: any[]) => Promise<T> {
-	return (...args: any[]): Promise<T> => {
+): (...args: unknown[]) => Promise<T> {
+	return (...args: unknown[]): Promise<T> => {
 		const _promise = fn(...args);
 
 		let _timeoutId: number;

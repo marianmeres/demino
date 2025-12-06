@@ -11,7 +11,7 @@ import { createHttpApi } from "@marianmeres/http-utils";
 const hostname = "127.0.0.1";
 
 // Helper to find available port
-async function getAvailablePort(): Promise<number> {
+function getAvailablePort(): number {
 	const listener = Deno.listen({ hostname, port: 0 });
 	const port = (listener.addr as Deno.NetAddr).port;
 	listener.close();
@@ -20,7 +20,7 @@ async function getAvailablePort(): Promise<number> {
 
 /** Start test server with custom return data suitable for testing */
 export async function startTestServer(handler: Deno.ServeHandler) {
-	const port = await getAvailablePort();
+	const port = getAvailablePort();
 	const ac = new AbortController();
 	// By default `Deno.serve` prints the message ... If you like to
 	// change this behavior, you can specify a custom `onListen` callback.
@@ -55,7 +55,7 @@ export async function assertResp(
 	} else if (isPlainObject(textCheck) || Array.isArray(textCheck)) {
 		assertEquals(JSON.parse(text), textCheck);
 	} else if (textCheck !== undefined) {
-		assertEquals(text, textCheck as any);
+		assertEquals(text, textCheck as string);
 	}
 
 	Object.entries(headersCheck || {}).forEach(([k, v]) => {
@@ -86,20 +86,23 @@ export async function assertResp(
 	return resp;
 }
 
+/** Options passed to test functions */
+export interface TestServerTestOpts {
+	srv: Awaited<ReturnType<typeof startTestServer>>;
+	base: string;
+	app: Demino;
+	get: ReturnType<typeof createHttpApi>["get"];
+	post: ReturnType<typeof createHttpApi>["post"];
+	put: ReturnType<typeof createHttpApi>["put"];
+	patch: ReturnType<typeof createHttpApi>["patch"];
+	del: ReturnType<typeof createHttpApi>["del"];
+}
+
 //
 export function runTestServerTests(
 	tests: {
 		name: string;
-		fn: (opts: {
-			srv: Awaited<ReturnType<typeof startTestServer>>;
-			base: string;
-			app: Demino;
-			get: ReturnType<typeof createHttpApi>["get"];
-			post: ReturnType<typeof createHttpApi>["post"];
-			put: ReturnType<typeof createHttpApi>["put"];
-			patch: ReturnType<typeof createHttpApi>["patch"];
-			del: ReturnType<typeof createHttpApi>["del"];
-		}) => void | Promise<void>;
+		fn: (opts: TestServerTestOpts) => void | Promise<void>;
 		only?: boolean;
 		ignore?: boolean;
 		raw?: boolean;
@@ -112,26 +115,25 @@ export function runTestServerTests(
 		if (typeof def.fn !== "function") continue;
 		Deno.test(
 			{ name, ignore, only },
-			def.raw ? () => def.fn({} as any) : async () => {
-				let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
-				try {
-					const app = demino("", [], def.appOptions, def.appLocals);
-					app.logger(null);
-					srv = await startTestServer(app);
-					const api = createHttpApi(srv.base);
-					await def.fn({
-						srv,
-						app,
-						...api,
-						base: srv.base,
-					} as any);
-				} catch (e) {
-					throw e;
-				} finally {
-					srv?.ac?.abort();
-				}
-				return srv?.server?.finished;
-			},
+			def.raw
+				? () => def.fn({} as unknown as TestServerTestOpts)
+				: async () => {
+					let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
+					try {
+						const app = demino("", [], def.appOptions, def.appLocals);
+						app.logger(null);
+						srv = await startTestServer(app);
+						const api = createHttpApi(srv.base);
+						// deno-lint-ignore no-explicit-any
+					const opts = { srv, app, ...api, base: srv.base } as any;
+					await def.fn(opts as TestServerTestOpts);
+					} catch (e) {
+						throw e;
+					} finally {
+						srv?.ac?.abort();
+					}
+					return srv?.server?.finished;
+				},
 		);
 	}
 }

@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { parseCookies, serializeCookie } from "../../utils/cookies.ts";
-import { cookies } from "../../middleware/cookies.ts";
+import { cookies, type CookiesLocals } from "../../middleware/cookies.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 // Unit tests for utility functions
@@ -134,7 +134,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.get("/", (_req, _info, ctx) => {
-				ctx.locals.setCookie("session", "abc123", {
+				(ctx.locals as unknown as CookiesLocals).setCookie("session", "abc123", {
 					httpOnly: true,
 					path: "/",
 				});
@@ -156,8 +156,8 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.get("/", (_req, _info, ctx) => {
-				ctx.locals.setCookie("a", "1");
-				ctx.locals.setCookie("b", "2");
+				(ctx.locals as unknown as CookiesLocals).setCookie("a", "1");
+				(ctx.locals as unknown as CookiesLocals).setCookie("b", "2");
 				return { ok: true };
 			});
 
@@ -177,7 +177,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.post("/logout", (_req, _info, ctx) => {
-				ctx.locals.deleteCookie("session", { path: "/" });
+				(ctx.locals as unknown as CookiesLocals).deleteCookie("session", { path: "/" });
 				return { loggedOut: true };
 			});
 
@@ -194,7 +194,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.get("/", (_req, _info, ctx) => {
-				return { count: Object.keys(ctx.locals.cookies).length };
+				return { count: Object.keys((ctx.locals as unknown as CookiesLocals).cookies).length };
 			});
 
 			await assertResp(fetch(`${base}/`), 200, { count: 0 });
@@ -205,7 +205,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies({ httpOnly: true, secure: true, path: "/" }));
 			app.get("/", (_req, _info, ctx) => {
-				ctx.locals.setCookie("session", "abc123");
+				(ctx.locals as unknown as CookiesLocals).setCookie("session", "abc123");
 				return { ok: true };
 			});
 
@@ -220,7 +220,7 @@ runTestServerTests([
 			app.use(cookies({ httpOnly: true, secure: true, path: "/" }));
 			app.get("/", (_req, _info, ctx) => {
 				// Override httpOnly and add maxAge
-				ctx.locals.setCookie("theme", "dark", { httpOnly: false, maxAge: 86400 });
+				(ctx.locals as unknown as CookiesLocals).setCookie("theme", "dark", { httpOnly: false, maxAge: 86400 });
 				return { ok: true };
 			});
 
@@ -235,7 +235,7 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies({ path: "/", domain: "example.com" }));
 			app.post("/logout", (_req, _info, ctx) => {
-				ctx.locals.deleteCookie("session");
+				(ctx.locals as unknown as CookiesLocals).deleteCookie("session");
 				return { loggedOut: true };
 			});
 

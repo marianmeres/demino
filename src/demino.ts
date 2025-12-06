@@ -1,13 +1,26 @@
-import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
+import {
+	createHttpError,
+	getErrorMessage,
+	HTTP_STATUS,
+} from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
 import { serveDir, type ServeDirOptions } from "@std/http/file-server";
-import requestIp from "npm:request-ip@3";
+import requestIp from "request-ip";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
-import type { Logger } from "@marianmeres/clog";
+
+/**
+ * see @marianmeres/clog
+ */
+export interface Logger {
+	debug: (...args: unknown[]) => unknown;
+	log: (...args: unknown[]) => unknown;
+	warn: (...args: unknown[]) => unknown;
+	error: (...args: unknown[]) => unknown;
+}
 
 /**
  * Context object passed to every middleware and route handler.
@@ -28,7 +41,7 @@ export interface DeminoContext {
 	/** Route's parsed params (if available). */
 	params: Record<string, string>;
 	/** Userland read/write key-value map. */
-	locals: Record<string, any>;
+	locals: Record<string, unknown>;
 	/** Custom userland response (!) headers to be used in the final output. */
 	headers: Headers;
 	/** The response status to be used in the final response if auto generating the response (default 200). */
@@ -36,7 +49,7 @@ export interface DeminoContext {
 	/** Internal: timestamp of the incoming request. */
 	__start: Date;
 	/** Internal: error ref for the error handler */
-	error: any;
+	error: (Error & { status?: number }) | null;
 	/** Client ip address */
 	ip: string;
 	/** Matched route definition */
@@ -100,7 +113,7 @@ export type DeminoRouteMiddlewareInfo = Partial<
  * Application-wide locals object accessible from any context via ctx.appLocals.
  * Unlike ctx.locals (request-scoped), this persists across all requests.
  */
-export type DeminoAppLocals = any;
+export type DeminoAppLocals = Record<string, unknown>;
 
 /**
  * The main Demino application interface.
@@ -161,7 +174,7 @@ export interface Demino extends Deno.ServeHandler {
 	static: (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
 	) => Demino;
 	/** Will re/un/set application logger */
 	logger: (logger: DeminoLogger | null) => Demino;
@@ -240,7 +253,7 @@ export interface DeminoLogger extends Logger {
 }
 
 /** Internal DRY helper */
-function isFn(v: any): boolean {
+function isFn(v: unknown): boolean {
 	return typeof v === "function";
 }
 
@@ -299,36 +312,38 @@ export const CONTENT_TYPE = {
  */
 export function createResponseFrom(
 	req: Request,
-	body: any,
+	body: unknown,
 	headers: Headers = new Headers(),
-	status = HTTP_STATUS.OK,
+	status = HTTP_STATUS.OK
 ): Response {
 	status ||= HTTP_STATUS.OK;
 
+	let responseBody: string | null;
+
 	// make no assumptions - empty body is technically valid
 	if (body === undefined) {
-		body = null;
+		responseBody = null;
 		status = HTTP_STATUS.NO_CONTENT;
 	} // JSON.stringify
 	else if (
 		// considering NULL a common DTO use case
 		body === null ||
 		// toJSON aware
-		isFn(body?.toJSON) ||
+		isFn((body as { toJSON?: unknown })?.toJSON) ||
 		// plain array
 		Array.isArray(body) ||
 		// plain object without its own `toString` method
 		(isPlainObject(body) &&
 			!Object.prototype.hasOwnProperty.call(body, "toString"))
 	) {
-		body = JSON.stringify(body);
+		responseBody = JSON.stringify(body);
 		if (!headers.has("content-type")) {
 			headers.set("content-type", CONTENT_TYPE.JSON);
 		}
 	} // maybe any other auto detection here?
 	// otherwise not much to guess anymore, simply cast to string
 	else {
-		body = `${body}`;
+		responseBody = `${body}`;
 		if (!headers.has("content-type")) {
 			headers.set("content-type", CONTENT_TYPE.HTML);
 		}
@@ -338,10 +353,10 @@ export function createResponseFrom(
 	// doing this step at the very bottom. Point is that we might have added the HEAD handler
 	// automatically (byt "cloning" GET or ALL), so make sure we're not outputing anything.
 	if (req.method === "HEAD") {
-		body = null;
+		responseBody = null;
 	}
 
-	return new Response(body, { status, headers });
+	return new Response(responseBody, { status, headers });
 }
 
 /** Internal DRY helper */
@@ -352,7 +367,7 @@ function _createContext(
 	req: Request,
 	info: Deno.ServeHandlerInfo,
 	getLogger: () => DeminoLogger | null,
-	appLocals: DeminoAppLocals,
+	appLocals: DeminoAppLocals
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -364,7 +379,7 @@ function _createContext(
 		headers: new Headers(),
 		error: null,
 		status: HTTP_STATUS.OK,
-		ip: _clientIp || (info?.remoteAddr as any)?.hostname,
+		ip: _clientIp || (info?.remoteAddr as Deno.NetAddr)?.hostname,
 		__start: new Date(start),
 		getLogger,
 		appLocals,
@@ -444,22 +459,22 @@ export function demino(
 	mountPath: string = "",
 	middleware: DeminoHandler | DeminoHandler[] = [],
 	options?: DeminoOptions,
-	appLocals: DeminoAppLocals = {},
+	appLocals: DeminoAppLocals = {}
 ): Demino {
 	// forcing conventional and composable behavior (see `deminoCompose` and URL.pathname)
 	if (mountPath !== "" && !mountPath.startsWith("/")) {
 		throw new TypeError(
-			`Mount path must be either empty or must start with a slash (path: ${mountPath})`,
+			`Mount path must be either empty or must start with a slash (path: ${mountPath})`
 		);
 	}
 	if (mountPath.endsWith("/")) {
 		throw new TypeError(
-			`Mount path must not end with a slash (path: ${mountPath})`,
+			`Mount path must not end with a slash (path: ${mountPath})`
 		);
 	}
 	if (/[\[\]:\*]/.test(mountPath)) {
 		throw new TypeError(
-			`Mount path must not contain dynamic segments (path: ${mountPath})`,
+			`Mount path must not contain dynamic segments (path: ${mountPath})`
 		);
 	}
 
@@ -469,21 +484,23 @@ export function demino(
 	let _errorHandler: DeminoHandler;
 
 	// initially we are falling back to console
-	let _log: DeminoLogger | null = options?.logger === undefined
-		? (console as unknown as DeminoLogger)
-		: options.logger;
+	let _log: DeminoLogger | null =
+		options?.logger === undefined
+			? (console as unknown as DeminoLogger)
+			: options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
-	const _routerFactory = typeof options?.routerFactory === "function"
-		? options.routerFactory
-		: () => new DeminoSimpleRouter();
+	const _routerFactory =
+		typeof options?.routerFactory === "function"
+			? options.routerFactory
+			: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
 	const _routers = ["ALL", ...supportedMethods].reduce(
 		(m, k) => ({ ...m, [k]: _routerFactory() }),
-		{} as Record<"ALL" | DeminoMethod, DeminoRouter>,
+		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
 	);
 
 	// see `app.info`
@@ -503,13 +520,16 @@ export function demino(
 		) {
 			context.headers.set(
 				"X-Response-Time",
-				`${Date.now() - context.__start.valueOf()}ms`,
+				`${Date.now() - context.__start.valueOf()}ms`
 			);
 		}
 	};
 
-	const _doLog = (type: keyof DeminoLogger, value: any) => {
-		(getLogger() as any)?.[type]?.(value);
+	const _doLog = (type: keyof DeminoLogger, value: unknown) => {
+		const logger = getLogger();
+		if (logger && type in logger) {
+			(logger[type] as (v: unknown) => void)?.(value);
+		}
 		// make sure it is async, so it never effects responding
 		// return new Promise(() => {
 		// getLogger()?.[type]?.(value);
@@ -520,7 +540,7 @@ export function demino(
 	const _createErrorResponse = async (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		context: DeminoContext,
+		context: DeminoContext
 	): Promise<Response> => {
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
@@ -531,7 +551,7 @@ export function demino(
 				req,
 				r || getErrorMessage(context.error),
 				context.headers,
-				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
+				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
 			);
 		}
 
@@ -575,7 +595,7 @@ export function demino(
 			req,
 			info,
 			getLogger,
-			appLocals,
+			appLocals
 		);
 
 		// console.log("_app METHOD", method);
@@ -617,7 +637,7 @@ export function demino(
 						req,
 						info,
 						getLogger,
-						appLocals,
+						appLocals
 					);
 
 					// everything is a middleware...
@@ -673,12 +693,7 @@ export function demino(
 						result = await _createErrorResponse(req, info, context);
 					} // we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						result = createResponseFrom(
-							req,
-							result,
-							headers,
-							context?.status,
-						);
+						result = createResponseFrom(req, result, headers, context?.status);
 					}
 
 					//
@@ -687,16 +702,17 @@ export function demino(
 
 					//
 					return result as Response;
-				} catch (e: any) {
-					_doLog("error", `${e.stack ?? e}`);
-					const status = e.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+				} catch (e: unknown) {
+					const err = e as Error & { status?: number; stack?: string };
+					_doLog("error", `${err.stack ?? e}`);
+					const status = err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
 					throw createHttpError(status, null, null, e);
 				}
 			} else {
 				throw createHttpError(HTTP_STATUS.NOT_FOUND);
 			}
-		} catch (e: any) {
-			context.error = e;
+		} catch (e: unknown) {
+			context.error = e as Error & { status?: number };
 			const resp = await _createErrorResponse(req, info, context);
 			_accessLog({ req, status: resp.status, start, ip: context.ip });
 			return resp;
@@ -754,7 +770,7 @@ export function demino(
 	_app.head = (...args) => {
 		console.warn(
 			"WARN: Are you sure to implement a custom HEAD request handler? " +
-				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists).",
+				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists)."
 		);
 		return _createRouteFn("HEAD")(...args);
 	};
@@ -793,12 +809,12 @@ export function demino(
 	_app.static = (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
 	) => {
 		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
 		if (/[\[\]:\*]/.test(route)) {
 			throw new TypeError(
-				`Static route must not contain dynamic segments (route: ${route})`,
+				`Static route must not contain dynamic segments (route: ${route})`
 			);
 		}
 		let urlRoot: string;

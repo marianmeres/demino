@@ -13,6 +13,6 @@
  * isFn(null); // false
  * ```
  */
-export function isFn(v: any): v is CallableFunction {
+export function isFn(v: unknown): v is CallableFunction {
 	return typeof v === "function";
 }

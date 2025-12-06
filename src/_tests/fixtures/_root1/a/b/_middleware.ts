@@ -1,6 +1,8 @@
+import type { DeminoContext } from "../../../../../demino.ts";
+
 export default [
-	(_r: Request, _i: any, c: any) => {
-		c.locals.mw ??= [];
-		c.locals.mw.push("A/B");
+	(_r: Request, _i: Deno.ServeHandlerInfo, c: DeminoContext) => {
+		(c.locals.mw as string[]) ??= [];
+		(c.locals.mw as string[]).push("A/B");
 	},
 ];

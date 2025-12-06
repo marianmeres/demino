@@ -17,7 +17,7 @@ runTestServerTests([
 			app.get("/", tsOff, () => "home"); // root must be ignored
 
 			const MP = HTTP_STATUS.MOVED_PERMANENTLY;
-			const prm: any = { redirect: "manual" };
+			const prm: RequestInit = { redirect: "manual" };
 
 			// ON
 			await assertResp(fetch(`${base}/foo/bar`, prm), MP, "", {

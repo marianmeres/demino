@@ -16,6 +16,6 @@
  * isValidDate(null); // false
  * ```
  */
-export function isValidDate(v: any): v is Date {
+export function isValidDate(v: unknown): v is Date {
 	return v instanceof Date && !isNaN(v.getTime());
 }

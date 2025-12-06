@@ -18,10 +18,10 @@
  * isPlainObject(new MyClass()); // false
  * ```
  */
-export function isPlainObject(v: any): v is Record<string, unknown> {
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
 	return (
 		v !== null &&
 		typeof v === "object" &&
-		[undefined, Object].includes(v.constructor)
+		[undefined, Object].includes((v as { constructor?: unknown }).constructor as undefined)
 	);
 }
