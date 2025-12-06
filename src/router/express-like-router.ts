@@ -54,4 +54,9 @@ export class DeminoExpressLikeRouter extends DeminoRouter {
 
 		return null;
 	}
+
+	/** Returns all registered route pattern strings. */
+	override info(): string[] {
+		return Array.from(this.#routes.keys());
+	}
 }

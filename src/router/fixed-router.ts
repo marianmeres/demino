@@ -36,4 +36,9 @@ export class DeminoFixedRouter extends DeminoRouter {
 		//
 		return this.#routes.has(pathname) ? this.#routes.get(pathname)!(params) : null;
 	}
+
+	/** Returns all registered route pattern strings. */
+	override info(): string[] {
+		return Array.from(this.#routes.keys());
+	}
 }

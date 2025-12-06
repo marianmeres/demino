@@ -1,9 +1,25 @@
 /**
- * Utility functions for proxy middleware
+ * Utility functions for proxy middleware.
+ * @module
  */
 
 /**
- * Checks if a hostname is a private/internal address (SSRF protection)
+ * Checks if a hostname is a private/internal address (SSRF protection).
+ *
+ * Detects localhost, private IPv4 ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x,
+ * 169.254.x.x, 127.x.x.x), and private IPv6 ranges (fe80::, fc/fd, ::1).
+ *
+ * @param hostname - The hostname or IP address to check
+ * @returns true if the hostname is a private/internal address, false otherwise
+ *
+ * @example
+ * ```ts
+ * isPrivateHost("localhost");     // true
+ * isPrivateHost("192.168.1.1");   // true
+ * isPrivateHost("10.0.0.1");      // true
+ * isPrivateHost("example.com");   // false
+ * isPrivateHost("8.8.8.8");       // false
+ * ```
  */
 export function isPrivateHost(hostname: string): boolean {
 	// localhost variations
@@ -47,7 +63,23 @@ export function isPrivateHost(hostname: string): boolean {
 }
 
 /**
- * Validates if a host is allowed based on whitelist
+ * Validates if a host is allowed based on an optional whitelist.
+ *
+ * Supports exact matches and wildcard subdomain patterns (e.g., "*.example.com").
+ * If no whitelist is provided or the list is empty, all hosts are allowed.
+ *
+ * @param hostname - The hostname to validate
+ * @param allowedHosts - Optional array of allowed hosts (supports wildcards like "*.example.com")
+ * @returns true if the hostname is allowed, false otherwise
+ *
+ * @example
+ * ```ts
+ * isHostAllowed("api.example.com", ["api.example.com"]);       // true
+ * isHostAllowed("sub.example.com", ["*.example.com"]);         // true
+ * isHostAllowed("example.com", ["*.example.com"]);             // true (base domain matches)
+ * isHostAllowed("other.com", ["api.example.com"]);             // false
+ * isHostAllowed("anything.com");                               // true (no whitelist)
+ * ```
  */
 export function isHostAllowed(
 	hostname: string,

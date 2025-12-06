@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.1.1 (BETA)
+- **Version**: 1.1.3 (BETA)
 - **Runtime**: Deno
 - **Type**: Web server framework
 - **Entry Point**: src/mod.ts
@@ -35,34 +35,46 @@ src/
 ├── mod.ts                    # Main exports barrel
 ├── demino.ts                 # Core: demino(), Demino, DeminoContext, types
 ├── router/
+│   ├── mod.ts                # Router exports barrel
 │   ├── abstract.ts           # DeminoRouter base class
 │   ├── simple-router.ts      # Default router (bracket params)
 │   ├── urlpattern-router.ts  # URL Pattern API router
 │   ├── fixed-router.ts       # Exact string matching
 │   ├── regex-router.ts       # Regex-based routing
-│   └── mod.ts
+│   └── express-like-router.ts # Express-style router (deprecated)
 ├── middleware/
+│   ├── mod.ts                # Middleware exports barrel
 │   ├── cors.ts               # CORS headers
 │   ├── cookies.ts            # Cookie parsing/setting
 │   ├── rate-limit.ts         # Token bucket rate limiting
 │   ├── etag.ts               # ETag/304 responses
 │   ├── redirect.ts           # URL redirects
 │   ├── trailing-slash.ts     # Slash normalization
-│   ├── proxy/proxy.ts        # Request proxying
-│   └── mod.ts
+│   └── proxy/
+│       ├── proxy.ts          # Request proxying
+│       └── utils.ts          # Proxy utility functions
 ├── misc/
+│   ├── mod.ts                # Misc exports barrel
 │   ├── compose.ts            # deminoCompose() multi-app
-│   ├── file-based.ts         # Directory-based routing
-│   └── mod.ts
+│   └── file-based.ts         # Directory-based routing
 └── utils/
+    ├── mod.ts                # Utils exports barrel
     ├── token-bucket.ts       # TokenBucket class
     ├── cookies.ts            # parseCookies, serializeCookie
     ├── sleep.ts              # Promise delay
     ├── with-timeout.ts       # Timeout wrapper
     ├── is-fn.ts              # Function type guard
     ├── is-plain-object.ts    # Plain object type guard
-    ├── is-valid-date.ts      # Date type guard
-    └── mod.ts
+    └── is-valid-date.ts      # Date type guard
+
+tests/                        # Test suite
+├── demino.test.ts            # Core framework tests
+├── _utils.ts                 # Test utilities
+├── middleware/               # Middleware tests
+├── router/                   # Router tests
+├── misc/                     # Feature tests
+├── fixtures/                 # File-based routing fixtures
+└── static/                   # Static file serving test files
 ```
 
 ## Critical Types
@@ -156,11 +168,15 @@ Handler return values are auto-converted to Response:
 ## Dependencies
 
 ### JSR
-- @marianmeres/clog - Logging
-- @marianmeres/http-utils - HTTP errors/status
+- @marianmeres/http-utils - HTTP errors/status codes
 - @marianmeres/midware - Middleware chaining
-- @marianmeres/simple-router - Default router
-- @std/assert, @std/encoding, @std/fmt, @std/fs, @std/http, @std/path
+- @marianmeres/simple-router - Default router implementation
+- @std/assert - Test assertions
+- @std/encoding - Encoding utilities (base64)
+- @std/fmt - Formatting utilities (colors)
+- @std/fs - File system utilities (walkSync)
+- @std/http - HTTP utilities (serveDir)
+- @std/path - Path utilities
 
 ### NPM
 - request-ip - Client IP detection
@@ -211,17 +227,19 @@ await deminoFileBased(app, "./routes");
 
 ```bash
 deno test -A              # Run all tests
-deno test -A --watch      # Watch mode
+deno task test            # Run all tests (shorthand)
+deno task test:watch      # Run tests in watch mode
 ```
 
-Test files located in: `src/_tests/`
+Test files located in: `tests/`
 
-## Build Commands
+## Deno Tasks
 
 ```bash
-deno task dev             # Dev mode with watch
-deno task test            # Run tests with watch
-deno task test:no-watch   # Run tests once
+deno task dev             # Run main module with watch
+deno task test            # Run all tests
+deno task test:watch      # Run tests in watch mode
+deno task release         # Publish to JSR
 ```
 
 ## Special Behaviors

@@ -53,4 +53,9 @@ export class DeminoRegexRouter extends DeminoRouter {
 			throw new TypeError(`Route must be a string`);
 		}
 	}
+
+	/** Returns all registered route pattern strings (regex source). */
+	override info(): string[] {
+		return Array.from(this.#routes.keys()).map((r) => r.source);
+	}
 }
