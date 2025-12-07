@@ -1,10 +1,11 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@marianmeres/clog@^3.4.0": "3.4.0",
     "jsr:@marianmeres/http-utils@^2.0.2": "2.0.2",
     "jsr:@marianmeres/midware@^1.3.0": "1.3.0",
-    "jsr:@marianmeres/pubsub@^2.4.1": "2.4.3",
-    "jsr:@marianmeres/simple-router@^2.2.3": "2.2.3",
+    "jsr:@marianmeres/pubsub@^2.4.3": "2.4.4",
+    "jsr:@marianmeres/simple-router@^3.0.1": "3.0.1",
     "jsr:@std/assert@^1.0.16": "1.0.16",
     "jsr:@std/cli@^1.0.24": "1.0.24",
     "jsr:@std/encoding@^1.0.10": "1.0.10",
@@ -22,17 +23,20 @@
     "npm:request-ip@^3.3.0": "3.3.0"
   },
   "jsr": {
+    "@marianmeres/clog@3.4.0": {
+      "integrity": "893fdf6f8ddc0321b9d63b24fc3ab84e15379984b0571073593eb91130965e84"
+    },
     "@marianmeres/http-utils@2.0.2": {
       "integrity": "d5fbf106d75693b828005d8cb9b7d8313f9b2fc1223d6c2198969554d386670a"
     },
     "@marianmeres/midware@1.3.0": {
       "integrity": "30543e25e19790089a851c4430f61081e2520803096534bf00cbdf92c68ef3f1"
     },
-    "@marianmeres/pubsub@2.4.3": {
-      "integrity": "5e1efdbcee268d626bc5df3202aa74ca24e38e6bf28c29b813dc6427d185f44a"
+    "@marianmeres/pubsub@2.4.4": {
+      "integrity": "ecd79d07121438802aa374323e08d7e2f156a4bdf84237be4e9bf711c8cadf93"
     },
-    "@marianmeres/simple-router@2.2.3": {
-      "integrity": "856ca16d21c82ab073cf0f01948e7172741dd86d25fbd3a60869f7d8d78e25e4",
+    "@marianmeres/simple-router@3.0.1": {
+      "integrity": "809a39ce1cca30f4c1957c84330646aafb03ffe47be0817fd32fe9b3cef77ef5",
       "dependencies": [
         "jsr:@marianmeres/pubsub"
       ]
@@ -111,9 +115,10 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@marianmeres/clog@^3.4.0",
       "jsr:@marianmeres/http-utils@^2.0.2",
       "jsr:@marianmeres/midware@^1.3.0",
-      "jsr:@marianmeres/simple-router@^2.2.3",
+      "jsr:@marianmeres/simple-router@^3.0.1",
       "jsr:@std/assert@^1.0.16",
       "jsr:@std/encoding@^1.0.10",
       "jsr:@std/fmt@^1.0.8",

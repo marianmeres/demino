@@ -17,7 +17,9 @@ export class DeminoSimpleRouter extends DeminoRouter {
 
 	/** Executes pathname match lookup against the registered routes. */
 	exec(pathname: string): null | DeminoRouterOnMatchResult {
-		return this.#router.exec(pathname);
+		const result = this.#router.exec(pathname);
+		// SimpleRouter.exec returns callback result or false if no match
+		return result === false ? null : (result as DeminoRouterOnMatchResult);
 	}
 
 	/** Should throw if route is not valid for this router.

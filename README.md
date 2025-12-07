@@ -232,6 +232,17 @@ const app = demino("", [], {
 });
 ```
 
+For convenience, this package provides the `createDeminoClog` helper that creates a
+complete logger with access logging using [`@marianmeres/clog`](https://jsr.io/@marianmeres/clog):
+
+```ts
+import { createDeminoClog } from "@marianmeres/demino";
+
+const app = demino("", [], {
+	logger: createDeminoClog("my-app"),
+});
+```
+
 You can use the application's logger anywhere via context:
 
 ```ts

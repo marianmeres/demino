@@ -258,7 +258,7 @@ export interface DeminoLogger extends Logger {
 }
 
 /** Internal DRY helper */
-function isFn(v: unknown): boolean {
+function isFn(v: unknown): v is CallableFunction {
 	return typeof v === "function";
 }
 
@@ -535,10 +535,6 @@ export function demino(
 		if (logger && type in logger) {
 			(logger[type] as (v: unknown) => void)?.(value);
 		}
-		// make sure it is async, so it never effects responding
-		// return new Promise(() => {
-		// getLogger()?.[type]?.(value);
-		// });
 	};
 
 	//
@@ -837,7 +833,8 @@ export function demino(
 
 		_app.all(route, (req) => {
 			return serveDir(req, {
-				...(options || { quiet: true }),
+				quiet: true,
+				...options,
 				fsRoot,
 				urlRoot,
 			});
