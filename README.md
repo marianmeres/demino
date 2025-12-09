@@ -520,3 +520,48 @@ Deno.serve(deminoCompose([app, api, admin]));
 
 Each group has its own isolated middleware stack, making it easy to apply authentication,
 validation, or logging to specific route groups without affecting others.
+
+## Extra: Server-Sent Events (SSE)
+
+While Demino doesn't provide a dedicated SSE abstraction, implementing SSE endpoints is
+straightforward since SSE is just a `Response` with `Content-Type: text/event-stream` and a
+`ReadableStream` body.
+
+```typescript
+app.get("/events", (req) => {
+	let intervalId: number;
+
+	const stream = new ReadableStream({
+		start(controller) {
+			// Send initial connection message
+			controller.enqueue(`data: ${JSON.stringify({ connected: true })}\n\n`);
+
+			intervalId = setInterval(() => {
+				controller.enqueue(`data: ${JSON.stringify({ tick: Date.now() })}\n\n`);
+			}, 1000);
+
+			// Handle client disconnect via AbortSignal
+			req.signal.addEventListener("abort", () => {
+				clearInterval(intervalId);
+				controller.close();
+			});
+		},
+		cancel() {
+			clearInterval(intervalId);
+		},
+	});
+
+	return new Response(stream.pipeThrough(new TextEncoderStream()), {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+		},
+	});
+});
+```
+
+Named events can be sent using the `event:` field:
+
+```typescript
+controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
+```
