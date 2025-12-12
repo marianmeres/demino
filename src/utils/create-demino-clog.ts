@@ -1,4 +1,4 @@
-import { type ClogConfig, createClog } from "@marianmeres/clog";
+import { type Clog, type ClogConfig, createClog } from "@marianmeres/clog";
 import type { DeminoLogger } from "../demino.ts";
 
 /**
@@ -24,7 +24,30 @@ export function createDeminoClog(
 	namespace: string = "demino",
 	config: ClogConfig = {}
 ): DeminoLogger {
-	const clog = createClog(namespace, config);
+	return createDeminoClogFrom(createClog(namespace, config));
+}
+
+/**
+ * Creates a DeminoLogger from an existing `Clog` instance.
+ *
+ * Useful when you already have a configured Clog instance and want to
+ * add the access log handler required by DeminoLogger.
+ *
+ * @param clog - An existing Clog instance to extend
+ * @returns A complete DeminoLogger instance
+ *
+ * @example
+ * ```ts
+ * import { createClog } from "@marianmeres/clog";
+ * import { demino, createDeminoClogFrom } from "demino";
+ *
+ * const myClog = createClog("my-app", { debug: true });
+ * const app = demino("/api", [], {
+ *     logger: createDeminoClogFrom(myClog),
+ * });
+ * ```
+ */
+export function createDeminoClogFrom(clog: Clog): DeminoLogger {
 	return {
 		...clog,
 		access(data: {
