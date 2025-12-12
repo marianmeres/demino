@@ -20,7 +20,7 @@ blocks framework, not a full featured web server.
 
 ## Beta
 
-Despite being marked as `1.0.x`, it is still in its early stages, where the API may
+Despite being marked as `1.x.x`, it is still in its early stages, where the API may
 occasionally change.
 
 ## Installation
