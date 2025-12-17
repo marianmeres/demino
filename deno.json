@@ -11,7 +11,7 @@
     "rpm": "deno task release minor -y && deno publish"
   },
   "imports": {
-    "@marianmeres/clog": "jsr:@marianmeres/clog@^3.8.2",
+    "@marianmeres/clog": "jsr:@marianmeres/clog@^3.11.0",
     "@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.0.2",
     "@marianmeres/midware": "jsr:@marianmeres/midware@^1.3.0",
     "@marianmeres/simple-router": "jsr:@marianmeres/simple-router@^3.1.0",
