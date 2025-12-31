@@ -1,7 +1,7 @@
 import type { DeminoContext, DeminoHandler } from "../../../../../src/demino.ts";
 
 export function GET(_r: Request, _i: Deno.ServeHandlerInfo, c: DeminoContext) {
-	return "a/b|" + c.locals.mw.join();
+	return "a/b|" + (c.locals.mw as string[]).join();
 }
 
 //
@@ -13,5 +13,5 @@ GET.middlewares = [
 ] as DeminoHandler[];
 
 export function ALL(_r: Request, _i: Deno.ServeHandlerInfo, c: DeminoContext) {
-	return "ALL:a/b|" + c.locals.mw.join();
+	return "ALL:a/b|" + (c.locals.mw as string[]).join();
 }
