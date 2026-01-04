@@ -725,4 +725,30 @@ runTestServerTests([
 			foo: "bar",
 		},
 	},
+	{
+		name: "app locals reassignment warns",
+		fn: async ({ app, base }) => {
+			let log: unknown[] = [];
+			app.get("/", (_r, _i, c) => {
+				log.push(c.appLocals);
+			});
+
+			// Initial state
+			assertEquals(app.locals.foo, "bar");
+			await assertResp(fetch(`${base}/`), 204);
+			assertEquals(log, [{ foo: "bar" }]);
+
+			// Reassignment is ignored (warning logged)
+			app.locals = { different: "object" };
+
+			// Original object still used
+			log = [];
+			await assertResp(fetch(`${base}/`), 204);
+			assertEquals(log, [{ foo: "bar" }]);
+			assertEquals(app.locals.foo, "bar");
+		},
+		appLocals: {
+			foo: "bar",
+		},
+	},
 ]);

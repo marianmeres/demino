@@ -177,6 +177,29 @@ app.use(async (req: Request, info: Deno.ServeHandlerInfo, ctx: DeminoContext) =>
 app.get("/[articleId]", (req, info, ctx) => render(ctx.locals.article));
 ```
 
+## Application Locals
+
+Unlike `ctx.locals` which is request-scoped, `app.locals` provides application-wide
+shared data accessible from any handler via `ctx.appLocals`.
+
+```ts
+const app = demino("", [], {}, { config: loadedConfig });
+
+// Or set after creation
+app.locals.db = databaseConnection;
+
+// Access in handlers
+app.get("/", (r, i, ctx) => {
+	const config = ctx.appLocals.config;
+	const db = ctx.appLocals.db;
+	// ...
+});
+```
+
+**Important:** Properties can be mutated (`app.locals.foo = "bar"`), but the object
+reference cannot be reassigned (`app.locals = { ... }` will log a warning and be ignored).
+This ensures handlers always reference the same object.
+
 ## Error handling
 
 Errors are caught and passed to the error handler. The built-in error handler can be

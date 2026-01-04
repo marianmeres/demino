@@ -192,7 +192,14 @@ export interface Demino extends Deno.ServeHandler {
 	/** Will return initial constructor options */
 	getOptions: () => DeminoOptions;
 
-	/** Will return the "locals" object */
+	/**
+	 * Application-wide locals object accessible from handlers via ctx.appLocals.
+	 *
+	 * Properties can be mutated: `app.locals.foo = "bar"`
+	 * Reassignment is not allowed: `app.locals = { ... }` (logs warning)
+	 *
+	 * This ensures handlers always reference the same object.
+	 */
 	locals: DeminoAppLocals;
 }
 
@@ -763,6 +770,9 @@ export function demino(
 		};
 	};
 
+	// Placeholder for locals (will be redefined with getter/setter below)
+	_app.locals = appLocals;
+
 	// userland method api
 	_app.all = _createRouteFn("ALL");
 	_app.connect = _createRouteFn("CONNECT");
@@ -871,8 +881,20 @@ export function demino(
 
 	_app.getOptions = () => options ?? {};
 
-	//
-	_app.locals = appLocals;
+	// Redefine locals with getter/setter to warn on reassignment attempts
+	Object.defineProperty(_app, "locals", {
+		get() {
+			return appLocals;
+		},
+		set() {
+			getLogger()?.warn?.(
+				"demino: app.locals reassignment is ignored. " +
+					"Mutate properties instead: app.locals.foo = value"
+			);
+		},
+		enumerable: true,
+		configurable: true,
+	});
 
 	//
 	return _app;
