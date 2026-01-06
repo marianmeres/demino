@@ -150,121 +150,127 @@ export function proxy(
 
 	const _proxy: DeminoHandler = async (req, _i, ctx) => {
 		try {
-			const url = new URL(req.url);
-			let _target: URL | string;
+			const doProxy = async () => {
+				const url = new URL(req.url);
+				let _target: URL | string;
 
-			// plain string (do some auto processing)
-			if (typeof target === "string") {
-				_target = new URL(target, url);
-				// FEATURE: if our target ends with "/*" append the full req.url.pathname to it
-				if (_target.pathname.endsWith("/*")) {
-					_target.pathname = _target.pathname.slice(0, -2) + url.pathname;
+				// plain string (do some auto processing)
+				if (typeof target === "string") {
+					_target = new URL(target, url);
+					// FEATURE: if our target ends with "/*" append the full req.url.pathname to it
+					if (_target.pathname.endsWith("/*")) {
+						_target.pathname = _target.pathname.slice(0, -2) + url.pathname;
+					}
+					// also reuse search query if not exists
+					if (!_target.search) _target.search = url.search;
+				} // but not with functions, they are fully manual
+				else if (typeof target === "function") {
+					_target = await target(req, ctx);
+					if (typeof _target !== "string" || !_target) {
+						throw new TypeError(`Invalid target, expecting valid url`);
+					}
+				} else {
+					throw new TypeError(
+						`Invalid target parameter, expecting string or a function`
+					);
 				}
-				// also reuse search query if not exists
-				if (!_target.search) _target.search = url.search;
-			} // but not with functions, they are fully manual
-			else if (typeof target === "function") {
-				_target = await target(req, ctx);
-				if (typeof _target !== "string" || !_target) {
-					throw new TypeError(`Invalid target, expecting valid url`);
+
+				const targetUrl = new URL(_target, url);
+
+				// Prevent proxying to ourselves
+				if (targetUrl.toString() === url.toString()) {
+					throw new Error("Cannot proxy to self");
 				}
-			} else {
-				throw new TypeError(
-					`Invalid target parameter, expecting string or a function`
-				);
-			}
 
-			const targetUrl = new URL(_target, url);
-
-			// Prevent proxying to ourselves
-			if (targetUrl.toString() === url.toString()) {
-				throw new Error("Cannot proxy to self");
-			}
-
-			// SSRF protection
-			if (preventSSRF && isPrivateHost(targetUrl.hostname)) {
-				throw new Error(
-					`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`
-				);
-			}
-
-			// Host whitelist validation
-			if (!isHostAllowed(targetUrl.hostname, allowedHosts)) {
-				throw new Error(
-					`Host '${targetUrl.hostname}' is not in the allowed hosts list`
-				);
-			}
-
-			// Build proxy headers
-			let proxyHeaders = new Headers(req.headers);
-			proxyHeaders.set("host", targetUrl.host);
-			const origin = req.headers.get("origin");
-			if (origin) proxyHeaders.set("origin", origin);
-
-			// Remove standard problematic headers
-			[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
-				(name) => proxyHeaders.delete(name)
-			);
-
-			// X-Forwarded-* headers
-			proxyHeaders.set("x-forwarded-host", url.host);
-			proxyHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""));
-			proxyHeaders.set("x-forwarded-for", ctx.ip);
-			proxyHeaders.set(
-				"x-forwarded-port",
-				url.port || (url.protocol === "https:" ? "443" : "80")
-			);
-			proxyHeaders.set("x-real-ip", ctx.ip);
-
-			// Add custom headers
-			if (customHeaders) {
-				for (const [key, value] of Object.entries(customHeaders)) {
-					proxyHeaders.set(key, value);
+				// SSRF protection
+				if (preventSSRF && isPrivateHost(targetUrl.hostname)) {
+					throw new Error(
+						`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`
+					);
 				}
-			}
 
-			// Apply header transformation if provided
-			if (transformRequestHeaders) {
-				proxyHeaders = await transformRequestHeaders(proxyHeaders, req, ctx);
-			}
+				// Host whitelist validation
+				if (!isHostAllowed(targetUrl.hostname, allowedHosts)) {
+					throw new Error(
+						`Host '${targetUrl.hostname}' is not in the allowed hosts list`
+					);
+				}
 
-			// Create and execute proxy request
-			const proxyReq = new Request(targetUrl, {
-				method: req.method,
-				headers: proxyHeaders,
-				body: req.body,
-				redirect: "follow",
-				cache,
-			});
+				// Build proxy headers
+				let proxyHeaders = new Headers(req.headers);
+				proxyHeaders.set("host", targetUrl.host);
+				const origin = req.headers.get("origin");
+				if (origin) proxyHeaders.set("origin", origin);
 
-			const resp = await fetch(proxyReq);
+				// Remove standard problematic headers
+				[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
+					(name) => proxyHeaders.delete(name)
+				);
 
-			// Create response with cleaned headers
-			let respHeaders = new Headers(resp.headers);
-			[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
-				(name) => respHeaders.delete(name)
-			);
+				// X-Forwarded-* headers
+				proxyHeaders.set("x-forwarded-host", url.host);
+				proxyHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""));
+				proxyHeaders.set("x-forwarded-for", ctx.ip);
+				proxyHeaders.set(
+					"x-forwarded-port",
+					url.port || (url.protocol === "https:" ? "443" : "80")
+				);
+				proxyHeaders.set("x-real-ip", ctx.ip);
 
-			// Apply response header transformation if provided
-			if (transformResponseHeaders) {
-				respHeaders = await transformResponseHeaders(respHeaders, resp);
-			}
+				// Add custom headers
+				if (customHeaders) {
+					for (const [key, value] of Object.entries(customHeaders)) {
+						proxyHeaders.set(key, value);
+					}
+				}
 
-			// Apply response body transformation if provided
-			let respBody: BodyInit | null = resp.body;
-			if (transformResponseBody) {
-				respBody = await transformResponseBody(respBody, resp);
-				// Remove Content-Length header as the body length has changed
-				respHeaders.delete("content-length");
-			}
+				// Apply header transformation if provided
+				if (transformRequestHeaders) {
+					proxyHeaders = await transformRequestHeaders(proxyHeaders, req, ctx);
+				}
 
-			const r = new Response(respBody, {
-				status: resp.status,
-				statusText: resp.statusText,
-				headers: respHeaders,
-			});
+				// Create and execute proxy request
+				const proxyReq = new Request(targetUrl, {
+					method: req.method,
+					headers: proxyHeaders,
+					body: req.body,
+					redirect: "follow",
+					cache,
+				});
 
-			return r;
+				const resp = await fetch(proxyReq);
+
+				// Create response with cleaned headers
+				let respHeaders = new Headers(resp.headers);
+				[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
+					(name) => respHeaders.delete(name)
+				);
+
+				// Apply response header transformation if provided
+				if (transformResponseHeaders) {
+					respHeaders = await transformResponseHeaders(respHeaders, resp);
+				}
+
+				// Apply response body transformation if provided
+				let respBody: BodyInit | null = resp.body;
+				if (transformResponseBody) {
+					respBody = await transformResponseBody(respBody, resp);
+					// Remove Content-Length header as the body length has changed
+					respHeaders.delete("content-length");
+				}
+
+				const r = new Response(respBody, {
+					status: resp.status,
+					statusText: resp.statusText,
+					headers: respHeaders,
+				});
+
+				return r;
+			};
+
+			return timeout
+				? await withTimeout(doProxy, timeout, "Proxy request timed out")()
+				: await doProxy();
 		} catch (error) {
 			// Use custom error handler if provided
 			if (onError) {
@@ -275,7 +281,5 @@ export function proxy(
 		}
 	};
 
-	return timeout
-		? withTimeout<DeminoHandler>(_proxy, timeout, "Proxy request timed out")
-		: _proxy;
+	return _proxy;
 }

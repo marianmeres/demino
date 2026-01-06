@@ -125,14 +125,14 @@ export function runTestServerTests(
 						srv = await startTestServer(app);
 						const api = createHttpApi(srv.base);
 						// deno-lint-ignore no-explicit-any
-					const opts = { srv, app, ...api, base: srv.base } as any;
-					await def.fn(opts as TestServerTestOpts);
+						const opts = { srv, app, ...api, base: srv.base } as any;
+						await def.fn(opts as TestServerTestOpts);
 					} catch (e) {
 						throw e;
 					} finally {
 						srv?.ac?.abort();
+						await srv?.server?.finished;
 					}
-					return srv?.server?.finished;
 				},
 		);
 	}
