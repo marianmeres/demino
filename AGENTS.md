@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.1.3 (BETA)
+- **Version**: 1.4.6 (BETA)
 - **Runtime**: Deno
 - **Type**: Web server framework
 - **Entry Point**: src/mod.ts
@@ -59,6 +59,7 @@ src/
 │   └── file-based.ts         # Directory-based routing
 └── utils/
     ├── mod.ts                # Utils exports barrel
+    ├── create-demino-clog.ts # DeminoLogger factory using @marianmeres/clog
     ├── token-bucket.ts       # TokenBucket class
     ├── cookies.ts            # parseCookies, serializeCookie
     ├── sleep.ts              # Promise delay
@@ -115,7 +116,7 @@ interface Demino extends Deno.ServeHandler {
   mountPath(): string;
   info(): { routes, globalAppMiddlewaresCount };
   getOptions(): DeminoOptions;
-  locals: any;
+  locals: DeminoAppLocals;           // App-wide persistent data (ctx.appLocals)
 }
 ```
 
@@ -313,3 +314,36 @@ app.use((req, info, ctx) => {
   ctx.getLogger()?.debug?.("Debug message");
 });
 ```
+
+## Logger with Access Logging
+
+```ts
+import { demino, createDeminoClog } from "@marianmeres/demino";
+
+const app = demino("", [], {
+  logger: createDeminoClog("my-app"),
+});
+
+// Or from existing Clog instance:
+import { createClog } from "@marianmeres/clog";
+import { createDeminoClogFrom } from "@marianmeres/demino";
+
+const myClog = createClog("my-app", { debug: true });
+const app2 = demino("", [], {
+  logger: createDeminoClogFrom(myClog),
+});
+```
+
+---
+
+## Documentation Index
+
+For deeper context, consult:
+
+- [Architecture](./docs/architecture.md) — System design, components, request lifecycle
+- [Conventions](./docs/conventions.md) — Code style, patterns, error handling
+- [Tasks](./docs/tasks.md) — Step-by-step common procedures
+
+Domain docs (consult when working in these areas):
+- [Routing](./docs/domains/routing.md) — Router implementations and parameter syntax
+- [Middleware](./docs/domains/middleware.md) — Built-in middleware reference
