@@ -1,4 +1,4 @@
-import { withTimeout } from "@marianmeres/midware";
+import { TimeoutError } from "@marianmeres/midware";
 import type { DeminoContext, DeminoHandler } from "../../demino.ts";
 import {
 	isHostAllowed,
@@ -150,7 +150,7 @@ export function proxy(
 
 	const _proxy: DeminoHandler = async (req, _i, ctx) => {
 		try {
-			const doProxy = async () => {
+			const doProxy = async (signal?: AbortSignal) => {
 				const url = new URL(req.url);
 				let _target: URL | string;
 
@@ -236,6 +236,7 @@ export function proxy(
 					body: req.body,
 					redirect: "follow",
 					cache,
+					signal,
 				});
 
 				const resp = await fetch(proxyReq);
@@ -268,9 +269,24 @@ export function proxy(
 				return r;
 			};
 
-			return timeout
-				? await withTimeout(doProxy, timeout, "Proxy request timed out")()
-				: await doProxy();
+			if (!timeout) {
+				return await doProxy();
+			}
+
+			// Use AbortController to actually cancel the in-flight fetch on timeout
+			// (unlike Promise.race, which leaves the fetch running in the background)
+			const ac = new AbortController();
+			const tid = setTimeout(() => ac.abort(), timeout);
+			try {
+				return await doProxy(ac.signal);
+			} catch (e) {
+				if (e instanceof DOMException && e.name === "AbortError") {
+					throw new TimeoutError("Proxy request timed out");
+				}
+				throw e;
+			} finally {
+				clearTimeout(tid);
+			}
 		} catch (error) {
 			// Use custom error handler if provided
 			if (onError) {
