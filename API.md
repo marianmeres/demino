@@ -33,6 +33,9 @@ Complete API documentation for `@marianmeres/demino`.
   - [deminoFileBased()](#deminofilebased)
   - [routesCompare()](#routescompare)
 - [Utilities](#utilities)
+  - [logListenInfo()](#loglisteninfo)
+  - [createDeminoClog()](#createdeminoclog)
+  - [createDeminoClogFrom()](#createdeminoclogfrom)
   - [TokenBucket](#tokenbucket)
   - [parseCookies()](#parsecookies)
   - [serializeCookie()](#serializecookie)
@@ -594,6 +597,80 @@ Sorts deeper routes first, then static before dynamic.
 ---
 
 ## Utilities
+
+### logListenInfo()
+
+Console logging callback for `Deno.serve()`'s `onListen` option. Prints the server's
+listening URL(s) with color formatting. When bound to `0.0.0.0`, displays both
+`localhost` and all detected IPv4 network addresses.
+
+```ts
+function logListenInfo(localAddr: Deno.NetAddr): void
+```
+
+**Example:**
+```ts
+import { deminoCompose, logListenInfo } from "@marianmeres/demino";
+
+Deno.serve(
+  {
+    port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
+    hostname: Deno.env.get("SERVER_HOST") || undefined,
+    onListen: logListenInfo,
+  },
+  deminoCompose([app]),
+);
+```
+
+---
+
+### createDeminoClog()
+
+Creates a `DeminoLogger` instance using `@marianmeres/clog`, with all standard
+logging methods plus access log support.
+
+```ts
+function createDeminoClog(
+  namespace?: string,
+  config?: ClogConfig
+): DeminoLogger
+```
+
+**Parameters:**
+- `namespace` (`string`) — Clog namespace prefix. Default: `"demino"`
+- `config` (`ClogConfig`, optional) — Clog configuration options
+
+**Example:**
+```ts
+import { demino, createDeminoClog } from "@marianmeres/demino";
+
+const app = demino("", [], {
+  logger: createDeminoClog("my-app"),
+});
+```
+
+---
+
+### createDeminoClogFrom()
+
+Creates a `DeminoLogger` from an existing `Clog` instance.
+
+```ts
+function createDeminoClogFrom(clog: Clog): DeminoLogger
+```
+
+**Example:**
+```ts
+import { createClog } from "@marianmeres/clog";
+import { createDeminoClogFrom } from "@marianmeres/demino";
+
+const myClog = createClog("my-app", { debug: true });
+const app = demino("", [], {
+  logger: createDeminoClogFrom(myClog),
+});
+```
+
+---
 
 ### TokenBucket
 

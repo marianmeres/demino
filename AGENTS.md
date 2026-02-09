@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.4.6 (BETA)
+- **Version**: 1.5.2 (BETA)
 - **Runtime**: Deno
 - **Type**: Web server framework
 - **Entry Point**: src/mod.ts
@@ -60,6 +60,7 @@ src/
 └── utils/
     ├── mod.ts                # Utils exports barrel
     ├── create-demino-clog.ts # DeminoLogger factory using @marianmeres/clog
+    ├── log-listen-info.ts    # logListenInfo() for Deno.serve onListen callback
     ├── token-bucket.ts       # TokenBucket class
     ├── cookies.ts            # parseCookies, serializeCookie
     ├── sleep.ts              # Promise delay

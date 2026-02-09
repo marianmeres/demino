@@ -588,3 +588,22 @@ Named events can be sent using the `event:` field:
 ```typescript
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
+
+## Extra: Listen info logging
+
+A convenience `onListen` callback for `Deno.serve()` that prints the server's listening
+URL(s) to the console. When bound to `0.0.0.0`, it displays both `localhost` and all
+detected network addresses.
+
+```ts
+import { deminoCompose, logListenInfo } from "@marianmeres/demino";
+
+Deno.serve(
+	{
+		port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
+		hostname: Deno.env.get("SERVER_HOST") || undefined,
+		onListen: logListenInfo,
+	},
+	deminoCompose([app, api, admin]),
+);
+```
