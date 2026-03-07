@@ -362,7 +362,7 @@ Advanced features include:
 - Configurable timeout and caching
 - Custom error handling
 
-See [proxy.ts](src/middleware/proxy.ts) for full API documentation and examples.
+See [proxy.ts](src/middleware/proxy/proxy.ts) for full API documentation and examples.
 
 ### Redirect
 
