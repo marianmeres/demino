@@ -179,7 +179,7 @@ export interface Demino extends Deno.ServeHandler {
 	static: (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
 	) => Demino;
 	/** Will re/un/set application logger */
 	logger: (logger: DeminoLogger | null) => Demino;
@@ -326,7 +326,7 @@ export function createResponseFrom(
 	req: Request,
 	body: unknown,
 	headers: Headers = new Headers(),
-	status = HTTP_STATUS.OK
+	status = HTTP_STATUS.OK,
 ): Response {
 	status ||= HTTP_STATUS.OK;
 
@@ -363,7 +363,7 @@ export function createResponseFrom(
 
 	// if we have a HEAD, do empty the body... (but no other changes). Intentionally
 	// doing this step at the very bottom. Point is that we might have added the HEAD handler
-	// automatically (byt "cloning" GET or ALL), so make sure we're not outputing anything.
+	// automatically (byt "cloning" GET or ALL), so make sure we're not outputting anything.
 	if (req.method === "HEAD") {
 		responseBody = null;
 	}
@@ -379,7 +379,7 @@ function _createContext(
 	req: Request,
 	info: Deno.ServeHandlerInfo,
 	getLogger: () => DeminoLogger | null,
-	appLocals: DeminoAppLocals
+	appLocals: DeminoAppLocals,
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -471,22 +471,22 @@ export function demino(
 	mountPath: string = "",
 	middleware: DeminoHandler | DeminoHandler[] = [],
 	options?: DeminoOptions,
-	appLocals: DeminoAppLocals = {}
+	appLocals: DeminoAppLocals = {},
 ): Demino {
 	// forcing conventional and composable behavior (see `deminoCompose` and URL.pathname)
 	if (mountPath !== "" && !mountPath.startsWith("/")) {
 		throw new TypeError(
-			`Mount path must be either empty or must start with a slash (path: ${mountPath})`
+			`Mount path must be either empty or must start with a slash (path: ${mountPath})`,
 		);
 	}
 	if (mountPath.endsWith("/")) {
 		throw new TypeError(
-			`Mount path must not end with a slash (path: ${mountPath})`
+			`Mount path must not end with a slash (path: ${mountPath})`,
 		);
 	}
 	if (/[\[\]:\*]/.test(mountPath)) {
 		throw new TypeError(
-			`Mount path must not contain dynamic segments (path: ${mountPath})`
+			`Mount path must not contain dynamic segments (path: ${mountPath})`,
 		);
 	}
 
@@ -512,7 +512,7 @@ export function demino(
 	// prepare routers for each method individually
 	const _routers = ["ALL", ...supportedMethods].reduce(
 		(m, k) => ({ ...m, [k]: _routerFactory() }),
-		{} as Record<"ALL" | DeminoMethod, DeminoRouter>
+		{} as Record<"ALL" | DeminoMethod, DeminoRouter>,
 	);
 
 	// see `app.info`
@@ -532,7 +532,7 @@ export function demino(
 		) {
 			context.headers.set(
 				"X-Response-Time",
-				`${Date.now() - context.__start.valueOf()}ms`
+				`${Date.now() - context.__start.valueOf()}ms`,
 			);
 		}
 	};
@@ -548,7 +548,7 @@ export function demino(
 	const _createErrorResponse = async (
 		req: Request,
 		info: Deno.ServeHandlerInfo,
-		context: DeminoContext
+		context: DeminoContext,
 	): Promise<Response> => {
 		let r = await _errorHandler?.(req, info, context);
 		if (!(r instanceof Response)) {
@@ -559,7 +559,7 @@ export function demino(
 				req,
 				r || getErrorMessage(context.error),
 				context.headers,
-				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
+				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
 			);
 		}
 
@@ -603,7 +603,7 @@ export function demino(
 			req,
 			info,
 			getLogger,
-			appLocals
+			appLocals,
 		);
 
 		// console.log("_app METHOD", method);
@@ -645,7 +645,7 @@ export function demino(
 						req,
 						info,
 						getLogger,
-						appLocals
+						appLocals,
 					);
 
 					// everything is a middleware...
@@ -781,7 +781,7 @@ export function demino(
 	_app.head = (...args) => {
 		console.warn(
 			"WARN: Are you sure to implement a custom HEAD request handler? " +
-				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists)."
+				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists).",
 		);
 		return _createRouteFn("HEAD")(...args);
 	};
@@ -820,12 +820,12 @@ export function demino(
 	_app.static = (
 		route: string,
 		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">
+		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
 	) => {
 		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
 		if (/[\[\]:\*]/.test(route)) {
 			throw new TypeError(
-				`Static route must not contain dynamic segments (route: ${route})`
+				`Static route must not contain dynamic segments (route: ${route})`,
 			);
 		}
 		let urlRoot: string;
@@ -844,9 +844,10 @@ export function demino(
 		_app.all(route, (req) => {
 			// serveDir only handles GET; rewrite HEAD as GET so it serves correctly
 			// (demino strips the response body for HEAD requests automatically)
-			const effectiveReq = req.method === "HEAD"
-				? new Request(req.url, { headers: req.headers, method: "GET" })
-				: req;
+			const effectiveReq =
+				req.method === "HEAD"
+					? new Request(req.url, { headers: req.headers, method: "GET" })
+					: req;
 			return serveDir(effectiveReq, {
 				quiet: true,
 				...options,
@@ -894,7 +895,7 @@ export function demino(
 		set() {
 			getLogger()?.warn?.(
 				"demino: app.locals reassignment is ignored. " +
-					"Mutate properties instead: app.locals.foo = value"
+					"Mutate properties instead: app.locals.foo = value",
 			);
 		},
 		enumerable: true,
