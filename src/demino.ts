@@ -842,7 +842,12 @@ export function demino(
 		// console.log(123, route, urlRoot);
 
 		_app.all(route, (req) => {
-			return serveDir(req, {
+			// serveDir only handles GET; rewrite HEAD as GET so it serves correctly
+			// (demino strips the response body for HEAD requests automatically)
+			const effectiveReq = req.method === "HEAD"
+				? new Request(req.url, { headers: req.headers, method: "GET" })
+				: req;
+			return serveDir(effectiveReq, {
 				quiet: true,
 				...options,
 				fsRoot,
