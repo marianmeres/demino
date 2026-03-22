@@ -1,0 +1,1 @@
+Minimal web framework for Deno built on Deno.serve() with routing, middleware chaining, error handling, static file serving, and request proxying. Provides building blocks (not batteries) for HTTP servers with multiple router implementations and composable middleware.
