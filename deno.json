@@ -21,7 +21,8 @@
     "@std/fs": "jsr:@std/fs@^1.0.23",
     "@std/http": "jsr:@std/http@^1.0.25",
     "@std/path": "jsr:@std/path@^1.1.4",
-    "request-ip": "npm:request-ip@^3.3.0"
+    "request-ip": "npm:request-ip@^3.3.0",
+    "@marianmeres/mcp-server/types": "jsr:@marianmeres/mcp-server/types"
   },
   "publish": {
     "exclude": [
