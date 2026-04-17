@@ -1,4 +1,4 @@
-# @marianmeres/demino (BETA)
+# @marianmeres/demino
 
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 
@@ -17,11 +17,6 @@ The design goal of this project is to provide a thin and
 [sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) extensible layer on top of the
 `Deno.serve` handler. Nothing more, nothing less. In other words, this is a building
 blocks framework, not a full featured web server.
-
-## Beta
-
-Despite being marked as `1.x.x`, it is still in its early stages, where the API may
-occasionally change.
 
 ## Installation
 
@@ -235,18 +230,19 @@ interface DeminoLogger {
 }
 ```
 
-The Demino logger, if not provided, defaults to `console`. You can provide a custom
-logger:
+The Demino logger, if not provided, defaults to a console-backed adapter. You can provide
+a custom logger:
 
 - when creating the app via `DeminoOptions` (eg
   `demino("", [], { logger: myCustomLogger })`)
 - or anytime later via `app.logger(logger: DeminoLogger)`
 
-If you do not wish the default `console` to be active, you must turn it off explicitly via
-`app.logger(null)`
+If you do not wish the default to be active, you must turn it off explicitly via
+`app.logger(null)`.
 
-The access log `logger.access` is not provided by the `console`, so if you wish to log
-access, you have to provide your own implementation. For example:
+The default adapter forwards `debug`/`log`/`warn`/`error` to the matching `console.*`
+methods, and emits `access` to `console.log` prefixed with `[access]`. If you want a
+different access log format, supply your own logger:
 
 ```ts
 // example to log access to console as well
@@ -254,6 +250,11 @@ const app = demino("", [], {
 	logger: { ...console, access: (data) => console.log(data) },
 });
 ```
+
+> **Note (1.7.0):** Prior versions cast `console` directly to `DeminoLogger` even though
+> `console.access` doesn't exist, so access logs were silently dropped unless a custom
+> logger was supplied. The default adapter introduced in 1.7.0 wires `access` to
+> `console.log` so the default behavior matches the type.
 
 For convenience, this package provides the `createDeminoClog` helper that creates a
 complete logger with access logging using [`@marianmeres/clog`](https://jsr.io/@marianmeres/clog):
@@ -295,8 +296,18 @@ included after all.
 ### CORS
 
 Will create the "Cross-origin resource sharing" ("CORS") headers in the response based on
-the provided config. Be aware that the default config is quite relaxed (allows wildcards
-and credentials by default).
+the provided config.
+
+Defaults: `allowOrigin: "*"`, `allowCredentials: false`. The CORS spec forbids combining
+`Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true`, so
+`cors({ allowOrigin: "*", allowCredentials: true })` throws at construction time. To allow
+credentials, provide an explicit `allowOrigin` allowlist (string, string[], or function
+that returns the matched origin).
+
+> **BREAKING (1.7.0):** `allowCredentials` defaulted to `true` in 1.6.x, and the wildcard
+> + credentials combination was silently "fixed" by echoing back the request `Origin`
+> header — which effectively allowed credentialed requests from any origin. See
+> [BC notes](#breaking-changes-170) below.
 
 Basic example
 
@@ -304,7 +315,7 @@ Basic example
 app.use(cors());
 ```
 
-Dynamic evaluation example
+Dynamic evaluation example (with credentials)
 
 ```ts
 app.use(cors({
@@ -355,12 +366,18 @@ app.get(
 ```
 
 Advanced features include:
-- SSRF protection (blocks private IPs, localhost)
+- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6,
+  CGNAT 100.64.0.0/10, and link-local — see caveat below)
 - Host whitelisting with wildcard support
 - Request/response header transformation
 - Response body transformation
 - Configurable timeout and caching
 - Custom error handling
+
+> **SSRF caveat:** `preventSSRF` is a string-only check on the target hostname. It does
+> NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to
+> a private IP. If you need protection against DNS rebinding attacks, resolve the
+> hostname yourself (e.g. via `Deno.resolveDns`) and re-check each resulting address.
 
 See [proxy.ts](src/middleware/proxy/proxy.ts) for full API documentation and examples.
 
@@ -441,10 +458,16 @@ app.get(
 
 // Use weak ETags for faster generation (less precise validation)
 app.get("/data", withETag(() => "content", { weak: true }));
+
+// Skip hashing for responses larger than the cap (default 1 MiB).
+// Set to 0 / Infinity to disable.
+app.get("/large", withETag(handler, { maxSizeBytes: 5 * 1024 * 1024 }));
 ```
 
-Only processes GET/HEAD requests with 2xx responses. Note: reads entire response body into
-memory to compute the hash.
+Only processes GET/HEAD requests with 2xx responses. Reads the entire response body into
+memory to compute the hash, so by default responses larger than `maxSizeBytes` (1 MiB) are
+returned unchanged with no ETag added. Adjust the cap (or disable it with `0`/`Infinity`)
+when you knowingly accept the memory cost.
 
 ## Extra: URL Pattern router
 
@@ -588,6 +611,88 @@ Named events can be sent using the `event:` field:
 ```typescript
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
+
+## Breaking changes (1.7.0)
+
+This release changes a handful of defaults and internal APIs to fix correctness and
+security issues. Most apps won't need any code changes — the affected areas are listed
+below in order of likely impact.
+
+### CORS — `allowCredentials` defaults to `false`
+
+`cors()` previously defaulted `allowCredentials: true` while also defaulting
+`allowOrigin: "*"`. The CORS spec forbids that combination, so the middleware silently
+rewrote the wildcard to the request's `Origin` header — effectively allowing credentialed
+requests from **any** origin out of the box.
+
+Now:
+- The default is `allowCredentials: false`.
+- Constructing `cors({ allowOrigin: "*", allowCredentials: true })` throws a `TypeError`.
+- If a dynamic `allowOrigin` function returns `"*"` while credentials are enabled, the
+  middleware refuses to set the headers (and logs a warning) instead of echoing back the
+  request origin.
+
+**Migration:** to allow credentials, pass an explicit allowlist:
+
+```ts
+// before (1.6.x — silently insecure)
+app.use(cors());
+
+// after (1.7.0)
+app.use(cors({
+  allowOrigin: ["https://app.example.com", "https://admin.example.com"],
+  allowCredentials: true,
+}));
+```
+
+### Default logger now emits access logs
+
+Previously the default logger was `console as DeminoLogger`, but `console` has no
+`access` method, so access logs were silently swallowed unless you supplied a custom
+logger. The default adapter now wires `access` to `console.log` (prefixed with
+`[access]`).
+
+**Migration:** if you relied on the previous "silent default" behavior, set the logger to
+`null` (`app.logger(null)`) or supply a logger whose `access` method is a no-op.
+
+### `withTimeout()` passes an `AbortSignal` to the wrapped function
+
+`withTimeout(fn)` now invokes `fn(...args, signal)`, so functions can actually cancel
+their work on timeout instead of having it run to completion in the background. Functions
+that don't accept the extra argument simply ignore it, but TypeScript will surface the
+extra positional parameter — update signatures to `(...args, signal?: AbortSignal)` if
+the additional argument matters to your callers.
+
+### SSRF protection covers more cases
+
+`isPrivateHost()` (used by `proxy({ preventSSRF: true })`) now also detects:
+
+- `0.0.0.0` and `::` (unspecified addresses)
+- IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
+- CGNAT range `100.64.0.0/10`
+- Bracketed IPv6 hostnames (`[::1]`)
+
+If you have tests that asserted `isPrivateHost("0.0.0.0") === false`, they now return
+`true`. There is no DNS resolution, so DNS-rebinding attacks are still possible — see the
+caveat in the Proxy section.
+
+### ETag middleware skips bodies larger than 1 MiB by default
+
+`withETag(handler)` used to buffer the entire response body to compute a SHA-1 hash with
+no size limit. It now defaults to `maxSizeBytes: 1_048_576` (1 MiB) and returns the
+response unchanged (no ETag, no 304 negotiation) when the body is larger.
+
+**Migration:** if you knowingly need ETags on larger payloads, raise the cap:
+`withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 })`. Pass `0` or `Infinity` to
+disable the cap entirely.
+
+### Internal: per-(method, route) middleware stack is cached
+
+The assembled `Midware` for each `(method, route)` is now cached and reused across
+requests. The cache is invalidated whenever `app.use(...)` mutates the global stacks or a
+route is registered. This is a transparent perf change — no API change — but if you were
+relying on a per-request side effect inside the array assembly, that's no longer
+happening.
 
 ## Extra: Listen info logging
 

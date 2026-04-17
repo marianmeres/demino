@@ -158,7 +158,12 @@ export function rateLimit(
 			});
 		}
 
-		const { bucket } = clients.get(clientId)!;
+		const entry = clients.get(clientId)!;
+		// keep lastAccess fresh so the cleanup pass doesn't evict an active client
+		// (evicting an active client would discard their bucket and let the next
+		// request start at full capacity, defeating the rate limit).
+		entry.lastAccess = new Date();
+		const { bucket } = entry;
 
 		// what rate capacity size are we going to consume for this request?
 		let consumeSize = 1;

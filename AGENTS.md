@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.5.2 (BETA)
+- **Version**: 1.7.0
 - **Runtime**: Deno
 - **Type**: Web server framework
 - **Entry Point**: src/mod.ts
@@ -249,8 +249,9 @@ deno task release         # Publish to JSR
 1. **HEAD requests**: Auto-generated from GET handlers
 2. **Trailing slashes**: `/foo` and `/foo/` are equivalent (use trailingSlash middleware to enforce)
 3. **Error logging**: All errors except 404s logged via `logger.error()`
-4. **Access logging**: Only if `logger.access` provided
+4. **Access logging**: Default logger forwards `access` to `console.log` (since 1.7.0). Set `logger: null` or override `access` to silence.
 5. **Mount path validation**: Must start with `/`, cannot end with `/`, no dynamic segments
+6. **Per-(method, route) middleware caching** (since 1.7.0): The assembled `Midware` for each route is built once on the first matching request and reused. The cache is invalidated when `app.use(...)` runs or when a route is (re-)registered.
 
 ## Common Modifications
 
@@ -308,6 +309,18 @@ app.get("/api/*", proxy("https://backend/*", {
 }));
 ```
 
+**SSRF check coverage** (`isPrivateHost`, since 1.7.0):
+- localhost / `127.0.0.0/8`
+- `0.0.0.0`, `::`
+- Private IPv4: `10/8`, `100.64/10` (CGNAT), `169.254/16`, `172.16/12`, `192.168/16`
+- Private IPv6: `::1`, `fe80::/10`, `fc00::/7`
+- IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
+- Bracketed IPv6 hostnames (`[::1]`)
+
+**Caveat:** string-only check, no DNS resolution. DNS rebinding bypasses this guard. For
+DNS-rebinding-resistant SSRF protection, resolve via `Deno.resolveDns` and re-check each
+result.
+
 ## Context Logger Access
 
 ```ts
@@ -336,6 +349,39 @@ const app2 = demino("", [], {
 ```
 
 ---
+
+## Recent Breaking Changes
+
+### 1.7.0
+
+- **CORS** (`cors()`): default `allowCredentials` flipped from `true` → `false`. Combining
+  `allowOrigin: "*"` with `allowCredentials: true` now throws `TypeError` (CORS spec
+  violation). Dynamic `allowOrigin` resolving to `"*"` with credentials enabled refuses to
+  set headers and warns.
+- **Default logger**: `console as DeminoLogger` cast replaced with a real adapter that
+  forwards `access` to `console.log`. Previously access logs were silently dropped.
+- **`withTimeout(fn)`**: now invokes `fn(...args, signal)` so the wrappee can cancel its
+  underlying work on timeout. Functions that ignore the extra arg work unchanged at
+  runtime; TS callers may need to update signatures.
+- **SSRF (`isPrivateHost`)**: now covers `0.0.0.0`, `::`, IPv4-mapped IPv6
+  (`::ffff:1.2.3.4`), CGNAT `100.64/10`, and bracketed IPv6 hostnames.
+- **`withETag()`**: new `maxSizeBytes` option (default 1 MiB). Bodies above the cap pass
+  through unchanged with no ETag added. Pass `0`/`Infinity` to disable.
+
+### Internal correctness fixes (1.7.0, no API change)
+
+- `TokenBucket.refill()` no longer loses fractional refill time under fast successive
+  calls (previously `Math.round(small)` returned 0 while `lastRefill` reset, permanently
+  starving the bucket).
+- `rateLimit()` now updates `lastAccess` on every request, so the periodic cleanup pass
+  doesn't evict an active client (which would have reset their bucket to full capacity).
+- `DeminoExpressLikeRouter.exec()` now uses `continue top` instead of `break top` on a
+  static-segment mismatch, so a request for a later-registered route no longer 404s when
+  an earlier route had a different static segment.
+- `deminoFileBased()` Windows path normalization uses `replaceAll("\\", "/")` instead of
+  `replace("\\", "/")` (only first backslash was being replaced).
+- `app.info()` no longer reports `-1` middleware count for handler-less route
+  registrations.
 
 ## Documentation Index
 

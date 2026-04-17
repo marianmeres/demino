@@ -43,7 +43,7 @@ Deno.test("serializeCookie - URL encodes name and value", () => {
 Deno.test("serializeCookie - with maxAge", () => {
 	assertEquals(
 		serializeCookie("foo", "bar", { maxAge: 3600 }),
-		"foo=bar; Max-Age=3600"
+		"foo=bar; Max-Age=3600",
 	);
 });
 
@@ -54,36 +54,36 @@ Deno.test("serializeCookie - with path", () => {
 Deno.test("serializeCookie - with domain", () => {
 	assertEquals(
 		serializeCookie("foo", "bar", { domain: "example.com" }),
-		"foo=bar; Domain=example.com"
+		"foo=bar; Domain=example.com",
 	);
 });
 
 Deno.test("serializeCookie - with secure", () => {
 	assertEquals(
 		serializeCookie("foo", "bar", { secure: true }),
-		"foo=bar; Secure"
+		"foo=bar; Secure",
 	);
 });
 
 Deno.test("serializeCookie - with httpOnly", () => {
 	assertEquals(
 		serializeCookie("foo", "bar", { httpOnly: true }),
-		"foo=bar; HttpOnly"
+		"foo=bar; HttpOnly",
 	);
 });
 
 Deno.test("serializeCookie - with sameSite", () => {
 	assertEquals(
 		serializeCookie("foo", "bar", { sameSite: "Strict" }),
-		"foo=bar; SameSite=Strict"
+		"foo=bar; SameSite=Strict",
 	);
 	assertEquals(
 		serializeCookie("foo", "bar", { sameSite: "Lax" }),
-		"foo=bar; SameSite=Lax"
+		"foo=bar; SameSite=Lax",
 	);
 	assertEquals(
 		serializeCookie("foo", "bar", { sameSite: "None" }),
-		"foo=bar; SameSite=None"
+		"foo=bar; SameSite=None",
 	);
 });
 
@@ -91,7 +91,7 @@ Deno.test("serializeCookie - with expires", () => {
 	const date = new Date("2025-12-31T23:59:59Z");
 	assertEquals(
 		serializeCookie("foo", "bar", { expires: date }),
-		"foo=bar; Expires=Wed, 31 Dec 2025 23:59:59 GMT"
+		"foo=bar; Expires=Wed, 31 Dec 2025 23:59:59 GMT",
 	);
 });
 
@@ -108,7 +108,7 @@ Deno.test("serializeCookie - with all options", () => {
 	});
 	assertEquals(
 		result,
-		"session=abc123; Max-Age=3600; Expires=Wed, 31 Dec 2025 23:59:59 GMT; Path=/; Domain=example.com; Secure; HttpOnly; SameSite=Lax"
+		"session=abc123; Max-Age=3600; Expires=Wed, 31 Dec 2025 23:59:59 GMT; Path=/; Domain=example.com; Secure; HttpOnly; SameSite=Lax",
 	);
 });
 
@@ -125,7 +125,7 @@ runTestServerTests([
 			await assertResp(
 				fetch(`${base}/`, { headers: { cookie: "foo=bar; baz=qux" } }),
 				200,
-				{ foo: "bar", baz: "qux" }
+				{ foo: "bar", baz: "qux" },
 			);
 		},
 	},
@@ -147,7 +147,7 @@ runTestServerTests([
 				{ ok: true },
 				{
 					"set-cookie": "session=abc123; Path=/; HttpOnly",
-				}
+				},
 			);
 		},
 	},
@@ -177,7 +177,9 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.post("/logout", (_req, _info, ctx) => {
-				(ctx.locals as unknown as CookiesLocals).deleteCookie("session", { path: "/" });
+				(ctx.locals as unknown as CookiesLocals).deleteCookie("session", {
+					path: "/",
+				});
 				return { loggedOut: true };
 			});
 
@@ -185,7 +187,7 @@ runTestServerTests([
 				fetch(`${base}/logout`, { method: "POST" }),
 				200,
 				{ loggedOut: true },
-				{ "set-cookie": "session=; Max-Age=0; Path=/" }
+				{ "set-cookie": "session=; Max-Age=0; Path=/" },
 			);
 		},
 	},
@@ -194,7 +196,10 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			app.use(cookies());
 			app.get("/", (_req, _info, ctx) => {
-				return { count: Object.keys((ctx.locals as unknown as CookiesLocals).cookies).length };
+				return {
+					count: Object.keys((ctx.locals as unknown as CookiesLocals).cookies)
+						.length,
+				};
 			});
 
 			await assertResp(fetch(`${base}/`), 200, { count: 0 });
@@ -220,7 +225,10 @@ runTestServerTests([
 			app.use(cookies({ httpOnly: true, secure: true, path: "/" }));
 			app.get("/", (_req, _info, ctx) => {
 				// Override httpOnly and add maxAge
-				(ctx.locals as unknown as CookiesLocals).setCookie("theme", "dark", { httpOnly: false, maxAge: 86400 });
+				(ctx.locals as unknown as CookiesLocals).setCookie("theme", "dark", {
+					httpOnly: false,
+					maxAge: 86400,
+				});
 				return { ok: true };
 			});
 

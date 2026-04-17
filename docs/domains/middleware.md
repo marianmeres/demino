@@ -20,12 +20,17 @@ Demino includes several built-in middleware factories. Each returns a `DeminoHan
 
 ## cors
 
-Creates CORS headers. Default config is permissive (allows wildcards and credentials).
+Creates CORS headers.
+
+**Defaults (since 1.7.0):** `allowOrigin: "*"`, `allowCredentials: false`. Constructing
+`cors({ allowOrigin: "*", allowCredentials: true })` throws `TypeError`. Dynamic
+`allowOrigin` resolving to `"*"` while credentials are enabled refuses to set headers and
+warns.
 
 ```ts
 import { cors } from "@marianmeres/demino";
 
-// Basic usage
+// Basic usage (no credentials)
 app.use(cors());
 
 // With options
@@ -33,9 +38,14 @@ app.use(cors({
   allowOrigin: "*",                    // string | string[] | fn
   allowMethods: ["GET", "POST"],       // string[]
   allowHeaders: ["Content-Type"],      // string[]
-  allowCredentials: true,              // boolean
-  exposeHeaders: [],                   // string[]
+  allowCredentials: false,             // boolean (default: false)
   maxAge: 86400,                       // number (seconds)
+}));
+
+// Credentialed: explicit allowlist required
+app.use(cors({
+  allowOrigin: ["https://app.example.com"],
+  allowCredentials: true,
 }));
 
 // Dynamic origin
@@ -90,14 +100,23 @@ app.get("/search/[q]", proxy((req, ctx) => `https://api.example.com/?q=${ctx.par
 
 // With options
 app.get("/api/*", proxy("https://backend/*", {
-  preventSSRF: true,              // Block private IPs (default: true)
+  preventSSRF: true,              // Block private IPs (default: false)
   allowedHosts: ["*.example.com"], // Host whitelist
   timeout: 30000,                 // Request timeout (ms)
-  transformRequest: (req) => req, // Modify outgoing request
-  transformResponse: (res) => res, // Modify response
+  transformRequestHeaders: (h) => h,    // Modify outgoing headers
+  transformResponseHeaders: (h, r) => h, // Modify response headers
+  transformResponseBody: (b, r) => b,    // Modify response body
   onError: (error, req, ctx) => { }, // Custom error handling
 }));
 ```
+
+**`preventSSRF` covers** (since 1.7.0): localhost (`127.0.0.0/8`, `*.localhost`),
+unspecified (`0.0.0.0`, `::`), private IPv4 (`10/8`, `100.64/10` CGNAT, `169.254/16`,
+`172.16/12`, `192.168/16`), private IPv6 (`::1`, `fe80::/10`, `fc00::/7`), IPv4-mapped
+IPv6 (`::ffff:1.2.3.4`), and bracketed IPv6 (`[::1]`).
+
+**Caveat:** string-only check, no DNS lookup. DNS-rebinding bypasses this guard. For
+DNS-rebinding-resistant SSRF, resolve via `Deno.resolveDns` and re-check each result.
 
 > Does NOT support WebSockets.
 
@@ -105,7 +124,8 @@ app.get("/api/*", proxy("https://backend/*", {
 
 ## rateLimit
 
-Token bucket rate limiting. Throws `429 Too Many Requests` when exceeded.
+Token bucket rate limiting. Throws `429 Too Many Requests` when exceeded. In-memory only
+(single-server setups).
 
 ```ts
 import { rateLimit } from "@marianmeres/demino";
@@ -114,15 +134,17 @@ app.use("/api", rateLimit(
   // Client ID function (return falsy to skip)
   (req, info, ctx) => req.headers.get("Authorization"),
   {
-    maxSize: 100,              // Bucket capacity
-    refillSizePerSecond: 10,   // Tokens added per second
-    initialSize: 100,          // Starting tokens (default: maxSize)
-    consumeSize: 1,            // Tokens per request
+    maxSize: 20,                // Bucket capacity / burst (default: 20)
+    refillSizePerSecond: 10,    // Tokens added per second (default: 10)
+    cleanupProbability: 0.001,  // Per-request GC chance (default: 0.001)
+    getConsumeSize: (req, info, ctx) => 1, // Tokens per request (default: 1)
   }
 ));
 ```
 
-**Headers added**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+**Active client retention (since 1.7.0):** every request refreshes the entry's
+`lastAccess` timestamp, so the periodic cleanup pass cannot evict a client that is still
+being limited.
 
 ---
 
@@ -139,10 +161,18 @@ app.get("/api/data", withETag(async () => {
 
 // Weak ETag (faster, less precise)
 app.get("/data", withETag(() => content, { weak: true }));
+
+// Lift the size cap (default 1 MiB)
+app.get("/large", withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 }));
+
+// Disable the cap entirely
+app.get("/anything", withETag(handler, { maxSizeBytes: 0 }));
 ```
 
 - Only processes GET/HEAD with 2xx responses
 - Reads entire response body to compute hash
+- Skips hashing for bodies above `maxSizeBytes` (default `1_048_576` since 1.7.0;
+  pass `0` or `Infinity` to disable)
 
 ---
 

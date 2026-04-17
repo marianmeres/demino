@@ -1,9 +1,5 @@
 import type { DeminoContext, DeminoHandler } from "../demino.ts";
-import {
-	type CookieOptions,
-	parseCookies,
-	serializeCookie,
-} from "../utils/cookies.ts";
+import { type CookieOptions, parseCookies, serializeCookie } from "../utils/cookies.ts";
 
 /**
  * Cookie helpers interface added to ctx.locals by the cookies middleware.

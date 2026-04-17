@@ -353,12 +353,27 @@ interface CorsOptions {
 - `allowOrigin`: `"*"`
 - `allowMethods`: `"GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS"`
 - `allowHeaders`: `"Content-Type,Authorization"`
-- `allowCredentials`: `true`
+- `allowCredentials`: `false` *(changed from `true` in 1.7.0 — see BC notes in README)*
 - `maxAge`: `86400` (24 hours)
+
+**Constraints:**
+- `cors({ allowOrigin: "*", allowCredentials: true })` throws `TypeError` (CORS spec
+  forbids the combination). To allow credentials, supply an explicit allowlist or
+  function returning the matched origin.
+- If a *dynamic* `allowOrigin` resolves to `"*"` while `allowCredentials` is `true`, the
+  middleware refuses to set the response headers and logs a warning.
 
 **Example:**
 ```ts
-app.use(cors({ allowOrigin: ["https://example.com"] }));
+// Public read-only API: wildcard origin, no credentials (default)
+app.use(cors());
+
+// Credentialed API: explicit allowlist required
+app.use(cors({
+  allowOrigin: ["https://app.example.com"],
+  allowCredentials: true,
+}));
+
 app.options("*", cors());  // Handle preflight
 ```
 
@@ -425,9 +440,19 @@ Wraps a handler to add ETag support and 304 responses.
 ```ts
 function withETag(
   handler: DeminoHandler,
-  options?: { weak?: boolean }
+  options?: ETagOptions
 ): DeminoHandler
+
+interface ETagOptions {
+  weak?: boolean;          // generate W/"..." instead of "..." (default: false)
+  maxSizeBytes?: number;   // skip hashing if body is larger (default: 1_048_576;
+                           // pass 0 or Infinity to disable the cap)
+}
 ```
+
+The middleware buffers the entire response body in memory to compute SHA-1, so by
+default responses larger than 1 MiB are returned unchanged with no ETag header. Lift
+the cap explicitly when you accept the memory cost.
 
 **Example:**
 ```ts
@@ -490,7 +515,7 @@ function proxy(
 
 interface ProxyOptions {
   timeout: number;                    // Default: 60000
-  preventSSRF: boolean;               // Block private IPs
+  preventSSRF: boolean;               // Block private IPs (string-only check, no DNS)
   allowedHosts: string[];             // Host whitelist (supports wildcards)
   headers: Record<string, string>;    // Custom headers
   transformRequestHeaders: (headers, req, ctx) => Headers;
@@ -502,6 +527,20 @@ interface ProxyOptions {
   removeResponseHeaders: string[];
 }
 ```
+
+**`preventSSRF` covers (since 1.7.0):**
+- localhost (`localhost`, `*.localhost`, `127.0.0.0/8`)
+- Unspecified `0.0.0.0` and `::`
+- Private IPv4: `10/8`, `172.16/12`, `192.168/16`, `169.254/16` (link-local), `100.64/10`
+  (CGNAT)
+- Private IPv6: `::1`, `fe80::/10`, `fc00::/7`
+- IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
+- Bracketed IPv6 hostnames (`[::1]`)
+
+**Caveat:** This is a *string-only* check on the target hostname — DNS is not resolved.
+A public hostname that resolves (or is DNS-rebound) to a private IP bypasses this guard.
+For DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and re-check
+each address.
 
 **Example:**
 ```ts
@@ -747,17 +786,33 @@ function sleep(
 
 ### withTimeout()
 
-Wraps a function with timeout enforcement.
+Wraps a function with timeout enforcement. The wrapped function is invoked with an
+`AbortSignal` appended to its arguments, and that signal is aborted on timeout — so a
+`fetch`-based wrappee can actually cancel its in-flight request.
 
 ```ts
 function withTimeout<T>(
   fn: CallableFunction,
-  timeout?: number,
+  timeout?: number,        // ms; pass 0 to disable the timer (default: 1000)
   errMessage?: string
 ): (...args: any[]) => Promise<T>
 
 class TimeoutError extends Error {}
 ```
+
+**Example:**
+```ts
+const timedFetch = withTimeout(
+  (url: string, signal?: AbortSignal) => fetch(url, { signal }),
+  5_000,
+);
+await timedFetch("https://api.example.com/data"); // throws TimeoutError after 5s
+```
+
+> **BC (1.7.0):** the wrapped function now receives an extra trailing `AbortSignal`
+> argument. Functions that ignore extra args are unaffected at runtime, but TypeScript
+> may flag a signature mismatch — declare your function as
+> `(...args, signal?: AbortSignal)`.
 
 ---
 

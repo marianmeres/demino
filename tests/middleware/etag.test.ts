@@ -81,6 +81,40 @@ runTestServerTests([
 		},
 	},
 	{
+		name: "etag skips bodies larger than maxSizeBytes",
+		fn: async ({ app, base }) => {
+			const big = "x".repeat(2048);
+			app.get("/big", withETag(() => big, { maxSizeBytes: 1024 }));
+
+			const res = await fetch(`${base}/big`);
+			const body = await res.text();
+			assertEquals(res.status, 200);
+			assertEquals(res.headers.has("etag"), false);
+			assertEquals(body, big);
+		},
+	},
+	{
+		name: "etag respects Content-Length to skip large responses early",
+		fn: async ({ app, base }) => {
+			app.get(
+				"/big-cl",
+				withETag(
+					() => {
+						return new Response("x".repeat(2048), {
+							headers: { "content-length": "2048" },
+						});
+					},
+					{ maxSizeBytes: 1024 },
+				),
+			);
+
+			const res = await fetch(`${base}/big-cl`);
+			await res.text();
+			assertEquals(res.status, 200);
+			assertEquals(res.headers.has("etag"), false);
+		},
+	},
+	{
 		name: "etag handles multiple ETags in If-None-Match",
 		fn: async ({ app, base }) => {
 			app.get(

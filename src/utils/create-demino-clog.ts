@@ -22,7 +22,7 @@ import type { DeminoLogger } from "../demino.ts";
  */
 export function createDeminoClog(
 	namespace: string = "demino",
-	config: ClogConfig = {}
+	config: ClogConfig = {},
 ): DeminoLogger {
 	return createDeminoClogFrom(createClog(namespace, config));
 }
@@ -60,9 +60,9 @@ export function createDeminoClogFrom(clog: Clog): DeminoLogger {
 			const { status, req, ip, duration } = data;
 			const url = new URL(req.url);
 			clog.log(
-				`[ACCESS] ${ip ?? "-"} [${req.method.toUpperCase()}] ${url.pathname}${
-					url.search
-				} ${status} ${duration}ms`
+				`[ACCESS] ${
+					ip ?? "-"
+				} [${req.method.toUpperCase()}] ${url.pathname}${url.search} ${status} ${duration}ms`,
 			);
 		},
 	};

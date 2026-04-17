@@ -115,25 +115,23 @@ export function runTestServerTests(
 		if (typeof def.fn !== "function") continue;
 		Deno.test(
 			{ name, ignore, only },
-			def.raw
-				? () => def.fn({} as unknown as TestServerTestOpts)
-				: async () => {
-					let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
-					try {
-						const app = demino("", [], def.appOptions, def.appLocals);
-						app.logger(null);
-						srv = await startTestServer(app);
-						const api = createHttpApi(srv.base);
-						// deno-lint-ignore no-explicit-any
-						const opts = { srv, app, ...api, base: srv.base } as any;
-						await def.fn(opts as TestServerTestOpts);
-					} catch (e) {
-						throw e;
-					} finally {
-						srv?.ac?.abort();
-						await srv?.server?.finished;
-					}
-				},
+			def.raw ? () => def.fn({} as unknown as TestServerTestOpts) : async () => {
+				let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
+				try {
+					const app = demino("", [], def.appOptions, def.appLocals);
+					app.logger(null);
+					srv = await startTestServer(app);
+					const api = createHttpApi(srv.base);
+					// deno-lint-ignore no-explicit-any
+					const opts = { srv, app, ...api, base: srv.base } as any;
+					await def.fn(opts as TestServerTestOpts);
+				} catch (e) {
+					throw e;
+				} finally {
+					srv?.ac?.abort();
+					await srv?.server?.finished;
+				}
+			},
 		);
 	}
 }

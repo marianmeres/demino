@@ -52,7 +52,7 @@ runTestServerTests([
 				proxy((r) => {
 					const path = new URL(r.url).pathname.slice("/old".length);
 					return `/new${path}`;
-				})
+				}),
 			);
 			app.get("/new/*", (r) => new URL(r.url).pathname);
 
@@ -67,34 +67,34 @@ runTestServerTests([
 			// SSRF protection blocks localhost
 			app.get(
 				"/ssrf-localhost",
-				proxy("http://localhost:8080/", { preventSSRF: true })
+				proxy("http://localhost:8080/", { preventSSRF: true }),
 			);
 			await assertResp(
 				fetch(`${base}/ssrf-localhost`),
 				500,
-				/SSRF protection.*localhost/i
+				/SSRF protection.*localhost/i,
 			);
 
 			// SSRF protection blocks 127.0.0.1
 			app.get(
 				"/ssrf-127",
-				proxy("http://127.0.0.1:8080/", { preventSSRF: true })
+				proxy("http://127.0.0.1:8080/", { preventSSRF: true }),
 			);
 			await assertResp(
 				fetch(`${base}/ssrf-127`),
 				500,
-				/SSRF protection.*127\.0\.0\.1/i
+				/SSRF protection.*127\.0\.0\.1/i,
 			);
 
 			// SSRF protection blocks private IP ranges
 			app.get(
 				"/ssrf-private",
-				proxy("http://192.168.1.1/", { preventSSRF: true })
+				proxy("http://192.168.1.1/", { preventSSRF: true }),
 			);
 			await assertResp(
 				fetch(`${base}/ssrf-private`),
 				500,
-				/SSRF protection.*192\.168\.1\.1/i
+				/SSRF protection.*192\.168\.1\.1/i,
 			);
 		},
 	},
@@ -107,7 +107,7 @@ runTestServerTests([
 			const targetHost = new URL(base).hostname;
 			app.get(
 				"/whitelist-allowed",
-				proxy(`${base}/target`, { allowedHosts: [targetHost] })
+				proxy(`${base}/target`, { allowedHosts: [targetHost] }),
 			);
 			await assertResp(fetch(`${base}/whitelist-allowed`), 200, "allowed");
 
@@ -116,12 +116,12 @@ runTestServerTests([
 				"/whitelist-blocked",
 				proxy("https://example.com/", {
 					allowedHosts: ["trusted.com", "*.safe.com"],
-				})
+				}),
 			);
 			await assertResp(
 				fetch(`${base}/whitelist-blocked`),
 				500,
-				/not in the allowed hosts list/i
+				/not in the allowed hosts list/i,
 			);
 		},
 	},
@@ -141,7 +141,7 @@ runTestServerTests([
 						"x-api-key": "secret123",
 						"x-custom": "value",
 					},
-				})
+				}),
 			);
 
 			const resp = await fetch(`${base}/with-headers`);
@@ -164,13 +164,13 @@ runTestServerTests([
 						headers.set("authorization", "Bearer TOKEN123");
 						return headers;
 					},
-				})
+				}),
 			);
 
 			await assertResp(
 				fetch(`${base}/transform-headers`),
 				200,
-				"Bearer TOKEN123"
+				"Bearer TOKEN123",
 			);
 		},
 	},
@@ -191,7 +191,7 @@ runTestServerTests([
 						headers.delete("x-original");
 						return headers;
 					},
-				})
+				}),
 			);
 
 			const resp = await fetch(`${base}/transform-response-headers`);
@@ -220,14 +220,14 @@ runTestServerTests([
 								chunks.push(value);
 							}
 							const text = new TextDecoder().decode(
-								new Uint8Array(chunks.flatMap((c) => Array.from(c)))
+								new Uint8Array(chunks.flatMap((c) => Array.from(c))),
 							);
 							const data = JSON.parse(text);
 							return JSON.stringify({ ...data, transformed: true });
 						}
 						return body;
 					},
-				})
+				}),
 			);
 
 			const resp = await fetch(`${base}/transform-body`);
@@ -249,10 +249,10 @@ runTestServerTests([
 							{
 								status: 502,
 								headers: { "content-type": "application/json" },
-							}
+							},
 						);
 					},
-				})
+				}),
 			);
 
 			const resp = await fetch(`${base}/custom-error`);
@@ -317,7 +317,7 @@ runTestServerTests([
 				"/remove-headers",
 				proxy(`${base}/echo-all-headers`, {
 					removeRequestHeaders: ["user-agent"],
-				})
+				}),
 			);
 
 			const resp = await fetch(`${base}/remove-headers`, {

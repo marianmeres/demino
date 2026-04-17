@@ -6,57 +6,86 @@
 /**
  * Checks if a hostname is a private/internal address (SSRF protection).
  *
- * Detects localhost, private IPv4 ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x,
- * 169.254.x.x, 127.x.x.x), and private IPv6 ranges (fe80::, fc/fd, ::1).
+ * Detects localhost, the unspecified address `0.0.0.0`, private IPv4 ranges
+ * (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x, 127.x.x.x,
+ * 100.64.0.0/10), private IPv6 ranges (fe80::/10, fc00::/7, ::1, the
+ * unspecified `::`), and IPv4-mapped IPv6 forms of any of the above.
+ *
+ * Important caveat: this is a *string-only* check. It cannot detect a public
+ * hostname that resolves (or is rebound) to a private IP. If you need
+ * protection against DNS rebinding, resolve the hostname yourself (e.g.
+ * `Deno.resolveDns`) and re-check each resulting address.
  *
  * @param hostname - The hostname or IP address to check
  * @returns true if the hostname is a private/internal address, false otherwise
  *
  * @example
  * ```ts
- * isPrivateHost("localhost");     // true
- * isPrivateHost("192.168.1.1");   // true
- * isPrivateHost("10.0.0.1");      // true
- * isPrivateHost("example.com");   // false
- * isPrivateHost("8.8.8.8");       // false
+ * isPrivateHost("localhost");           // true
+ * isPrivateHost("0.0.0.0");             // true
+ * isPrivateHost("192.168.1.1");         // true
+ * isPrivateHost("10.0.0.1");            // true
+ * isPrivateHost("::ffff:127.0.0.1");    // true (IPv4-mapped IPv6)
+ * isPrivateHost("example.com");         // false (does NOT do DNS lookup)
+ * isPrivateHost("8.8.8.8");             // false
  * ```
  */
 export function isPrivateHost(hostname: string): boolean {
+	// strip optional brackets used for IPv6 in URLs
+	if (hostname.startsWith("[") && hostname.endsWith("]")) {
+		hostname = hostname.slice(1, -1);
+	}
+
 	// localhost variations
 	if (
 		hostname === "localhost" ||
 		hostname === "127.0.0.1" ||
 		hostname === "::1" ||
+		hostname === "::" ||
 		hostname.endsWith(".localhost")
 	) {
 		return true;
 	}
 
+	// Extract the IPv4 portion of an IPv4-mapped IPv6 address (`::ffff:1.2.3.4`)
+	// before doing the IPv4 range check, so the same logic applies.
+	const lowerHost = hostname.toLowerCase();
+	const v4MappedMatch = lowerHost.match(
+		/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
+	);
+	const ipv4Candidate = v4MappedMatch ? v4MappedMatch[1] : hostname;
+
 	// Check for private IP ranges
-	const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+	const ipv4Match = ipv4Candidate.match(
+		/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
+	);
 	if (ipv4Match) {
 		const [, a, b] = ipv4Match.map(Number);
+		// 0.0.0.0 (unspecified — resolves to localhost on Linux)
+		if (a === 0) return true;
 		// 10.0.0.0/8
 		if (a === 10) return true;
+		// 100.64.0.0/10 (carrier-grade NAT)
+		if (a === 100 && b >= 64 && b <= 127) return true;
+		// 127.0.0.0/8 (loopback)
+		if (a === 127) return true;
+		// 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
+		if (a === 169 && b === 254) return true;
 		// 172.16.0.0/12
 		if (a === 172 && b >= 16 && b <= 31) return true;
 		// 192.168.0.0/16
 		if (a === 192 && b === 168) return true;
-		// 169.254.0.0/16 (link-local)
-		if (a === 169 && b === 254) return true;
-		// 127.0.0.0/8 (loopback)
-		if (a === 127) return true;
 	}
 
-	// Check for private IPv6 ranges
+	// Check for private IPv6 ranges (only meaningful if it actually contains ':')
 	if (hostname.includes(":")) {
-		const lower = hostname.toLowerCase();
 		// Link-local (fe80::/10)
-		if (lower.startsWith("fe80:")) return true;
-		// Unique local (fc00::/7)
-		if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-		// Loopback
-		if (lower === "::1") return true;
+		if (lowerHost.startsWith("fe80:")) return true;
+		// Unique local (fc00::/7) — note: must be followed by the rest of an IPv6
+		// address, so a literal "fc"-prefixed string still requires a colon.
+		if (lowerHost.startsWith("fc") || lowerHost.startsWith("fd")) return true;
+		// Loopback / unspecified
+		if (lowerHost === "::1" || lowerHost === "::") return true;
 	}
 
 	return false;

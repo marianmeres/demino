@@ -43,9 +43,9 @@ export class DeminoExpressLikeRouter extends DeminoRouter {
 				if (def.startsWith(":")) {
 					const name = def.slice(1); // remove the ":" prefix
 					params[name] = part;
-				} // If it's a static segment and doesn't match, route don't match
+				} // If it's a static segment and doesn't match, try the next route
 				else if (def !== part) {
-					break top;
+					continue top;
 				}
 			}
 

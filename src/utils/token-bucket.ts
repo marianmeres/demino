@@ -89,12 +89,39 @@ export class TokenBucket {
 	 */
 	refill(): TokenBucket {
 		const now = new Date();
-		const secondsPassed = (now.valueOf() - this.#lastRefill.valueOf()) / 1000;
-		const countToAdd = Math.round(secondsPassed * this.#refillSizePerSec);
+		const elapsedMs = now.valueOf() - this.#lastRefill.valueOf();
 
-		// make sure to prevent capacity hoarding by using Math.min
-		this.#currentSize = Math.min(this.#maxSize, this.#currentSize + countToAdd);
-		this.#lastRefill = now;
+		// clock skew protection
+		if (elapsedMs <= 0) return this;
+
+		const secondsPassed = elapsedMs / 1000;
+		// Math.floor (not Math.round) so we never credit a token before it's earned;
+		// any fractional remainder is preserved by NOT advancing lastRefill below.
+		const countToAdd = Math.floor(secondsPassed * this.#refillSizePerSec);
+
+		if (countToAdd <= 0) {
+			// No whole tokens earned yet. Critically: do NOT update lastRefill —
+			// otherwise fast successive calls (e.g. each <100ms apart with refill=10/s)
+			// would each compute countToAdd=0 and reset the clock, permanently losing
+			// the fractional time and effectively disabling refill under load.
+			return this;
+		}
+
+		const newSize = Math.min(this.#maxSize, this.#currentSize + countToAdd);
+
+		if (newSize >= this.#maxSize) {
+			// Bucket is full; any unused refill time is discarded (no hoarding).
+			this.#lastRefill = now;
+		} else {
+			// Advance lastRefill by exactly the time accounted for by `countToAdd`,
+			// so the unconsumed fraction carries to the next refill call.
+			this.#lastRefill = new Date(
+				this.#lastRefill.valueOf() +
+					(countToAdd * 1000) / this.#refillSizePerSec,
+			);
+		}
+
+		this.#currentSize = newSize;
 
 		// for debugging
 		this._logger?.debug?.("[TokenBucket]", {

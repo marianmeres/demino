@@ -1,6 +1,21 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
+import { assertThrows } from "@std/assert";
 import { cors } from "../../src/mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
+
+Deno.test("cors() throws on wildcard origin + credentials true", () => {
+	assertThrows(
+		() => cors({ allowOrigin: "*", allowCredentials: true }),
+		TypeError,
+		"allowCredentials",
+	);
+});
+
+Deno.test("cors() default config does NOT enable credentials", () => {
+	// We can only assert it doesn't throw — the runtime behavior is covered
+	// in the integration test below ("cors sanity check").
+	cors();
+});
 
 runTestServerTests([
 	{
@@ -16,14 +31,15 @@ runTestServerTests([
 				"Access-Control-Max-Age": false,
 			});
 
-			// now use default wildcard
-			app.use(cors({ allowCredentials: true }));
+			// now use default wildcard origin (credentials must stay false —
+			// the wildcard + credentials combination is rejected as of 1.7.0).
+			app.use(cors());
 
 			await assertResp(fetch(`${base}/`), 200, undefined, {
 				"Access-Control-Allow-Origin": "*",
 				"Access-Control-Allow-Methods": true,
 				"Access-Control-Allow-Headers": true,
-				"Access-Control-Allow-Credentials": true,
+				"Access-Control-Allow-Credentials": false,
 				"Access-Control-Max-Age": true,
 			});
 		},
@@ -84,7 +100,9 @@ runTestServerTests([
 					"Access-Control-Allow-Origin": "*",
 					"Access-Control-Allow-Methods": true,
 					"Access-Control-Allow-Headers": true,
-					"Access-Control-Allow-Credentials": true,
+					// `cors()` defaults to allowCredentials: false (since 1.7.0),
+					// so this header is intentionally NOT set
+					"Access-Control-Allow-Credentials": false,
 					"Access-Control-Max-Age": true,
 				},
 			);

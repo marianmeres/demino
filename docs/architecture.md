@@ -45,14 +45,18 @@ Deno.serve(app)
 1. **Incoming Request** → `Deno.serve()` invokes Demino handler
 2. **Route Matching** → Router finds matching route pattern, extracts params
 3. **Context Creation** → Fresh `DeminoContext` created with params, headers, etc.
-4. **Middleware Execution** → Chain executes in order:
+4. **Middleware Stack Resolution** (since 1.7.0) → Look up `(method, route)` in the
+   middleware cache. If absent, assemble + sort and store the resulting `Midware`
+   instance. The cache is invalidated on `app.use(...)` or route (re-)registration.
+5. **Middleware Execution** → Cached chain executes in order:
    - Global app middlewares (`app.use(mw)`)
    - Route-global middlewares (`app.use("/route", mw)`)
    - Route-method middlewares (`app.get("/route", mw, handler)`)
-5. **Handler Execution** → Final handler (last argument to route method)
-6. **Response Conversion** → Return value converted to `Response`
-7. **Error Handling** → If error thrown, error handler invoked
-8. **Access Logging** → If logger.access provided, log entry created
+6. **Handler Execution** → Final handler (last argument to route method)
+7. **Response Conversion** → Return value converted to `Response`
+8. **Error Handling** → If error thrown, error handler invoked
+9. **Access Logging** → `logger.access` invoked (default logger forwards to `console.log`
+   prefixed `[access]`; pass a custom logger or `null` to change/disable)
 
 ### Termination Rules
 

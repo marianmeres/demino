@@ -4,6 +4,45 @@ import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
+		// Regression: pre-1.7.0 the `lastAccess` field was set once on first
+		// contact and never refreshed. With cleanupProbability set high, an
+		// active client could be evicted mid-stream — and its bucket recreated
+		// at full capacity on the next request, defeating the rate limit.
+		name: "rate limit: cleanup does not evict active clients",
+		fn: async ({ app, base }) => {
+			app.get(
+				"/",
+				rateLimit(() => "active-client", {
+					maxSize: 2,
+					refillSizePerSecond: 1,
+					// run cleanup on every request and use a tight stale threshold
+					// (maxSize/refillSizePerSecond = 2 seconds) so eviction is
+					// guaranteed to be considered each call
+					cleanupProbability: 1,
+				}),
+				() => "",
+			);
+			// Drain the burst capacity
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.OK);
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.TOO_MANY_REQUESTS);
+			// Wait longer than the eviction threshold (2s) while continuing to
+			// poll. Pre-fix the cleanup pass would delete the entry → next
+			// request reinitialises a full-capacity bucket. Post-fix, polling
+			// keeps lastAccess fresh, so the entry survives and the limit holds.
+			const deadline = Date.now() + 2_500;
+			while (Date.now() < deadline) {
+				const r = await fetch(`${base}/`);
+				await r.text(); // consume body to prevent leak
+				await sleep(50);
+			}
+			// The bucket should NOT have refilled to full capacity. With
+			// refill=1/s and ~3.5s elapsed during the test we'd have at most a
+			// few tokens; the burst of 2 is what we're guarding against.
+			await assertResp(fetch(`${base}/`), HTTP_STATUS.TOO_MANY_REQUESTS);
+		},
+	},
+	{
 		name: "rate limit works",
 		fn: async ({ app, base }) => {
 			app.get(

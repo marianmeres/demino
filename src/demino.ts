@@ -1,8 +1,4 @@
-import {
-	createHttpError,
-	getErrorMessage,
-	HTTP_STATUS,
-} from "@marianmeres/http-utils";
+import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
 import { green, red } from "@std/fmt/colors";
 import { serveDir, type ServeDirOptions } from "@std/http/file-server";
@@ -270,6 +266,22 @@ function isFn(v: unknown): v is CallableFunction {
 }
 
 /**
+ * Builds the default `DeminoLogger` used when the caller passes no `logger`
+ * option. Forwards everything to `console`, and crucially provides an `access`
+ * method (which `console` itself doesn't have) so access logs go to
+ * `console.log` instead of being silently swallowed.
+ */
+function defaultConsoleLogger(): DeminoLogger {
+	return {
+		debug: (...a) => console.debug(...a),
+		log: (...a) => console.log(...a),
+		warn: (...a) => console.warn(...a),
+		error: (...a) => console.error(...a),
+		access: (data) => console.log("[access]", data),
+	};
+}
+
+/**
  * Common content-type header values for convenience.
  *
  * @example
@@ -495,19 +507,26 @@ export function demino(
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
 	let _errorHandler: DeminoHandler;
 
-	// initially we are falling back to console
-	let _log: DeminoLogger | null =
-		options?.logger === undefined
-			? (console as unknown as DeminoLogger)
-			: options.logger;
+	// Per-(method+route) cached Midware instance. The middleware stack only
+	// changes when `app.use(...)` is called, so we can build it lazily on the
+	// first request and reuse it for all subsequent requests to the same
+	// (method, route) pair. The cache is cleared on every `app.use(...)`.
+	const _midwareCache = new Map<string, Midware<DeminoHandlerArgs>>();
+	const _invalidateMidwareCache = () => _midwareCache.clear();
+
+	// initially we are falling back to a console-backed adapter (the bare
+	// `console` object lacks an `access` method, so previously access logs
+	// silently no-op'd; the adapter wires `access` to `console.log`).
+	let _log: DeminoLogger | null = options?.logger === undefined
+		? defaultConsoleLogger()
+		: options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
-	const _routerFactory =
-		typeof options?.routerFactory === "function"
-			? options.routerFactory
-			: () => new DeminoSimpleRouter();
+	const _routerFactory = typeof options?.routerFactory === "function"
+		? options.routerFactory
+		: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
 	const _routers = ["ALL", ...supportedMethods].reduce(
@@ -648,39 +667,47 @@ export function demino(
 						appLocals,
 					);
 
-					// everything is a middleware...
-					const midwares: DeminoHandler[] = [
-						..._globalAppMws,
-						...(_globalRouteMws[matched.route] || []),
-						...[...matched.midwares],
-					]
-						.flat()
-						.filter(Boolean)
-						.map((mw, i, arr) => {
-							if (i === arr.length - 1) {
-								// handler: if sort order is not yet defined, make it big
-								mw.__midwarePreExecuteSortOrder ??= Infinity;
-							} else {
-								// middleware: let's create some magic value, so we have some known boundary...
-								// in other words, if we would ever need to manually set a mw position after normal ones,
-								// we'll know to set a value greater than 1_000
-								mw.__midwarePreExecuteSortOrder ??= 1_000;
-							}
-							return mw;
+					// Build (or reuse) the assembled+sorted Midware for this
+					// (method, route) pair. The cache is invalidated whenever
+					// app.use(...) changes the global middleware sets.
+					const cacheKey = `${method} ${matched.route}`;
+					let midware = _midwareCache.get(cacheKey);
+					if (!midware) {
+						// everything is a middleware...
+						const midwares: DeminoHandler[] = [
+							..._globalAppMws,
+							...(_globalRouteMws[matched.route] || []),
+							...[...matched.midwares],
+						]
+							.flat()
+							.filter(Boolean)
+							.map((mw, i, arr) => {
+								if (i === arr.length - 1) {
+									// handler: if sort order is not yet defined, make it big
+									mw.__midwarePreExecuteSortOrder ??= Infinity;
+								} else {
+									// middleware: let's create some magic value, so we have some known boundary...
+									// in other words, if we would ever need to manually set a mw position after normal ones,
+									// we'll know to set a value greater than 1_000
+									mw.__midwarePreExecuteSortOrder ??= 1_000;
+								}
+								return mw;
+							});
+
+						// this is likely a bug (while technically ok)
+						if (!midwares.length) {
+							throw new TypeError(`No DeminoHandler found`);
+						}
+
+						midware = new Midware<DeminoHandlerArgs>(midwares, {
+							// we will sort the stack (see the dance above)
+							preExecuteSortEnabled: true,
+							// and we will check for duplicated middleware usage
+							duplicatesCheckEnabled: true,
 						});
 
-					// this is likely a bug (while technically ok)
-					if (!midwares.length) {
-						throw new TypeError(`No DeminoHandler found`);
+						_midwareCache.set(cacheKey, midware);
 					}
-
-					// create the midware
-					const midware = new Midware<DeminoHandlerArgs>(midwares, {
-						// we will sort the stack (see the dance above)
-						preExecuteSortEnabled: true,
-						// and we will check for duplicated middleware usage
-						duplicatesCheckEnabled: true,
-					});
 
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
@@ -701,7 +728,12 @@ export function demino(
 						result = await _createErrorResponse(req, info, context);
 					} // we need Response instance eventually...
 					else if (!(result instanceof Response)) {
-						result = createResponseFrom(req, result, headers, context?.status);
+						result = createResponseFrom(
+							req,
+							result,
+							headers,
+							context?.status,
+						);
 					}
 
 					//
@@ -743,6 +775,10 @@ export function demino(
 				_methods.push("HEAD");
 			}
 
+			// (re-)registering a route can change its middleware stack, so drop
+			// any cached assembled Midware for it
+			_invalidateMidwareCache();
+
 			for (const method of _methods) {
 				try {
 					//
@@ -755,7 +791,10 @@ export function demino(
 					}));
 
 					_localMwsCounts[_fullRoute] ??= {};
-					_localMwsCounts[_fullRoute][method] = args.flat().length - 1;
+					_localMwsCounts[_fullRoute][method] = Math.max(
+						0,
+						args.flat().length - 1,
+					);
 
 					if (options?.verbose) {
 						_doLog("debug", green(` ✔ ${method} ${mountPath + route}`));
@@ -810,6 +849,9 @@ export function demino(
 		} else {
 			_globalAppMws.push(...mws.flat());
 		}
+		// any change to global middleware composition must invalidate the
+		// per-route assembled stack cache so the next request rebuilds it
+		_invalidateMidwareCache();
 		return _app;
 	};
 
@@ -844,10 +886,9 @@ export function demino(
 		_app.all(route, (req) => {
 			// serveDir only handles GET; rewrite HEAD as GET so it serves correctly
 			// (demino strips the response body for HEAD requests automatically)
-			const effectiveReq =
-				req.method === "HEAD"
-					? new Request(req.url, { headers: req.headers, method: "GET" })
-					: req;
+			const effectiveReq = req.method === "HEAD"
+				? new Request(req.url, { headers: req.headers, method: "GET" })
+				: req;
 			return serveDir(effectiveReq, {
 				quiet: true,
 				...options,

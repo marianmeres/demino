@@ -17,20 +17,27 @@ export class TimeoutError extends Error {}
 /**
  * Wraps a function to reject if execution exceeds a timeout.
  *
- * Creates a new function that wraps the original and races it against a timer.
- * If the original function doesn't resolve/reject before the timeout,
- * the wrapper rejects with a TimeoutError.
+ * On timeout, the wrapper rejects with a `TimeoutError`. If the wrapped
+ * function accepts an `AbortSignal` as its **last** argument, that signal will
+ * also be aborted on timeout — which lets the underlying work (e.g. `fetch`)
+ * actually cancel rather than continue running in the background.
+ *
+ * If the wrapped function ignores the signal, the work continues until it
+ * completes naturally — but the wrapper has already rejected, so any result
+ * is discarded.
  *
  * @typeParam T - The return type of the wrapped function
- * @param fn - The function to wrap (can be sync or async)
- * @param timeout - Timeout in milliseconds (default: 1000)
+ * @param fn - The function to wrap (can be sync or async). Receives an
+ *             `AbortSignal` as its last argument when invoked.
+ * @param timeout - Timeout in milliseconds (default: 1000). Pass 0 to disable
+ *                  the timer entirely.
  * @param errMessage - Custom error message for timeout (default: "Timed out after X ms")
  * @returns A new function that returns a Promise with timeout enforcement
  *
- * @example Basic usage
+ * @example Basic usage with cancellable fetch
  * ```ts
- * const slowFetch = async (url: string) => {
- *   const res = await fetch(url);
+ * const slowFetch = async (url: string, signal?: AbortSignal) => {
+ *   const res = await fetch(url, { signal });
  *   return res.json();
  * };
  *
@@ -40,7 +47,7 @@ export class TimeoutError extends Error {}
  *   const data = await timedFetch("https://api.example.com/data");
  * } catch (e) {
  *   if (e instanceof TimeoutError) {
- *     console.log("Request timed out after 5 seconds");
+ *     console.log("Request timed out after 5 seconds (and was cancelled)");
  *   }
  * }
  * ```
@@ -56,20 +63,24 @@ export function withTimeout<T>(
 	errMessage?: string,
 ): (...args: unknown[]) => Promise<T> {
 	return (...args: unknown[]): Promise<T> => {
-		const _promise = fn(...args);
+		// Pass an AbortSignal so the wrapped function can actually cancel its
+		// underlying work on timeout (e.g. abort an in-flight fetch). Functions
+		// that don't take a signal will simply ignore it.
+		const ac = new AbortController();
+		const _promise = fn(...args, ac.signal) as Promise<T>;
+
+		if (!timeout) return Promise.resolve(_promise);
 
 		let _timeoutId: number;
-		const _clock = new Promise((_, reject) => {
+		const _clock = new Promise<never>((_, reject) => {
 			_timeoutId = setTimeout(() => {
+				ac.abort();
 				reject(new TimeoutError(errMessage || `Timed out after ${timeout} ms`));
 			}, timeout);
 		});
 
-		return new Promise<T>((res, rej) => {
-			return Promise.race([_promise, _clock])
-				.then(res)
-				.catch(rej)
-				.finally(() => clearTimeout(_timeoutId));
+		return Promise.race([_promise, _clock]).finally(() => {
+			clearTimeout(_timeoutId);
 		});
 	};
 }

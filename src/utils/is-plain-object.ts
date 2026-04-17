@@ -22,6 +22,8 @@ export function isPlainObject(v: unknown): v is Record<string, unknown> {
 	return (
 		v !== null &&
 		typeof v === "object" &&
-		[undefined, Object].includes((v as { constructor?: unknown }).constructor as undefined)
+		[undefined, Object].includes(
+			(v as { constructor?: unknown }).constructor as undefined,
+		)
 	);
 }

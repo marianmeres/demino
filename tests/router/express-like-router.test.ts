@@ -13,6 +13,11 @@ Deno.test("express like router", async () => {
 
 	app.get("/", () => "home");
 	app.get("/foo", () => "foo");
+	// Regression: pre-1.7.0 the router used `break top` instead of `continue top`
+	// on a static-segment mismatch, so a request for a route registered LATER
+	// would 404 if an earlier-registered route had the same segment count.
+	app.get("/bar", () => "bar");
+	app.get("/baz", () => "baz");
 	app.get("/user/:foo/section/:baz", (_r, _i, ctx) => ctx.params);
 
 	try {
@@ -20,6 +25,8 @@ Deno.test("express like router", async () => {
 
 		await assertResp(fetch(`${srv.base}`), 200, "home");
 		await assertResp(fetch(`${srv.base}/foo`), 200, "foo");
+		await assertResp(fetch(`${srv.base}/bar`), 200, "bar");
+		await assertResp(fetch(`${srv.base}/baz`), 200, "baz");
 		await assertResp(fetch(`${srv.base}/user/bar/section/bat`), 200, {
 			foo: "bar",
 			baz: "bat",

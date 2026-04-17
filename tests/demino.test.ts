@@ -7,8 +7,8 @@ import {
 import { sleep } from "@marianmeres/midware";
 import { assertEquals } from "@std/assert";
 import {
-	demino,
 	type Demino,
+	demino,
 	type DeminoHandler,
 	type DeminoLogger,
 	type Logger,
@@ -97,7 +97,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}`, { method: "POST" }),
 			200,
-			/world/i
+			/world/i,
 		);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
@@ -111,13 +111,13 @@ Deno.test("mounted hello world", async () => {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method }),
 				200,
-				method
+				method,
 			);
 			// head must return 405 for not get registered routes
 			await assertResp(
 				fetch(`${srv.base}${mount}/${method}`, { method: "HEAD" }),
 				405,
-				""
+				"",
 			);
 		}
 
@@ -126,7 +126,7 @@ Deno.test("mounted hello world", async () => {
 			await assertResp(
 				fetch(`${srv.base}${mount}/${p}`, { method: "HEAD" }),
 				200,
-				""
+				"",
 			);
 		}
 
@@ -134,7 +134,7 @@ Deno.test("mounted hello world", async () => {
 		await assertResp(
 			fetch(`${srv.base}${mount}/asdf`, { method: "HEAD" }),
 			404,
-			false
+			false,
 		);
 
 		// case sensitivity check
@@ -200,7 +200,7 @@ Deno.test("middlewares and various return types", async () => {
 			{
 				"X-VERSION": "1.2.3",
 				"content-type": /json/,
-			}
+			},
 		);
 
 		// "bar" return via toJSON as json
@@ -208,7 +208,7 @@ Deno.test("middlewares and various return types", async () => {
 			fetch(`${srv.base}/some/bar`),
 			200,
 			{ baz: "bat" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// array
@@ -230,7 +230,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/no-content`),
 			HTTP_STATUS.NO_CONTENT,
-			""
+			"",
 		);
 
 		// mirror post data
@@ -238,7 +238,7 @@ Deno.test("middlewares and various return types", async () => {
 		await assertResp(
 			fetch(`${srv.base}/echo`, { method: "POST", body: JSON.stringify(hey) }),
 			200,
-			hey
+			hey,
 		);
 
 		// check html content-type
@@ -384,7 +384,7 @@ Deno.test("custom error handler", async () => {
 		await assertResp(
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
-			"Forbidden"
+			"Forbidden",
 		);
 
 		// now register custom error handler which will talk always in json
@@ -397,7 +397,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}/secret`),
 			HTTP_STATUS.FORBIDDEN,
 			{ ok: false, message: "Forbidden" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// repeat, and expect json
@@ -405,7 +405,7 @@ Deno.test("custom error handler", async () => {
 			fetch(`${srv.base}`),
 			404,
 			{ ok: false, message: "Not Found" },
-			{ "content-type": /json/ }
+			{ "content-type": /json/ },
 		);
 
 		// err
@@ -456,7 +456,7 @@ Deno.test("catch all fallback route", async () => {
 		await assertResp(
 			fetch(`${srv.base}/${Math.random()}`, { method: "POST" }),
 			200,
-			/hey/i
+			/hey/i,
 		);
 	} catch (e) {
 		throw e;
@@ -547,8 +547,10 @@ Deno.test("access log", async () => {
 	const logger: DeminoLogger = {
 		...({} as unknown as Logger),
 		access: async ({ req, status }) => {
-			// intentionally sleeping - must not prevent responding
-			await sleep(10);
+			// intentionally sleeping — must not prevent responding. Sleep
+			// duration must be comfortably longer than the time taken for the
+			// 4 fetches below so the assertion at length === 0 is reliable.
+			await sleep(500);
 			const { pathname, search } = new URL(req.url);
 			_log.push(`${req.method} ${pathname}${search} ${status}`);
 		},
@@ -572,7 +574,7 @@ Deno.test("access log", async () => {
 		assertEquals(_log.length, 0);
 
 		// wait for logger to complete
-		await sleep(100);
+		await sleep(750);
 
 		// now check
 		assertEquals(_log, [
@@ -607,7 +609,7 @@ runTestServerTests([
 				(_r, _i, c) => {
 					c.locals.local = 1;
 				},
-				(_r, _i, c) => c.locals
+				(_r, _i, c) => c.locals,
 			);
 
 			app.use("/foo", (_r, _i, c) => {

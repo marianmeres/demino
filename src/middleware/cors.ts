@@ -22,7 +22,10 @@ export interface CorsOptions {
 	allowMethods:
 		| string
 		| string[]
-		| ((origin: string, headers: Headers) => string | string[] | Promise<string | string[]>);
+		| ((
+			origin: string,
+			headers: Headers,
+		) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Allowed request headers.
@@ -31,11 +34,24 @@ export interface CorsOptions {
 	allowHeaders:
 		| string
 		| string[]
-		| ((origin: string, headers: Headers) => string | string[] | Promise<string | string[]>);
+		| ((
+			origin: string,
+			headers: Headers,
+		) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Whether to allow credentials (cookies, authorization headers).
-	 * @default true
+	 *
+	 * Defaults to `false` (since 1.7.0) — the CORS spec forbids combining
+	 * credentialed requests with `allowOrigin: "*"`, and the previous default
+	 * (`true`) silently echoed back any request `Origin` to work around that,
+	 * effectively allowing credentialed requests from any origin.
+	 *
+	 * Enable this only with an explicit `allowOrigin` allowlist (string or
+	 * function) — passing both `allowCredentials: true` AND `allowOrigin: "*"`
+	 * will throw at construction time.
+	 *
+	 * @default false
 	 */
 	allowCredentials:
 		| boolean
@@ -54,12 +70,15 @@ export interface CorsOptions {
  * Creates a CORS (Cross-Origin Resource Sharing) middleware.
  *
  * Sets appropriate CORS headers in the response and handles preflight OPTIONS requests.
- * By default, uses permissive settings (allows all origins and credentials).
+ * Defaults: `allowOrigin: "*"`, `allowCredentials: false`. To allow credentialed
+ * requests, supply an explicit allowlist (string, string[], or function returning the
+ * matched origin); the wildcard + credentials combination is forbidden by the CORS spec
+ * and rejected at construction time.
  *
  * @param options - CORS configuration (all fields optional)
  * @returns Middleware handler that sets CORS headers
  *
- * @example Basic usage with defaults
+ * @example Basic public-read usage (no credentials)
  * ```ts
  * import { cors } from "@marianmeres/demino";
  *
@@ -67,7 +86,7 @@ export interface CorsOptions {
  * app.options("*", cors()); // Handle preflight requests
  * ```
  *
- * @example Static whitelist
+ * @example Static whitelist with credentials
  * ```ts
  * app.use(cors({
  *   allowOrigin: ["https://example.com", "https://app.example.com"],
@@ -75,7 +94,7 @@ export interface CorsOptions {
  * }));
  * ```
  *
- * @example Dynamic origin validation
+ * @example Dynamic origin validation with credentials
  * ```ts
  * app.use(cors({
  *   allowOrigin: (origin, headers) => {
@@ -99,9 +118,22 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 		allowOrigin = "*",
 		allowMethods = "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
 		allowHeaders = "Content-Type,Authorization", // '*'
-		allowCredentials = true,
+		allowCredentials = false,
 		maxAge = 86_400, // 24 hours
 	} = options ?? {};
+
+	// Refuse the spec-violating combination at construction time. We can only
+	// catch the static case here; for dynamic `allowOrigin` / `allowCredentials`
+	// functions, the per-request branch below silently disables credentials when
+	// the resolved origin is `*` (and warns once via console).
+	if (allowOrigin === "*" && allowCredentials === true) {
+		throw new TypeError(
+			"cors(): `allowCredentials: true` is incompatible with " +
+				'`allowOrigin: "*"`. Provide an explicit allowlist (string, ' +
+				"string[], or function returning the matched origin), or set " +
+				"`allowCredentials: false`. See https://fetch.spec.whatwg.org/#cors-protocol-and-credentials.",
+		);
+	}
 
 	const midware: DeminoHandler = async (
 		req: Request,
@@ -134,14 +166,27 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 			origin = allowOrigin;
 		}
 		if (origin) {
-			// browsers may not support wildcard with allow-credentials, so:
-			if (credentials && origin === "*" && requestOrigin) {
-				origin = requestOrigin;
-				originVaries = true;
-			}
-			ctx.headers.set("Access-Control-Allow-Origin", origin);
-			if (originVaries) {
-				ctx.headers.append("Vary", "Origin");
+			// Spec-violating combination: `Access-Control-Allow-Origin: *` is
+			// incompatible with `Access-Control-Allow-Credentials: true`. The
+			// constructor catches the static-config case; this branch handles
+			// the case where a dynamic `allowOrigin` / `allowCredentials`
+			// function resolved to that combination at request time.
+			//
+			// Refuse to send the headers at all so the browser-side preflight
+			// fails closed instead of us silently echoing back an arbitrary
+			// request `Origin` (which would amount to allowing every origin).
+			if (credentials && origin === "*") {
+				ctx.getLogger()?.warn?.(
+					"[cors] Refusing to set headers: dynamic `allowOrigin` " +
+						"resolved to '*' while `allowCredentials` is true. " +
+						"Return a specific origin (or set credentials to false).",
+				);
+				ctx.headers.delete("Access-Control-Allow-Credentials");
+			} else {
+				ctx.headers.set("Access-Control-Allow-Origin", origin);
+				if (originVaries) {
+					ctx.headers.append("Vary", "Origin");
+				}
 			}
 		}
 

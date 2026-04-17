@@ -7,6 +7,19 @@ export interface ETagOptions {
 	 * Default: false
 	 */
 	weak?: boolean;
+	/**
+	 * Maximum response body size (in bytes) eligible for ETag generation. The
+	 * middleware buffers the entire response body in memory to compute the
+	 * SHA-1 hash, so large responses are a memory hazard.
+	 *
+	 * If the response advertises a `Content-Length` greater than this value, or
+	 * if the buffered body turns out to exceed it, the middleware skips
+	 * hashing and returns the response unchanged (no ETag added, no 304
+	 * negotiation). Set to `0` (or `Infinity`) to disable the cap.
+	 *
+	 * Default: 1_048_576 (1 MiB).
+	 */
+	maxSizeBytes?: number;
 }
 
 /**
@@ -38,7 +51,8 @@ export function withETag(
 	handler: DeminoHandler,
 	options?: ETagOptions,
 ): DeminoHandler {
-	const { weak = false } = options ?? {};
+	const { weak = false, maxSizeBytes = 1_048_576 } = options ?? {};
+	const sizeCap = !maxSizeBytes || maxSizeBytes === Infinity ? Infinity : maxSizeBytes;
 
 	return async (req, info, ctx) => {
 		// Only process GET and HEAD methods
@@ -64,8 +78,25 @@ export function withETag(
 			return result;
 		}
 
+		// Skip large responses up-front when Content-Length advertises the size.
+		// (We can't trust the absence of the header — `arrayBuffer()` below has
+		// the second-line defense for when the body is actually larger.)
+		const contentLength = Number(result.headers.get("content-length"));
+		if (Number.isFinite(contentLength) && contentLength > sizeCap) {
+			return result;
+		}
+
 		// Read response body (this consumes the stream)
 		const body = await result.arrayBuffer();
+		if (body.byteLength > sizeCap) {
+			// Body is past the cap; we already consumed the stream so we have to
+			// rebuild the response from the buffered bytes, but we skip hashing.
+			return new Response(body, {
+				status: result.status,
+				statusText: result.statusText,
+				headers: result.headers,
+			});
+		}
 
 		// Generate ETag using SHA-1 hash
 		const hashBuffer = await crypto.subtle.digest("SHA-1", body);
