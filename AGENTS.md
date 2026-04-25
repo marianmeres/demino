@@ -174,7 +174,6 @@ Handler return values are auto-converted to Response:
 - @marianmeres/midware - Middleware chaining
 - @marianmeres/simple-router - Default router implementation
 - @std/assert - Test assertions
-- @std/encoding - Encoding utilities (base64)
 - @std/fmt - Formatting utilities (colors)
 - @std/fs - File system utilities (walkSync)
 - @std/http - HTTP utilities (serveDir)

@@ -1,7 +1,6 @@
-import { encodeBase64 } from "@std/encoding";
 import { green } from "@std/fmt/colors";
 import { walkSync } from "@std/fs";
-import { dirname, normalize } from "@std/path";
+import { dirname, normalize, resolve, toFileUrl } from "@std/path";
 import {
 	type Demino,
 	type DeminoHandler,
@@ -20,9 +19,9 @@ export interface DeminoFileBasedOptions {
 	/** Custom logger (default console) */
 	logger?: DeminoLogger | null | undefined;
 	/**
-	 * https://docs.deno.com/deploy/api/dynamic-import/
-	 * This hoisted importer is only required if the imported module is using other relative
-	 * imports.
+	 * Override the default importer (which uses `file://` URL dynamic import).
+	 * Useful for bundling, mocking in tests, or environments with custom module
+	 * resolution.
 	 */
 	doImport?: (modulePath: string) => Promise<Record<string, unknown>>;
 }
@@ -101,14 +100,10 @@ export async function deminoFileBased(
 	> = {};
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
-	const _defatulImporter = async (modulePath: string) => {
-		// https://docs.deno.com/deploy/api/dynamic-import/
-		const type = /\.ts$/i.test(modulePath) ? "typescript" : "javascript";
-		const jsSource = encodeBase64(Deno.readTextFileSync(modulePath));
-		return await import(`data:text/${type};base64,${jsSource}`);
-	};
+	const _defaultImporter = (modulePath: string) =>
+		import(toFileUrl(resolve(modulePath)).href);
 
-	const doImport = options?.doImport ?? _defatulImporter;
+	const doImport = options?.doImport ?? _defaultImporter;
 
 	for (const rootDir of rootDirs) {
 		for (
