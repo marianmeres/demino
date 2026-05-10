@@ -11,14 +11,14 @@
     "rpm": "deno task release minor -y && deno publish"
   },
   "imports": {
-    "@marianmeres/clog": "jsr:@marianmeres/clog@^3.17.0",
-    "@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.6.0",
+    "@marianmeres/clog": "jsr:@marianmeres/clog@^3.18.1",
+    "@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.7.0",
     "@marianmeres/midware": "jsr:@marianmeres/midware@^1.5.0",
-    "@marianmeres/simple-router": "jsr:@marianmeres/simple-router@^3.3.0",
+    "@marianmeres/simple-router": "jsr:@marianmeres/simple-router@^3.3.1",
     "@std/assert": "jsr:@std/assert@^1.0.19",
-    "@std/fmt": "jsr:@std/fmt@^1.0.9",
+    "@std/fmt": "jsr:@std/fmt@^1.0.10",
     "@std/fs": "jsr:@std/fs@^1.0.23",
-    "@std/http": "jsr:@std/http@^1.0.25",
+    "@std/http": "jsr:@std/http@^1.1.0",
     "@std/path": "jsr:@std/path@^1.1.4",
     "request-ip": "npm:request-ip@^3.3.0",
     "@marianmeres/mcp-server/types": "jsr:@marianmeres/mcp-server@1.2.1/types"
