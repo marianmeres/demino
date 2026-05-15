@@ -1,9 +1,9 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@marianmeres/batch@^1.2.4": "1.2.4",
-    "jsr:@marianmeres/clog@^3.17.1": "3.19.1",
-    "jsr:@marianmeres/clog@^3.19.1": "3.19.1",
+    "jsr:@marianmeres/batch@^1.2.5": "1.2.5",
+    "jsr:@marianmeres/clog@^3.19.1": "3.19.2",
+    "jsr:@marianmeres/clog@^3.19.2": "3.19.2",
     "jsr:@marianmeres/http-utils@^2.7.0": "2.7.0",
     "jsr:@marianmeres/mcp-server@^1.3.2": "1.3.2",
     "jsr:@marianmeres/midware@^1.5.0": "1.5.0",
@@ -26,15 +26,15 @@
     "npm:zod@^3.25.76": "3.25.76"
   },
   "jsr": {
-    "@marianmeres/batch@1.2.4": {
-      "integrity": "876717f551c12988c511b0b71c6e1fe6f3d673b08543921b817701f76920652c",
+    "@marianmeres/batch@1.2.5": {
+      "integrity": "f30d2f508b9ea52169759e841cfdd18c66bedea9ec3a3813022a5f5958af95e0",
       "dependencies": [
-        "jsr:@marianmeres/clog@^3.17.1",
+        "jsr:@marianmeres/clog@^3.19.1",
         "jsr:@marianmeres/pubsub"
       ]
     },
-    "@marianmeres/clog@3.19.1": {
-      "integrity": "f840f9413b7a7365fdfa576932288da68add1ca4b9274f0b1f162a8003eb3cb4",
+    "@marianmeres/clog@3.19.2": {
+      "integrity": "683f72cbf5b6bd25f22dcbb2e7e61a0c1a08286c5278ab4ba5d8c48885358deb",
       "dependencies": [
         "jsr:@marianmeres/batch"
       ]
@@ -639,7 +639,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@marianmeres/clog@^3.19.1",
+      "jsr:@marianmeres/clog@^3.19.2",
       "jsr:@marianmeres/http-utils@^2.7.0",
       "jsr:@marianmeres/mcp-server@^1.3.2",
       "jsr:@marianmeres/midware@^1.5.0",
