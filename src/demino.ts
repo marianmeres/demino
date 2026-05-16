@@ -884,12 +884,10 @@ export function demino(
 		// console.log(123, route, urlRoot);
 
 		_app.all(route, (req) => {
-			// serveDir only handles GET; rewrite HEAD as GET so it serves correctly
-			// (demino strips the response body for HEAD requests automatically)
-			const effectiveReq = req.method === "HEAD"
-				? new Request(req.url, { headers: req.headers, method: "GET" })
-				: req;
-			return serveDir(effectiveReq, {
+			// `serveDir` (@std/http >= 1.0) handles HEAD natively — it sets
+			// the correct headers (Content-Length, ETag, Last-Modified, …)
+			// with a null body and short-circuits the file read.
+			return serveDir(req, {
 				quiet: true,
 				...options,
 				fsRoot,
