@@ -291,6 +291,22 @@ Deno.test("middlewares sort order", async () => {
 	return srv?.server?.finished;
 });
 
+Deno.test("constructor middleware array is defensively copied", () => {
+	const m1: DeminoHandler = () => "m1";
+	const m2: DeminoHandler = () => "m2";
+	const m3: DeminoHandler = () => "m3";
+	const mws = [m1, m2];
+
+	const a = demino("/a", mws);
+	const b = demino("/b", mws);
+
+	a.use(m3);
+
+	assertEquals(a.info().globalAppMiddlewaresCount, 3);
+	assertEquals(b.info().globalAppMiddlewaresCount, 2);
+	assertEquals(mws.length, 2);
+});
+
 Deno.test("global route middlewares", async () => {
 	let srv: Srv | null = null;
 	let log: number[] = [];

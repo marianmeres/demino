@@ -450,7 +450,7 @@ export interface DeminoOptions {
  * It provides routing, middleware support, error handling, and logging capabilities.
  *
  * @param mountPath - Optional base path for all routes (default: ""). Must start with "/" if not empty.
- * @param middleware - Optional global middleware(s) to run on every request
+ * @param middleware - Optional global middleware(s) to run on every request. Array inputs are shallow-copied; demino owns its internal stack.
  * @param options - Optional configuration for the application
  * @param appLocals - Optional application-wide data accessible via ctx.appLocals
  * @returns Demino application instance ready to serve requests
@@ -503,7 +503,7 @@ export function demino(
 	}
 
 	// initialize and normalize...
-	const _globalAppMws = Array.isArray(middleware) ? middleware : [middleware];
+	const _globalAppMws = Array.isArray(middleware) ? [...middleware] : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
 	let _errorHandler: DeminoHandler;
 
