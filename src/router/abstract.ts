@@ -35,7 +35,7 @@ export type DeminoRouterOnMatch = (
  * ```ts
  * class MyRouter extends DeminoRouter {
  *   on(route: string, callback: DeminoRouterOnMatch): void { ... }
- *   exec(pathname: string): DeminoRouterOnMatchResult | null { ... }
+ *   exec(pathname: string, options?: { skipCatchAll?: boolean }): DeminoRouterOnMatchResult | null { ... }
  * }
  *
  * const app = demino("", [], { routerFactory: () => new MyRouter() });
@@ -52,9 +52,16 @@ export abstract class DeminoRouter {
 	/**
 	 * Attempts to match a pathname against registered routes.
 	 * @param pathname - The URL pathname to match (e.g., "/users/123")
+	 * @param options - Optional matching options. When `skipCatchAll` is true, a
+	 *   deferred internal catch-all (e.g. the `*` route in `DeminoSimpleRouter`) is
+	 *   suppressed, so only real routes can match. Routers without a deferred
+	 *   catch-all may ignore this.
 	 * @returns Match result with params and middlewares, or null if no match
 	 */
-	abstract exec(pathname: string): DeminoRouterOnMatchResult | null;
+	abstract exec(
+		pathname: string,
+		options?: { skipCatchAll?: boolean },
+	): DeminoRouterOnMatchResult | null;
 
 	/**
 	 * Validates whether a route pattern is valid for this router.

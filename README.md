@@ -69,6 +69,28 @@ Demino also comes with
 [URL Pattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) based
 router. Read more about it below.
 
+### Catch-all (`*`) precedence
+
+A `*` catch-all always resolves **globally last** - it only fires once nothing else
+matched. The effective order is: real routes (any method) → catch-all routes. So a
+catch-all never shadows a more specific route, regardless of the HTTP method it was
+registered on:
+
+```typescript
+app.get("/", () => "home");
+app.all("/files/*", () => "static");
+app.get("*", () => { throw createHttpError(404); }); // legacy fallback
+
+// GET /files/logo.png -> "static"  (the .all() route wins over the GET catch-all)
+// GET /              -> "home"
+// GET /anything-else -> 404        (the catch-all fires only here)
+```
+
+> **Note (1.8.8):** Earlier versions let a method-specific catch-all (e.g.
+> `app.get("*")`) shadow `app.all("/files/*")` and similar literal routes. Catch-alls
+> are now consistently last. A `*` registered on any single method no longer turns an
+> otherwise-unmatched `HEAD` request into a `405`.
+
 ## Middlewares and route handlers
 
 The stuff happens in route handlers. Or in middlewares. Or in both. In fact, they are

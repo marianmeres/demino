@@ -154,6 +154,19 @@ Handler return values are auto-converted to Response:
 ^/(?<year>\\d{4})$           -> params.year
 ```
 
+### Catch-all (`*`) precedence
+
+A `*` catch-all resolves **globally last**, across both the method-specific router and the
+`ALL` router. Effective order: method real routes → ALL real routes → method `*` → ALL `*`.
+A catch-all never shadows a more specific route.
+
+Since 1.8.8: dispatch does a real-routes-only pass first (router's
+`exec(pathname, { skipCatchAll: true })`), and only fires a catch-all when nothing real
+matched anywhere. Previously a method-specific catch-all (`app.get("*")`) shadowed
+`app.all("/files/*")` and could fake a `405` for unmatched `HEAD`. `app.all("*")` was always
+correct and is unchanged. Only `DeminoSimpleRouter` (the default) keeps a deferred internal
+catch-all; the other built-in routers match `*` positionally and ignore `skipCatchAll`.
+
 ## Middleware Execution
 
 1. Global app middlewares (`app.use(mw)`)

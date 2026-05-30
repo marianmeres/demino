@@ -16,8 +16,12 @@ export class DeminoSimpleRouter extends DeminoRouter {
 	}
 
 	/** Executes pathname match lookup against the registered routes. */
-	exec(pathname: string): null | DeminoRouterOnMatchResult {
-		const result = this.#router.exec(pathname);
+	exec(
+		pathname: string,
+		options?: { skipCatchAll?: boolean },
+	): null | DeminoRouterOnMatchResult {
+		// 2nd arg is SimpleRouter's `fallbackFn` (unused here); 3rd is options
+		const result = this.#router.exec(pathname, undefined, options);
 		// SimpleRouter.exec returns callback result or false if no match
 		return result === false ? null : (result as DeminoRouterOnMatchResult);
 	}

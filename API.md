@@ -271,7 +271,13 @@ Base class for custom routers.
 ```ts
 abstract class DeminoRouter {
   abstract on(route: string, callback: DeminoRouterOnMatch): void;
-  abstract exec(pathname: string): DeminoRouterOnMatchResult | null;
+  // `skipCatchAll` suppresses a deferred internal catch-all (e.g. the `*` route
+  // in DeminoSimpleRouter) so only real routes can match; ignored by routers
+  // without a deferred catch-all.
+  abstract exec(
+    pathname: string,
+    options?: { skipCatchAll?: boolean },
+  ): DeminoRouterOnMatchResult | null;
   assertIsValid(route: string): void;
   info(): string[];
 }

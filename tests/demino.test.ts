@@ -483,6 +483,46 @@ Deno.test("catch all fallback route", async () => {
 	return srv?.server?.finished;
 });
 
+Deno.test("method catch-all resolves globally last", async () => {
+	let srv: Srv | null = null;
+
+	const app = demino();
+	app.get("/", () => "home");
+	app.all("/flipperial/*", () => "static");
+	// legacy method-specific catch-all - must NOT shadow the .all() routes above
+	app.get("*", () => {
+		throw createHttpError(HTTP_STATUS.NOT_FOUND);
+	});
+
+	try {
+		srv = await startTestServer(app);
+
+		// real .all() routes win over the GET "*" catch-all
+		await assertResp(fetch(`${srv.base}/flipperial/index.html`), 200, "static");
+		await assertResp(fetch(`${srv.base}/flipperial/`), 200, "static");
+
+		// exact/real routes unaffected
+		await assertResp(fetch(`${srv.base}`), 200, "home");
+
+		// catch-all still fires for genuinely unmatched paths
+		await assertResp(fetch(`${srv.base}/whatever`), 404);
+
+		// a "*" on GET must not turn an unmatched HEAD into 405
+		// (HEAD has no body, so pass `false` to skip the default 404 body match)
+		await assertResp(
+			fetch(`${srv.base}/whatever`, { method: "HEAD" }),
+			404,
+			false,
+		);
+	} catch (e) {
+		throw e;
+	} finally {
+		srv?.ac?.abort();
+	}
+
+	return srv?.server?.finished;
+});
+
 Deno.test("same route different method", async () => {
 	let srv: Srv | null = null;
 

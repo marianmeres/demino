@@ -632,9 +632,22 @@ export function demino(
 				throw createHttpError(HTTP_STATUS.NOT_IMPLEMENTED);
 			}
 
-			let matched = _routers[method].exec(url.pathname);
+			// Phase 1 — real routes only, method router then ALL router. Catch-alls
+			// are suppressed so a `*` on one router can't pre-empt a literal route on
+			// the other.
+			let matched = _routers[method].exec(url.pathname, {
+				skipCatchAll: true,
+			});
+			if (!matched && method !== "ALL") {
+				matched = _routers.ALL.exec(url.pathname, { skipCatchAll: true });
+			}
 
-			// if not matched, try ALL as a second attempt
+			// Phase 2 — nothing real matched anywhere; now allow catch-alls, same
+			// order (method-specific `*` beats the generic ALL `*`). This re-scan
+			// only happens on the otherwise-404 path, not the hot path.
+			if (!matched) {
+				matched = _routers[method].exec(url.pathname);
+			}
 			if (!matched && method !== "ALL") {
 				matched = _routers.ALL.exec(url.pathname);
 			}
@@ -650,7 +663,11 @@ export function demino(
 					"POST",
 					"PUT",
 				];
-				if (ms.some((m) => _routers[m].exec(url.pathname))) {
+				if (
+					ms.some((m) =>
+						_routers[m].exec(url.pathname, { skipCatchAll: true })
+					)
+				) {
 					throw createHttpError(HTTP_STATUS.METHOD_NOT_ALLOWED);
 				}
 			}
