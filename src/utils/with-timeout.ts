@@ -71,7 +71,7 @@ export function withTimeout<T>(
 
 		if (!timeout) return Promise.resolve(_promise);
 
-		let _timeoutId: number;
+		let _timeoutId: ReturnType<typeof setTimeout>;
 		const _clock = new Promise<never>((_, reject) => {
 			_timeoutId = setTimeout(() => {
 				ac.abort();

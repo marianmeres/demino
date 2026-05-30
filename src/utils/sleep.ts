@@ -4,9 +4,10 @@
  * A simple Promise-based sleep/delay utility for async code.
  *
  * @param timeout - Duration to sleep in milliseconds
- * @param __timeout_ref__ - Optional reference object to store the timeout ID.
- *   Useful when you need to cancel the sleep externally. Deno.test requires
- *   all timeouts to be cleared, so this is needed for Promise.race scenarios.
+ * @param __timeout_ref__ - Optional reference object to store the timeout ID
+ *   (`setTimeout`'s return value). Useful when you need to cancel the sleep
+ *   externally. Deno.test requires all timeouts to be cleared, so this is needed
+ *   for Promise.race scenarios.
  * @returns A Promise that resolves after the timeout
  *
  * @example Basic usage
@@ -17,7 +18,7 @@
  *
  * @example With cancellation support
  * ```ts
- * const ref = { id: -1 };
+ * const ref: { id?: ReturnType<typeof setTimeout> } = {};
  * const sleepPromise = sleep(5000, ref);
  *
  * // Later, if you need to cancel:
@@ -36,7 +37,7 @@
  */
 export function sleep(
 	timeout: number,
-	__timeout_ref__: { id: number } = { id: -1 },
+	__timeout_ref__: { id?: ReturnType<typeof setTimeout> } = {},
 ): Promise<void> {
 	return new Promise((resolve) => {
 		__timeout_ref__.id = setTimeout(() => {
