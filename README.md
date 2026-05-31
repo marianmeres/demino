@@ -79,17 +79,19 @@ registered on:
 ```typescript
 app.get("/", () => "home");
 app.all("/files/*", () => "static");
-app.get("*", () => { throw createHttpError(404); }); // legacy fallback
+app.get("*", () => {
+	throw createHttpError(404);
+}); // legacy fallback
 
 // GET /files/logo.png -> "static"  (the .all() route wins over the GET catch-all)
 // GET /              -> "home"
 // GET /anything-else -> 404        (the catch-all fires only here)
 ```
 
-> **Note (1.8.8):** Earlier versions let a method-specific catch-all (e.g.
-> `app.get("*")`) shadow `app.all("/files/*")` and similar literal routes. Catch-alls
-> are now consistently last. A `*` registered on any single method no longer turns an
-> otherwise-unmatched `HEAD` request into a `405`.
+> **Note (1.8.8):** Earlier versions let a method-specific catch-all (e.g. `app.get("*")`)
+> shadow `app.all("/files/*")` and similar literal routes. Catch-alls are now consistently
+> last. A `*` registered on any single method no longer turns an otherwise-unmatched
+> `HEAD` request into a `405`.
 
 ## Middlewares and route handlers
 
@@ -197,12 +199,12 @@ app.get("/[articleId]", (req, info, ctx) => render(ctx.locals.article));
 
 ### Static route metadata (`ctx.routeMeta` / `withMeta`)
 
-A route handler can carry static, opaque metadata that Demino surfaces on
-`ctx.routeMeta` **before any middleware runs** — so even the first global `app.use`
-middleware can read it as plain data (no injector, no execution-order trick). It is
-frozen, defaults to `{}`, is cached per `(method, route)`, and is inherited by
-auto-HEAD. This is generic (auth/permission, rate limits, cache policy, audit tags,
-telemetry, OpenAPI…), not tied to any one concern.
+A route handler can carry static, opaque metadata that Demino surfaces on `ctx.routeMeta`
+**before any middleware runs** — so even the first global `app.use` middleware can read it
+as plain data (no injector, no execution-order trick). It is frozen, defaults to `{}`, is
+cached per `(method, route)`, and is inherited by auto-HEAD. This is generic
+(auth/permission, rate limits, cache policy, audit tags, telemetry, OpenAPI…), not tied to
+any one concern.
 
 ```typescript
 import { demino, withMeta } from "@marianmeres/demino";
@@ -223,15 +225,15 @@ app.get(
 );
 ```
 
-You can also set `handler.meta = {...}` directly; `withMeta` just merges and returns
-the same handler for ergonomic inline use.
+You can also set `handler.meta = {...}` directly; `withMeta` just merges and returns the
+same handler for ergonomic inline use.
 
 ### Route introspection (`app.routes()`)
 
 `app.routes()` enumerates every registered `(method, route, meta)` — mirroring the
-dispatcher match-set (ALL router, catch-alls, auto-HEAD). It is the read-side
-companion to `routeMeta`, intended for build-time introspection and audits
-(permission coverage, OpenAPI/sitemap generation, cache-policy checks):
+dispatcher match-set (ALL router, catch-alls, auto-HEAD). It is the read-side companion to
+`routeMeta`, intended for build-time introspection and audits (permission coverage,
+OpenAPI/sitemap generation, cache-policy checks):
 
 ```typescript
 for (const { method, route, meta } of app.routes()) {
@@ -241,10 +243,10 @@ for (const { method, route, meta } of app.routes()) {
 
 ### Middleware ordering (`DEMINO_SORT`)
 
-Middleware order is controlled by `handler.__midwarePreExecuteSortOrder` (ascending;
-lower runs first). The exported `DEMINO_SORT` constant publishes the reference points
-Demino assigns by default — `PRE` (100), `DEFAULT` (1000), `HANDLER` (Infinity) — so a
-middleware can position itself ahead of the normal chain deterministically:
+Middleware order is controlled by `handler.__midwarePreExecuteSortOrder` (ascending; lower
+runs first). The exported `DEMINO_SORT` constant publishes the reference points Demino
+assigns by default — `PRE` (100), `DEFAULT` (1000), `HANDLER` (Infinity) — so a middleware
+can position itself ahead of the normal chain deterministically:
 
 ```typescript
 import { DEMINO_SORT } from "@marianmeres/demino";
@@ -256,8 +258,8 @@ app.use(gate);
 
 ## Application Locals
 
-Unlike `ctx.locals` which is request-scoped, `app.locals` provides application-wide
-shared data accessible from any handler via `ctx.appLocals`.
+Unlike `ctx.locals` which is request-scoped, `app.locals` provides application-wide shared
+data accessible from any handler via `ctx.appLocals`.
 
 ```ts
 const app = demino("", [], {}, { config: loadedConfig });
@@ -339,7 +341,8 @@ const app = demino("", [], {
 > `console.log` so the default behavior matches the type.
 
 For convenience, this package provides the `createDeminoClog` helper that creates a
-complete logger with access logging using [`@marianmeres/clog`](https://jsr.io/@marianmeres/clog):
+complete logger with access logging using
+[`@marianmeres/clog`](https://jsr.io/@marianmeres/clog):
 
 ```ts
 import { createDeminoClog } from "@marianmeres/demino";
@@ -387,9 +390,10 @@ credentials, provide an explicit `allowOrigin` allowlist (string, string[], or f
 that returns the matched origin).
 
 > **BREAKING (1.7.0):** `allowCredentials` defaulted to `true` in 1.6.x, and the wildcard
-> + credentials combination was silently "fixed" by echoing back the request `Origin`
-> header — which effectively allowed credentialed requests from any origin. See
-> [BC notes](#breaking-changes-170) below.
+>
+> - credentials combination was silently "fixed" by echoing back the request `Origin`
+>   header — which effectively allowed credentialed requests from any origin. See
+>   [BC notes](#breaking-changes-170) below.
 
 Basic example
 
@@ -430,9 +434,10 @@ app.use(trailingSlash(true));
 
 ### Proxy
 
-Proxies requests to a different server with comprehensive features including SSRF protection,
-host whitelisting, header/body transformation, and custom error handling. Target can be
-specified as a URL string (absolute or relative) or a function. Does NOT support WebSockets.
+Proxies requests to a different server with comprehensive features including SSRF
+protection, host whitelisting, header/body transformation, and custom error handling.
+Target can be specified as a URL string (absolute or relative) or a function. Does NOT
+support WebSockets.
 
 Basic usage:
 
@@ -448,8 +453,9 @@ app.get(
 ```
 
 Advanced features include:
-- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6,
-  CGNAT 100.64.0.0/10, and link-local — see caveat below)
+
+- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6, CGNAT
+  100.64.0.0/10, and link-local — see caveat below)
 - Host whitelisting with wildcard support
 - Request/response header transformation
 - Response body transformation
@@ -457,9 +463,9 @@ Advanced features include:
 - Custom error handling
 
 > **SSRF caveat:** `preventSSRF` is a string-only check on the target hostname. It does
-> NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to
-> a private IP. If you need protection against DNS rebinding attacks, resolve the
-> hostname yourself (e.g. via `Deno.resolveDns`) and re-check each resulting address.
+> NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to a
+> private IP. If you need protection against DNS rebinding attacks, resolve the hostname
+> yourself (e.g. via `Deno.resolveDns`) and re-check each resulting address.
 
 See [proxy.ts](src/middleware/proxy/proxy.ts) for full API documentation and examples.
 
@@ -493,8 +499,8 @@ app.use(
 
 ### Cookies
 
-Parses request cookies and provides helpers for setting/deleting response cookies.
-Accepts optional default options applied to all `setCookie` calls.
+Parses request cookies and provides helpers for setting/deleting response cookies. Accepts
+optional default options applied to all `setCookie` calls.
 
 ```ts
 // Configure secure defaults once
@@ -646,8 +652,8 @@ validation, or logging to specific route groups without affecting others.
 ## Extra: Server-Sent Events (SSE)
 
 While Demino doesn't provide a dedicated SSE abstraction, implementing SSE endpoints is
-straightforward since SSE is just a `Response` with `Content-Type: text/event-stream` and a
-`ReadableStream` body.
+straightforward since SSE is just a `Response` with `Content-Type: text/event-stream` and
+a `ReadableStream` body.
 
 ```typescript
 app.get("/events", (req) => {
@@ -702,6 +708,7 @@ rewrote the wildcard to the request's `Origin` header — effectively allowing c
 requests from **any** origin out of the box.
 
 Now:
+
 - The default is `allowCredentials: false`.
 - Constructing `cors({ allowOrigin: "*", allowCredentials: true })` throws a `TypeError`.
 - If a dynamic `allowOrigin` function returns `"*"` while credentials are enabled, the
@@ -716,17 +723,16 @@ app.use(cors());
 
 // after (1.7.0)
 app.use(cors({
-  allowOrigin: ["https://app.example.com", "https://admin.example.com"],
-  allowCredentials: true,
+	allowOrigin: ["https://app.example.com", "https://admin.example.com"],
+	allowCredentials: true,
 }));
 ```
 
 ### Default logger now emits access logs
 
-Previously the default logger was `console as DeminoLogger`, but `console` has no
-`access` method, so access logs were silently swallowed unless you supplied a custom
-logger. The default adapter now wires `access` to `console.log` (prefixed with
-`[access]`).
+Previously the default logger was `console as DeminoLogger`, but `console` has no `access`
+method, so access logs were silently swallowed unless you supplied a custom logger. The
+default adapter now wires `access` to `console.log` (prefixed with `[access]`).
 
 **Migration:** if you relied on the previous "silent default" behavior, set the logger to
 `null` (`app.logger(null)`) or supply a logger whose `access` method is a no-op.
@@ -736,8 +742,8 @@ logger. The default adapter now wires `access` to `console.log` (prefixed with
 `withTimeout(fn)` now invokes `fn(...args, signal)`, so functions can actually cancel
 their work on timeout instead of having it run to completion in the background. Functions
 that don't accept the extra argument simply ignore it, but TypeScript will surface the
-extra positional parameter — update signatures to `(...args, signal?: AbortSignal)` if
-the additional argument matters to your callers.
+extra positional parameter — update signatures to `(...args, signal?: AbortSignal)` if the
+additional argument matters to your callers.
 
 ### SSRF protection covers more cases
 
@@ -759,8 +765,8 @@ no size limit. It now defaults to `maxSizeBytes: 1_048_576` (1 MiB) and returns 
 response unchanged (no ETag, no 304 negotiation) when the body is larger.
 
 **Migration:** if you knowingly need ETags on larger payloads, raise the cap:
-`withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 })`. Pass `0` or `Infinity` to
-disable the cap entirely.
+`withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 })`. Pass `0` or `Infinity` to disable
+the cap entirely.
 
 ### Internal: per-(method, route) middleware stack is cached
 

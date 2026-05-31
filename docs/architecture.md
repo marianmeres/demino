@@ -2,7 +2,9 @@
 
 ## System Overview
 
-Demino is a minimal web framework providing a thin layer over `Deno.serve()`. It adds routing, middleware chaining, error handling, and logging while remaining compatible with the native Deno HTTP server API.
+Demino is a minimal web framework providing a thin layer over `Deno.serve()`. It adds
+routing, middleware chaining, error handling, and logging while remaining compatible with
+the native Deno HTTP server API.
 
 ## Component Map
 
@@ -67,32 +69,34 @@ Deno.serve(app)
 ## External Dependencies
 
 ### JSR Packages
-| Package | Purpose |
-|---------|---------|
-| `@marianmeres/http-utils` | HTTP errors, status codes |
-| `@marianmeres/midware` | Middleware chaining |
-| `@marianmeres/simple-router` | Default router implementation |
-| `@marianmeres/clog` | Structured logging (optional) |
-| `@std/http` | Static file serving |
-| `@std/path` | Path utilities |
-| `@std/fs` | File system (file-based routing) |
+
+| Package                      | Purpose                          |
+| ---------------------------- | -------------------------------- |
+| `@marianmeres/http-utils`    | HTTP errors, status codes        |
+| `@marianmeres/midware`       | Middleware chaining              |
+| `@marianmeres/simple-router` | Default router implementation    |
+| `@marianmeres/clog`          | Structured logging (optional)    |
+| `@std/http`                  | Static file serving              |
+| `@std/path`                  | Path utilities                   |
+| `@std/fs`                    | File system (file-based routing) |
 
 ### NPM Packages
-| Package | Purpose |
-|---------|---------|
+
+| Package      | Purpose             |
+| ------------ | ------------------- |
 | `request-ip` | Client IP detection |
 
 ## Key Files
 
-| File | Responsibility |
-|------|----------------|
-| `src/demino.ts` | Core: `demino()` factory, `Demino` interface, `DeminoContext`, response conversion |
-| `src/router/abstract.ts` | `DeminoRouter` base class |
-| `src/router/simple-router.ts` | Default router (bracket params: `/users/[id]`) |
-| `src/router/urlpattern-router.ts` | URL Pattern API router (`:id` params) |
-| `src/middleware/mod.ts` | Built-in middleware exports |
-| `src/misc/compose.ts` | `deminoCompose()` for multi-app |
-| `src/misc/file-based.ts` | Directory-based routing |
+| File                              | Responsibility                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/demino.ts`                   | Core: `demino()` factory, `Demino` interface, `DeminoContext`, response conversion |
+| `src/router/abstract.ts`          | `DeminoRouter` base class                                                          |
+| `src/router/simple-router.ts`     | Default router (bracket params: `/users/[id]`)                                     |
+| `src/router/urlpattern-router.ts` | URL Pattern API router (`:id` params)                                              |
+| `src/middleware/mod.ts`           | Built-in middleware exports                                                        |
+| `src/misc/compose.ts`             | `deminoCompose()` for multi-app                                                    |
+| `src/misc/file-based.ts`          | Directory-based routing                                                            |
 
 ## Security Boundaries
 
@@ -105,6 +109,7 @@ Demino is a building-blocks framework. Security is delegated to:
 - **SSRF protection**: Use `proxy()` middleware with `preventSSRF: true`
 
 The framework does NOT provide built-in:
+
 - Session management
 - CSRF protection
 - Content Security Policy headers

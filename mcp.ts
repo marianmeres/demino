@@ -1,10 +1,10 @@
 import { z } from "npm:zod";
 import type { McpToolDefinition } from "@marianmeres/mcp-server/types";
-import { isPrivateHost, isHostAllowed } from "./src/middleware/proxy/utils.ts";
+import { isHostAllowed, isPrivateHost } from "./src/middleware/proxy/utils.ts";
 import {
-	serializeCookie,
-	parseCookies,
 	type CookieOptions,
+	parseCookies,
+	serializeCookie,
 } from "./src/utils/cookies.ts";
 
 export const tools: McpToolDefinition[] = [
@@ -105,7 +105,9 @@ export const tools: McpToolDefinition[] = [
 
 			if (mwImports.length) {
 				imports.push(
-					`import { ${mwImports.join(", ")} } from "jsr:@marianmeres/demino/middleware";`,
+					`import { ${
+						mwImports.join(", ")
+					} } from "jsr:@marianmeres/demino/middleware";`,
 				);
 			}
 
@@ -114,14 +116,14 @@ export const tools: McpToolDefinition[] = [
 			if (fileBased) miscImports.push("deminoFileBased");
 			if (miscImports.length) {
 				imports.push(
-					`import { ${miscImports.join(", ")} } from "jsr:@marianmeres/demino/misc";`,
+					`import { ${
+						miscImports.join(", ")
+					} } from "jsr:@marianmeres/demino/misc";`,
 				);
 			}
 
 			for (const route of routes || []) {
-				const comment = route.description
-					? `// ${route.description}\n`
-					: "";
+				const comment = route.description ? `// ${route.description}\n` : "";
 				routeLines.push(
 					`${comment}app.${route.method}("${route.path}", (req, info, ctx) => {\n\t// TODO: implement\n\treturn { ok: true };\n});`,
 				);
@@ -130,10 +132,12 @@ export const tools: McpToolDefinition[] = [
 			const mp = mountPath ? `"${mountPath}"` : "";
 			let code = `${imports.join("\n")}\n\nconst app = demino(${mp});\n\n`;
 			if (mwSetup.length) code += mwSetup.join("\n") + "\n\n";
-			if (fileBased)
+			if (fileBased) {
 				code += 'await deminoFileBased(app, "./routes");\n\n';
-			if (routeLines.length)
+			}
+			if (routeLines.length) {
 				code += routeLines.join("\n\n") + "\n\n";
+			}
 
 			if (compose) {
 				code += "Deno.serve(deminoCompose([app]));\n";
@@ -175,13 +179,15 @@ export const tools: McpToolDefinition[] = [
 			if (args.path != null) options.path = args.path as string;
 			if (args.domain != null) options.domain = args.domain as string;
 			if (args.secure != null) options.secure = args.secure as boolean;
-			if (args.httpOnly != null)
+			if (args.httpOnly != null) {
 				options.httpOnly = args.httpOnly as boolean;
-			if (args.sameSite != null)
+			}
+			if (args.sameSite != null) {
 				options.sameSite = args.sameSite as
 					| "Strict"
 					| "Lax"
 					| "None";
+			}
 			return serializeCookie(name, value, options);
 		},
 	},

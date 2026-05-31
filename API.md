@@ -55,15 +55,17 @@ Creates a new Demino application instance.
 
 ```ts
 function demino(
-  mountPath?: string,
-  middleware?: DeminoHandler | DeminoHandler[],
-  options?: DeminoOptions,
-  appLocals?: DeminoAppLocals
-): Demino
+	mountPath?: string,
+	middleware?: DeminoHandler | DeminoHandler[],
+	options?: DeminoOptions,
+	appLocals?: DeminoAppLocals,
+): Demino;
 ```
 
 **Parameters:**
-- `mountPath` - Base path for all routes (default: `""`). Must start with `/` if not empty.
+
+- `mountPath` - Base path for all routes (default: `""`). Must start with `/` if not
+  empty.
 - `middleware` - Global middleware(s) to run on every request
 - `options` - Application configuration
 - `appLocals` - Application-wide data accessible via `ctx.appLocals`
@@ -71,6 +73,7 @@ function demino(
 **Returns:** Demino application instance (also a valid `Deno.ServeHandler`)
 
 **Example:**
+
 ```ts
 const app = demino();
 app.get("/", () => "Hello World");
@@ -88,6 +91,7 @@ api.get("/users", getUsers);
 The main application interface. Extends `Deno.ServeHandler`.
 
 **Route Methods:**
+
 ```ts
 app.get(route, ...handlers): Demino
 app.post(route, ...handlers): Demino
@@ -103,21 +107,22 @@ app.all(route, ...handlers): Demino  // Matches all methods
 
 **Other Methods:**
 
-| Method | Description |
-|--------|-------------|
-| `use(...args)` | Register global or route-specific middlewares |
-| `error(handler)` | Set custom error handler |
-| `static(route, fsRoot, options?)` | Serve static files |
-| `logger(logger)` | Set/unset application logger |
-| `mountPath()` | Get the mount path |
-| `info()` | Get debug info about routes |
-| `getOptions()` | Get constructor options |
-| `locals` | Application-wide locals object |
+| Method                            | Description                                   |
+| --------------------------------- | --------------------------------------------- |
+| `use(...args)`                    | Register global or route-specific middlewares |
+| `error(handler)`                  | Set custom error handler                      |
+| `static(route, fsRoot, options?)` | Serve static files                            |
+| `logger(logger)`                  | Set/unset application logger                  |
+| `mountPath()`                     | Get the mount path                            |
+| `info()`                          | Get debug info about routes                   |
+| `getOptions()`                    | Get constructor options                       |
+| `locals`                          | Application-wide locals object                |
 
 **Middleware Registration:**
+
 ```ts
-app.use(mw);                    // App-global
-app.use("/route", mw);          // Route-global (all methods)
+app.use(mw); // App-global
+app.use("/route", mw); // Route-global (all methods)
 app.get("/route", mw, handler); // Route-method specific
 ```
 
@@ -129,26 +134,27 @@ Request-scoped context object passed to every handler.
 
 ```ts
 interface DeminoContext {
-  params: Record<string, string>;  // Route params (readonly)
-  locals: Record<string, any>;     // Request-scoped data store
-  headers: Headers;                // Response headers to set
-  status: number;                  // Response status (default: 200)
-  route: string;                   // Matched route pattern
-  ip: string;                      // Client IP address
-  error: any;                      // Error (in error handlers)
-  appLocals: DeminoAppLocals;      // App-wide persistent data
-  getLogger(): DeminoLogger | null; // Get logger instance
-  __start: Date;                   // Request start timestamp
+	params: Record<string, string>; // Route params (readonly)
+	locals: Record<string, any>; // Request-scoped data store
+	headers: Headers; // Response headers to set
+	status: number; // Response status (default: 200)
+	route: string; // Matched route pattern
+	ip: string; // Client IP address
+	error: any; // Error (in error handlers)
+	appLocals: DeminoAppLocals; // App-wide persistent data
+	getLogger(): DeminoLogger | null; // Get logger instance
+	__start: Date; // Request start timestamp
 }
 ```
 
 **Example:**
+
 ```ts
 app.get("/users/[id]", (req, info, ctx) => {
-  const userId = ctx.params.id;
-  ctx.headers.set("X-Custom", "value");
-  ctx.status = 200;
-  return { userId };
+	const userId = ctx.params.id;
+	ctx.headers.set("X-Custom", "value");
+	ctx.status = 200;
+	return { userId };
 });
 ```
 
@@ -160,13 +166,14 @@ Function signature for route handlers and middlewares.
 
 ```ts
 type DeminoHandler = (
-  req: Request,
-  info: Deno.ServeHandlerInfo,
-  ctx: DeminoContext
-) => any | Promise<any>
+	req: Request,
+	info: Deno.ServeHandlerInfo,
+	ctx: DeminoContext,
+) => any | Promise<any>;
 ```
 
 **Return Value Handling:**
+
 - `undefined` → 204 No Content
 - Plain object/array/null/toJSON → JSON stringified
 - `Response` → Passed through directly
@@ -181,12 +188,12 @@ Configuration options for creating a Demino app.
 
 ```ts
 interface DeminoOptions {
-  routerFactory?: () => DeminoRouter;  // Custom router factory
-  noXPoweredBy?: boolean;              // Disable X-Powered-By header
-  noXResponseTime?: boolean;           // Disable X-Response-Time header
-  verbose?: boolean;                   // Enable verbose logging
-  logger?: DeminoLogger | null;        // Application logger
-  errorHandler?: DeminoHandler;        // Custom error handler
+	routerFactory?: () => DeminoRouter; // Custom router factory
+	noXPoweredBy?: boolean; // Disable X-Powered-By header
+	noXResponseTime?: boolean; // Disable X-Response-Time header
+	verbose?: boolean; // Enable verbose logging
+	logger?: DeminoLogger | null; // Application logger
+	errorHandler?: DeminoHandler; // Custom error handler
 }
 ```
 
@@ -198,17 +205,17 @@ Logger interface for Demino applications.
 
 ```ts
 interface DeminoLogger {
-  error?: (...args: any[]) => void;
-  warn?: (...args: any[]) => void;
-  log?: (...args: any[]) => void;
-  debug?: (...args: any[]) => void;
-  access?: (data: {
-    timestamp: Date;
-    status: number;
-    req: Request;
-    ip: string | undefined;
-    duration: number;
-  }) => void;
+	error?: (...args: any[]) => void;
+	warn?: (...args: any[]) => void;
+	log?: (...args: any[]) => void;
+	debug?: (...args: any[]) => void;
+	access?: (data: {
+		timestamp: Date;
+		status: number;
+		req: Request;
+		ip: string | undefined;
+		duration: number;
+	}) => void;
 }
 ```
 
@@ -220,14 +227,15 @@ Creates a Response from various body types.
 
 ```ts
 function createResponseFrom(
-  req: Request,
-  body: any,
-  headers?: Headers,
-  status?: number
-): Response
+	req: Request,
+	body: any,
+	headers?: Headers,
+	status?: number,
+): Response;
 ```
 
 **Conversion Rules:**
+
 - `undefined` → 204 No Content
 - Plain object/array/null/toJSON → JSON with `application/json`
 - Everything else → toString() with `text/html`
@@ -241,9 +249,16 @@ Array of supported HTTP methods.
 
 ```ts
 const supportedMethods: DeminoMethod[] = [
-  "CONNECT", "DELETE", "GET", "HEAD", "OPTIONS",
-  "PATCH", "POST", "PUT", "TRACE"
-]
+	"CONNECT",
+	"DELETE",
+	"GET",
+	"HEAD",
+	"OPTIONS",
+	"PATCH",
+	"POST",
+	"PUT",
+	"TRACE",
+];
 ```
 
 ---
@@ -254,10 +269,10 @@ Common content-type header values.
 
 ```ts
 const CONTENT_TYPE = {
-  JSON: "application/json",
-  TEXT: "text/plain; charset=utf-8",
-  HTML: "text/html; charset=utf-8"
-}
+	JSON: "application/json",
+	TEXT: "text/plain; charset=utf-8",
+	HTML: "text/html; charset=utf-8",
+};
 ```
 
 ---
@@ -270,16 +285,16 @@ Base class for custom routers.
 
 ```ts
 abstract class DeminoRouter {
-  abstract on(route: string, callback: DeminoRouterOnMatch): void;
-  // `skipCatchAll` suppresses a deferred internal catch-all (e.g. the `*` route
-  // in DeminoSimpleRouter) so only real routes can match; ignored by routers
-  // without a deferred catch-all.
-  abstract exec(
-    pathname: string,
-    options?: { skipCatchAll?: boolean },
-  ): DeminoRouterOnMatchResult | null;
-  assertIsValid(route: string): void;
-  info(): string[];
+	abstract on(route: string, callback: DeminoRouterOnMatch): void;
+	// `skipCatchAll` suppresses a deferred internal catch-all (e.g. the `*` route
+	// in DeminoSimpleRouter) so only real routes can match; ignored by routers
+	// without a deferred catch-all.
+	abstract exec(
+		pathname: string,
+		options?: { skipCatchAll?: boolean },
+	): DeminoRouterOnMatchResult | null;
+	assertIsValid(route: string): void;
+	info(): string[];
 }
 ```
 
@@ -290,6 +305,7 @@ abstract class DeminoRouter {
 Default router using [simple-router](https://github.com/marianmeres/simple-router).
 
 **Route Syntax:** Uses bracket notation for parameters.
+
 ```ts
 app.get("/users/[userId]/posts/[postId]", handler);
 // ctx.params = { userId: "123", postId: "456" }
@@ -299,13 +315,14 @@ app.get("/users/[userId]/posts/[postId]", handler);
 
 ### DeminoUrlPatternRouter
 
-Router using the [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API).
+Router using the
+[URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API).
 
 ```ts
 const app = demino("", [], {
-  routerFactory: () => new DeminoUrlPatternRouter()
+	routerFactory: () => new DeminoUrlPatternRouter(),
 });
-app.get("/users/:id", handler);  // ctx.params = { id: "123" }
+app.get("/users/:id", handler); // ctx.params = { id: "123" }
 ```
 
 ---
@@ -316,7 +333,7 @@ Simple string comparison router (no parameter extraction).
 
 ```ts
 const app = demino("", [], {
-  routerFactory: () => new DeminoFixedRouter()
+	routerFactory: () => new DeminoFixedRouter(),
 });
 app.get("/exact/path", handler);
 ```
@@ -329,7 +346,7 @@ Regex-based router with named groups for parameters.
 
 ```ts
 const app = demino("", [], {
-  routerFactory: () => new DeminoRegexRouter()
+	routerFactory: () => new DeminoRegexRouter(),
 });
 app.get("^/(?<year>\\d{4})$", handler);
 // ctx.params = { year: "2024" }
@@ -344,43 +361,46 @@ app.get("^/(?<year>\\d{4})$", handler);
 Creates CORS middleware.
 
 ```ts
-function cors(options?: Partial<CorsOptions>): DeminoHandler
+function cors(options?: Partial<CorsOptions>): DeminoHandler;
 
 interface CorsOptions {
-  allowOrigin: string | string[] | ((origin, headers) => string);
-  allowMethods: string | string[] | ((origin, headers) => string);
-  allowHeaders: string | string[] | ((origin, headers) => string);
-  allowCredentials: boolean | ((origin, headers) => boolean);
-  maxAge: number | ((origin, headers) => number);
+	allowOrigin: string | string[] | ((origin, headers) => string);
+	allowMethods: string | string[] | ((origin, headers) => string);
+	allowHeaders: string | string[] | ((origin, headers) => string);
+	allowCredentials: boolean | ((origin, headers) => boolean);
+	maxAge: number | ((origin, headers) => number);
 }
 ```
 
 **Defaults:**
+
 - `allowOrigin`: `"*"`
 - `allowMethods`: `"GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS"`
 - `allowHeaders`: `"Content-Type,Authorization"`
-- `allowCredentials`: `false` *(changed from `true` in 1.7.0 — see BC notes in README)*
+- `allowCredentials`: `false` _(changed from `true` in 1.7.0 — see BC notes in README)_
 - `maxAge`: `86400` (24 hours)
 
 **Constraints:**
+
 - `cors({ allowOrigin: "*", allowCredentials: true })` throws `TypeError` (CORS spec
-  forbids the combination). To allow credentials, supply an explicit allowlist or
-  function returning the matched origin.
-- If a *dynamic* `allowOrigin` resolves to `"*"` while `allowCredentials` is `true`, the
+  forbids the combination). To allow credentials, supply an explicit allowlist or function
+  returning the matched origin.
+- If a _dynamic_ `allowOrigin` resolves to `"*"` while `allowCredentials` is `true`, the
   middleware refuses to set the response headers and logs a warning.
 
 **Example:**
+
 ```ts
 // Public read-only API: wildcard origin, no credentials (default)
 app.use(cors());
 
 // Credentialed API: explicit allowlist required
 app.use(cors({
-  allowOrigin: ["https://app.example.com"],
-  allowCredentials: true,
+	allowOrigin: ["https://app.example.com"],
+	allowCredentials: true,
 }));
 
-app.options("*", cors());  // Handle preflight
+app.options("*", cors()); // Handle preflight
 ```
 
 ---
@@ -390,22 +410,24 @@ app.options("*", cors());  // Handle preflight
 Creates cookie parsing and management middleware.
 
 ```ts
-function cookies(defaults?: CookieOptions): DeminoHandler
+function cookies(defaults?: CookieOptions): DeminoHandler;
 ```
 
 **Adds to `ctx.locals`:**
+
 - `cookies` - Parsed request cookies
 - `setCookie(name, value, options?)` - Set response cookie
 - `deleteCookie(name, options?)` - Delete cookie
 
 **Example:**
+
 ```ts
 app.use(cookies({ httpOnly: true, secure: true }));
 
 app.get("/", (req, info, ctx) => {
-  const session = ctx.locals.cookies.session;
-  ctx.locals.setCookie("theme", "dark", { maxAge: 3600 });
-  ctx.locals.deleteCookie("old");
+	const session = ctx.locals.cookies.session;
+	ctx.locals.setCookie("theme", "dark", { maxAge: 3600 });
+	ctx.locals.deleteCookie("old");
 });
 ```
 
@@ -417,24 +439,28 @@ Creates token bucket rate limiting middleware.
 
 ```ts
 function rateLimit(
-  getClientId: (req, info, ctx) => unknown,
-  options?: Partial<RateLimitOptions>
-): DeminoHandler
+	getClientId: (req, info, ctx) => unknown,
+	options?: Partial<RateLimitOptions>,
+): DeminoHandler;
 
 interface RateLimitOptions {
-  maxSize: number;              // Burst capacity (default: 20)
-  refillSizePerSecond: number;  // Sustained rate (default: 10)
-  cleanupProbability: number;   // GC frequency 0-1 (default: 0.001)
-  getConsumeSize: (req, info, ctx) => number;  // Token cost per request
+	maxSize: number; // Burst capacity (default: 20)
+	refillSizePerSecond: number; // Sustained rate (default: 10)
+	cleanupProbability: number; // GC frequency 0-1 (default: 0.001)
+	getConsumeSize: (req, info, ctx) => number; // Token cost per request
 }
 ```
 
 **Example:**
+
 ```ts
-app.use("/api", rateLimit(
-  (req) => req.headers.get("Authorization"),
-  { maxSize: 100, refillSizePerSecond: 50 }
-));
+app.use(
+	"/api",
+	rateLimit(
+		(req) => req.headers.get("Authorization"),
+		{ maxSize: 100, refillSizePerSecond: 50 },
+	),
+);
 ```
 
 ---
@@ -445,26 +471,30 @@ Wraps a handler to add ETag support and 304 responses.
 
 ```ts
 function withETag(
-  handler: DeminoHandler,
-  options?: ETagOptions
-): DeminoHandler
+	handler: DeminoHandler,
+	options?: ETagOptions,
+): DeminoHandler;
 
 interface ETagOptions {
-  weak?: boolean;          // generate W/"..." instead of "..." (default: false)
-  maxSizeBytes?: number;   // skip hashing if body is larger (default: 1_048_576;
-                           // pass 0 or Infinity to disable the cap)
+	weak?: boolean; // generate W/"..." instead of "..." (default: false)
+	maxSizeBytes?: number; // skip hashing if body is larger (default: 1_048_576;
+	// pass 0 or Infinity to disable the cap)
 }
 ```
 
-The middleware buffers the entire response body in memory to compute SHA-1, so by
-default responses larger than 1 MiB are returned unchanged with no ETag header. Lift
-the cap explicitly when you accept the memory cost.
+The middleware buffers the entire response body in memory to compute SHA-1, so by default
+responses larger than 1 MiB are returned unchanged with no ETag header. Lift the cap
+explicitly when you accept the memory cost.
 
 **Example:**
+
 ```ts
-app.get("/data", withETag(async () => {
-  return await fetchData();
-}));
+app.get(
+	"/data",
+	withETag(async () => {
+		return await fetchData();
+	}),
+);
 // First request: 200 + ETag header
 // Subsequent with If-None-Match: 304 Not Modified
 ```
@@ -477,12 +507,13 @@ Creates a redirect middleware.
 
 ```ts
 function redirect(
-  url: string | URL,
-  status?: 301 | 302 | 303 | 307 | 308
-): DeminoHandler
+	url: string | URL,
+	status?: 301 | 302 | 303 | 307 | 308,
+): DeminoHandler;
 ```
 
 **Example:**
+
 ```ts
 app.use("/old", redirect("/new", 301));
 app.use("/external", redirect("https://example.com"));
@@ -496,15 +527,16 @@ Enforces trailing slash policy with 301 redirects.
 
 ```ts
 function trailingSlash(
-  flag: boolean,
-  options?: { logger?: CallableFunction }
-): DeminoHandler
+	flag: boolean,
+	options?: { logger?: CallableFunction },
+): DeminoHandler;
 ```
 
 **Example:**
+
 ```ts
-app.use(trailingSlash(true));   // /foo -> /foo/
-app.use(trailingSlash(false));  // /foo/ -> /foo
+app.use(trailingSlash(true)); // /foo -> /foo/
+app.use(trailingSlash(false)); // /foo/ -> /foo
 ```
 
 ---
@@ -515,26 +547,27 @@ Creates a request proxy middleware.
 
 ```ts
 function proxy(
-  target: string | ((req, ctx) => string),
-  options?: Partial<ProxyOptions>
-): DeminoHandler
+	target: string | ((req, ctx) => string),
+	options?: Partial<ProxyOptions>,
+): DeminoHandler;
 
 interface ProxyOptions {
-  timeout: number;                    // Default: 60000
-  preventSSRF: boolean;               // Block private IPs (string-only check, no DNS)
-  allowedHosts: string[];             // Host whitelist (supports wildcards)
-  headers: Record<string, string>;    // Custom headers
-  transformRequestHeaders: (headers, req, ctx) => Headers;
-  transformResponseHeaders: (headers, resp) => Headers;
-  transformResponseBody: (body, resp) => BodyInit | null;
-  cache: RequestCache;                // Default: "no-store"
-  onError: (error, req, ctx) => Response;
-  removeRequestHeaders: string[];
-  removeResponseHeaders: string[];
+	timeout: number; // Default: 60000
+	preventSSRF: boolean; // Block private IPs (string-only check, no DNS)
+	allowedHosts: string[]; // Host whitelist (supports wildcards)
+	headers: Record<string, string>; // Custom headers
+	transformRequestHeaders: (headers, req, ctx) => Headers;
+	transformResponseHeaders: (headers, resp) => Headers;
+	transformResponseBody: (body, resp) => BodyInit | null;
+	cache: RequestCache; // Default: "no-store"
+	onError: (error, req, ctx) => Response;
+	removeRequestHeaders: string[];
+	removeResponseHeaders: string[];
 }
 ```
 
 **`preventSSRF` covers (since 1.7.0):**
+
 - localhost (`localhost`, `*.localhost`, `127.0.0.0/8`)
 - Unspecified `0.0.0.0` and `::`
 - Private IPv4: `10/8`, `172.16/12`, `192.168/16`, `169.254/16` (link-local), `100.64/10`
@@ -543,26 +576,31 @@ interface ProxyOptions {
 - IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
 - Bracketed IPv6 hostnames (`[::1]`)
 
-**Caveat:** This is a *string-only* check on the target hostname — DNS is not resolved.
-A public hostname that resolves (or is DNS-rebound) to a private IP bypasses this guard.
-For DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and re-check
-each address.
+**Caveat:** This is a _string-only_ check on the target hostname — DNS is not resolved. A
+public hostname that resolves (or is DNS-rebound) to a private IP bypasses this guard. For
+DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and re-check each
+address.
 
 **Example:**
+
 ```ts
 // Wildcard path proxying
 app.get("/api/*", proxy("https://backend.example.com/*"));
 
 // Dynamic target
-app.get("/search/[q]", proxy((req, ctx) =>
-  `https://api.example.com/search?q=${ctx.params.q}`
-));
+app.get(
+	"/search/[q]",
+	proxy((req, ctx) => `https://api.example.com/search?q=${ctx.params.q}`),
+);
 
 // With SSRF protection
-app.get("/fetch/*", proxy("https://api.example.com/*", {
-  preventSSRF: true,
-  allowedHosts: ["api.example.com"]
-}));
+app.get(
+	"/fetch/*",
+	proxy("https://api.example.com/*", {
+		preventSSRF: true,
+		allowedHosts: ["api.example.com"],
+	}),
+);
 ```
 
 ---
@@ -575,12 +613,13 @@ Composes multiple Demino apps into a single handler.
 
 ```ts
 function deminoCompose(
-  apps: Demino[],
-  notFoundHandler?: (req, info) => Response
-): Deno.ServeHandler
+	apps: Demino[],
+	notFoundHandler?: (req, info) => Response,
+): Deno.ServeHandler;
 ```
 
 **Example:**
+
 ```ts
 const app = demino();
 const api = demino("/api");
@@ -597,19 +636,20 @@ Enables directory-based routing.
 
 ```ts
 function deminoFileBased(
-  app: Demino,
-  rootDirs: string | string[],
-  options?: DeminoFileBasedOptions
-): Promise<Demino>
+	app: Demino,
+	rootDirs: string | string[],
+	options?: DeminoFileBasedOptions,
+): Promise<Demino>;
 
 interface DeminoFileBasedOptions {
-  verbose?: boolean;
-  logger?: DeminoLogger | null;
-  doImport?: (modulePath: string) => Promise<any>;
+	verbose?: boolean;
+	logger?: DeminoLogger | null;
+	doImport?: (modulePath: string) => Promise<any>;
 }
 ```
 
 **Directory Structure:**
+
 ```
 routes/
 ├── _middleware.ts       # export default [mw1, mw2]
@@ -621,6 +661,7 @@ routes/
 ```
 
 **Example:**
+
 ```ts
 const app = demino();
 await deminoFileBased(app, "./routes");
@@ -634,7 +675,7 @@ Deno.serve(app);
 Comparator for sorting routes by specificity.
 
 ```ts
-function routesCompare(a: string, b: string): number
+function routesCompare(a: string, b: string): number;
 ```
 
 Sorts deeper routes first, then static before dynamic.
@@ -646,24 +687,25 @@ Sorts deeper routes first, then static before dynamic.
 ### logListenInfo()
 
 Console logging callback for `Deno.serve()`'s `onListen` option. Prints the server's
-listening URL(s) with color formatting. When bound to `0.0.0.0`, displays both
-`localhost` and all detected IPv4 network addresses.
+listening URL(s) with color formatting. When bound to `0.0.0.0`, displays both `localhost`
+and all detected IPv4 network addresses.
 
 ```ts
-function logListenInfo(localAddr: Deno.NetAddr): void
+function logListenInfo(localAddr: Deno.NetAddr): void;
 ```
 
 **Example:**
+
 ```ts
 import { deminoCompose, logListenInfo } from "@marianmeres/demino";
 
 Deno.serve(
-  {
-    port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
-    hostname: Deno.env.get("SERVER_HOST") || undefined,
-    onListen: logListenInfo,
-  },
-  deminoCompose([app]),
+	{
+		port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
+		hostname: Deno.env.get("SERVER_HOST") || undefined,
+		onListen: logListenInfo,
+	},
+	deminoCompose([app]),
 );
 ```
 
@@ -671,26 +713,28 @@ Deno.serve(
 
 ### createDeminoClog()
 
-Creates a `DeminoLogger` instance using `@marianmeres/clog`, with all standard
-logging methods plus access log support.
+Creates a `DeminoLogger` instance using `@marianmeres/clog`, with all standard logging
+methods plus access log support.
 
 ```ts
 function createDeminoClog(
-  namespace?: string,
-  config?: ClogConfig
-): DeminoLogger
+	namespace?: string,
+	config?: ClogConfig,
+): DeminoLogger;
 ```
 
 **Parameters:**
+
 - `namespace` (`string`) — Clog namespace prefix. Default: `"demino"`
 - `config` (`ClogConfig`, optional) — Clog configuration options
 
 **Example:**
+
 ```ts
-import { demino, createDeminoClog } from "@marianmeres/demino";
+import { createDeminoClog, demino } from "@marianmeres/demino";
 
 const app = demino("", [], {
-  logger: createDeminoClog("my-app"),
+	logger: createDeminoClog("my-app"),
 });
 ```
 
@@ -701,17 +745,18 @@ const app = demino("", [], {
 Creates a `DeminoLogger` from an existing `Clog` instance.
 
 ```ts
-function createDeminoClogFrom(clog: Clog): DeminoLogger
+function createDeminoClogFrom(clog: Clog): DeminoLogger;
 ```
 
 **Example:**
+
 ```ts
 import { createClog } from "@marianmeres/clog";
 import { createDeminoClogFrom } from "@marianmeres/demino";
 
 const myClog = createClog("my-app", { debug: true });
 const app = demino("", [], {
-  logger: createDeminoClogFrom(myClog),
+	logger: createDeminoClogFrom(myClog),
 });
 ```
 
@@ -723,21 +768,22 @@ Rate limiting using token bucket algorithm.
 
 ```ts
 class TokenBucket {
-  constructor(maxSize: number, refillPerSecond: number, logger?: DeminoLogger);
-  refill(): TokenBucket;
-  consume(quantity?: number): boolean;
-  get size(): number;
+	constructor(maxSize: number, refillPerSecond: number, logger?: DeminoLogger);
+	refill(): TokenBucket;
+	consume(quantity?: number): boolean;
+	get size(): number;
 }
 ```
 
 **Example:**
+
 ```ts
-const bucket = new TokenBucket(20, 10);  // 20 burst, 10/sec sustained
+const bucket = new TokenBucket(20, 10); // 20 burst, 10/sec sustained
 
 if (bucket.consume()) {
-  // Request allowed
+	// Request allowed
 } else {
-  // Rate limited
+	// Rate limited
 }
 ```
 
@@ -748,7 +794,7 @@ if (bucket.consume()) {
 Parses Cookie header into key-value pairs.
 
 ```ts
-function parseCookies(cookieHeader: string | null): Record<string, string>
+function parseCookies(cookieHeader: string | null): Record<string, string>;
 ```
 
 ---
@@ -759,19 +805,19 @@ Serializes a cookie with options.
 
 ```ts
 function serializeCookie(
-  name: string,
-  value: string,
-  options?: CookieOptions
-): string
+	name: string,
+	value: string,
+	options?: CookieOptions,
+): string;
 
 interface CookieOptions {
-  maxAge?: number;
-  expires?: Date;
-  path?: string;
-  domain?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  sameSite?: "Strict" | "Lax" | "None";
+	maxAge?: number;
+	expires?: Date;
+	path?: string;
+	domain?: string;
+	secure?: boolean;
+	httpOnly?: boolean;
+	sameSite?: "Strict" | "Lax" | "None";
 }
 ```
 
@@ -783,9 +829,9 @@ Promise-based delay utility.
 
 ```ts
 function sleep(
-  timeout: number,
-  __timeout_ref__?: { id: number }
-): Promise<void>
+	timeout: number,
+	__timeout_ref__?: { id: number },
+): Promise<void>;
 ```
 
 ---
@@ -798,27 +844,27 @@ Wraps a function with timeout enforcement. The wrapped function is invoked with 
 
 ```ts
 function withTimeout<T>(
-  fn: CallableFunction,
-  timeout?: number,        // ms; pass 0 to disable the timer (default: 1000)
-  errMessage?: string
-): (...args: any[]) => Promise<T>
+	fn: CallableFunction,
+	timeout?: number, // ms; pass 0 to disable the timer (default: 1000)
+	errMessage?: string,
+): (...args: any[]) => Promise<T>;
 
 class TimeoutError extends Error {}
 ```
 
 **Example:**
+
 ```ts
 const timedFetch = withTimeout(
-  (url: string, signal?: AbortSignal) => fetch(url, { signal }),
-  5_000,
+	(url: string, signal?: AbortSignal) => fetch(url, { signal }),
+	5_000,
 );
 await timedFetch("https://api.example.com/data"); // throws TimeoutError after 5s
 ```
 
 > **BC (1.7.0):** the wrapped function now receives an extra trailing `AbortSignal`
-> argument. Functions that ignore extra args are unaffected at runtime, but TypeScript
-> may flag a signature mismatch — declare your function as
-> `(...args, signal?: AbortSignal)`.
+> argument. Functions that ignore extra args are unaffected at runtime, but TypeScript may
+> flag a signature mismatch — declare your function as `(...args, signal?: AbortSignal)`.
 
 ---
 
@@ -827,7 +873,7 @@ await timedFetch("https://api.example.com/data"); // throws TimeoutError after 5
 Type guard for functions.
 
 ```ts
-function isFn(v: any): v is CallableFunction
+function isFn(v: any): v is CallableFunction;
 ```
 
 ---
@@ -837,7 +883,7 @@ function isFn(v: any): v is CallableFunction
 Type guard for plain objects.
 
 ```ts
-function isPlainObject(v: any): v is Record<string, unknown>
+function isPlainObject(v: any): v is Record<string, unknown>;
 ```
 
 ---
@@ -847,5 +893,5 @@ function isPlainObject(v: any): v is Record<string, unknown>
 Type guard for valid Date objects.
 
 ```ts
-function isValidDate(v: any): v is Date
+function isValidDate(v: any): v is Date;
 ```

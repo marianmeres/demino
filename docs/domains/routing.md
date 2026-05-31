@@ -2,18 +2,20 @@
 
 ## Overview
 
-Demino routing matches incoming request pathnames against registered route patterns. The router extracts named parameters and wildcards from the URL. Multiple router implementations are available; the default is `DeminoSimpleRouter`.
+Demino routing matches incoming request pathnames against registered route patterns. The
+router extracts named parameters and wildcards from the URL. Multiple router
+implementations are available; the default is `DeminoSimpleRouter`.
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/router/abstract.ts` | `DeminoRouter` base class |
-| `src/router/simple-router.ts` | Default router (bracket params) |
-| `src/router/urlpattern-router.ts` | URL Pattern API router |
-| `src/router/fixed-router.ts` | Exact string matching only |
-| `src/router/regex-router.ts` | Regex-based patterns |
-| `src/router/express-like-router.ts` | Express-style (deprecated) |
+| File                                | Purpose                         |
+| ----------------------------------- | ------------------------------- |
+| `src/router/abstract.ts`            | `DeminoRouter` base class       |
+| `src/router/simple-router.ts`       | Default router (bracket params) |
+| `src/router/urlpattern-router.ts`   | URL Pattern API router          |
+| `src/router/fixed-router.ts`        | Exact string matching only      |
+| `src/router/regex-router.ts`        | Regex-based patterns            |
+| `src/router/express-like-router.ts` | Express-style (deprecated)      |
 
 ## Router Implementations
 
@@ -22,21 +24,23 @@ Demino routing matches incoming request pathnames against registered route patte
 Uses bracket syntax for parameters. Powered by `@marianmeres/simple-router`.
 
 ```ts
-const app = demino();  // Uses DeminoSimpleRouter by default
+const app = demino(); // Uses DeminoSimpleRouter by default
 
 app.get("/users/[userId]", (r, i, ctx) => ctx.params.userId);
-app.get("/files/*", handler);  // Wildcard
+app.get("/files/*", handler); // Wildcard
 ```
 
-| Pattern | Example URL | `ctx.params` |
-|---------|-------------|--------------|
-| `/users/[id]` | `/users/123` | `{ id: "123" }` |
-| `/[a]/[b]` | `/foo/bar` | `{ a: "foo", b: "bar" }` |
-| `/files/*` | `/files/a/b/c` | `{}` (wildcard matched) |
+| Pattern       | Example URL    | `ctx.params`             |
+| ------------- | -------------- | ------------------------ |
+| `/users/[id]` | `/users/123`   | `{ id: "123" }`          |
+| `/[a]/[b]`    | `/foo/bar`     | `{ a: "foo", b: "bar" }` |
+| `/files/*`    | `/files/a/b/c` | `{}` (wildcard matched)  |
 
 ### DeminoUrlPatternRouter
 
-Uses the [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) syntax.
+Uses the
+[URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API)
+syntax.
 
 ```ts
 import { DeminoUrlPatternRouter } from "@marianmeres/demino";
@@ -47,9 +51,9 @@ app.get("/users/:id", (r, i, ctx) => ctx.params.id);
 app.get("/files/*", handler);
 ```
 
-| Pattern | Example URL | `ctx.params` |
-|---------|-------------|--------------|
-| `/users/:id` | `/users/123` | `{ id: "123" }` |
+| Pattern                  | Example URL         | `ctx.params`            |
+| ------------------------ | ------------------- | ----------------------- |
+| `/users/:id`             | `/users/123`        | `{ id: "123" }`         |
 | `/post/:id/comment/:cid` | `/post/1/comment/2` | `{ id: "1", cid: "2" }` |
 
 ### DeminoRegexRouter
@@ -74,7 +78,7 @@ import { DeminoFixedRouter } from "@marianmeres/demino";
 
 const app = demino("", [], { routerFactory: () => new DeminoFixedRouter() });
 
-app.get("/about", handler);  // Only matches exactly "/about"
+app.get("/about", handler); // Only matches exactly "/about"
 ```
 
 ## Common Operations
@@ -85,7 +89,7 @@ app.get("/about", handler);  // Only matches exactly "/about"
 import { demino, DeminoUrlPatternRouter } from "@marianmeres/demino";
 
 const app = demino("", [], {
-  routerFactory: () => new DeminoUrlPatternRouter()
+	routerFactory: () => new DeminoUrlPatternRouter(),
 });
 ```
 
@@ -95,21 +99,21 @@ const app = demino("", [], {
 import { DeminoRouter, type DeminoRouterExecResult } from "@marianmeres/demino";
 
 class MyRouter extends DeminoRouter {
-  private routes: Map<string, string> = new Map();
+	private routes: Map<string, string> = new Map();
 
-  on(route: string): void {
-    this.routes.set(route, route);
-  }
+	on(route: string): void {
+		this.routes.set(route, route);
+	}
 
-  exec(pathname: string): DeminoRouterExecResult | undefined {
-    for (const [pattern, route] of this.routes) {
-      // Custom matching logic
-      if (this.matches(pathname, pattern)) {
-        return { route, params: this.extractParams(pathname, pattern) };
-      }
-    }
-    return undefined;
-  }
+	exec(pathname: string): DeminoRouterExecResult | undefined {
+		for (const [pattern, route] of this.routes) {
+			// Custom matching logic
+			if (this.matches(pathname, pattern)) {
+				return { route, params: this.extractParams(pathname, pattern) };
+			}
+		}
+		return undefined;
+	}
 }
 ```
 

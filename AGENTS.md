@@ -13,9 +13,11 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 ## Core Concept
 
-Demino is a minimal web framework built on Deno's native HTTP server. It provides a thin layer over `Deno.serve()` with routing, middleware, error handling, and logging.
+Demino is a minimal web framework built on Deno's native HTTP server. It provides a thin
+layer over `Deno.serve()` with routing, middleware, error handling, and logging.
 
-**Key Philosophy**: "Batteries NOT included" - provides building blocks, not a full-featured server.
+**Key Philosophy**: "Batteries NOT included" - provides building blocks, not a
+full-featured server.
 
 ## Architecture Overview
 
@@ -82,31 +84,34 @@ tests/                        # Test suite
 ## Critical Types
 
 ### DeminoHandler
+
 ```ts
 type DeminoHandler = (
-  req: Request,
-  info: Deno.ServeHandlerInfo,
-  ctx: DeminoContext
-) => any | Promise<any>
+	req: Request,
+	info: Deno.ServeHandlerInfo,
+	ctx: DeminoContext,
+) => any | Promise<any>;
 ```
 
 ### DeminoContext
+
 ```ts
 interface DeminoContext {
-  params: Record<string, string>;    // Route params (frozen)
-  locals: Record<string, any>;       // Request-scoped storage
-  headers: Headers;                  // Response headers
-  status: number;                    // Response status
-  route: string;                     // Matched route pattern
-  ip: string;                        // Client IP
-  error: any;                        // Error ref (error handlers)
-  appLocals: any;                    // App-wide persistent data
-  getLogger(): DeminoLogger | null;
-  __start: Date;                     // Request timestamp
+	params: Record<string, string>; // Route params (frozen)
+	locals: Record<string, any>; // Request-scoped storage
+	headers: Headers; // Response headers
+	status: number; // Response status
+	route: string; // Matched route pattern
+	ip: string; // Client IP
+	error: any; // Error ref (error handlers)
+	appLocals: any; // App-wide persistent data
+	getLogger(): DeminoLogger | null;
+	__start: Date; // Request timestamp
 }
 ```
 
 ### Demino Interface
+
 ```ts
 interface Demino extends Deno.ServeHandler {
   get/post/put/patch/delete/head/options/connect/trace/all: DeminoRouteHandler;
@@ -122,40 +127,43 @@ interface Demino extends Deno.ServeHandler {
 }
 ```
 
-`routes()` returns `{ method, route, meta }[]` mirroring the dispatcher match-set
-(ALL router, catch-alls, auto-HEAD). It is the read-side companion to `routeMeta` —
-intended for build-time introspection/audits (permission coverage, OpenAPI, sitemap).
-`meta` is `{}` for handlers without metadata (e.g. `app.static`).
+`routes()` returns `{ method, route, meta }[]` mirroring the dispatcher match-set (ALL
+router, catch-alls, auto-HEAD). It is the read-side companion to `routeMeta` — intended
+for build-time introspection/audits (permission coverage, OpenAPI, sitemap). `meta` is
+`{}` for handlers without metadata (e.g. `app.static`).
 
 ## Response Conversion Rules
 
 Handler return values are auto-converted to Response:
 
-| Return Type | Conversion |
-|-------------|------------|
-| `undefined` | 204 No Content |
-| `null` | JSON `null` |
-| Plain object/array | JSON stringified |
-| `toJSON()` objects | JSON stringified |
-| `Response` | Pass through |
-| `Error` | Error response |
-| Other | `toString()` as text/html |
+| Return Type        | Conversion                |
+| ------------------ | ------------------------- |
+| `undefined`        | 204 No Content            |
+| `null`             | JSON `null`               |
+| Plain object/array | JSON stringified          |
+| `toJSON()` objects | JSON stringified          |
+| `Response`         | Pass through              |
+| `Error`            | Error response            |
+| Other              | `toString()` as text/html |
 
 ## Router Parameter Syntax
 
 ### DeminoSimpleRouter (default)
+
 ```
 /users/[userId]              -> params.userId
 /posts/[postId]/comments/*   -> wildcard support
 ```
 
 ### DeminoUrlPatternRouter
+
 ```
 /users/:id                   -> params.id
 /files/*                     -> wildcard
 ```
 
 ### DeminoRegexRouter
+
 ```
 ^/(?<year>\\d{4})$           -> params.year
 ```
@@ -163,15 +171,16 @@ Handler return values are auto-converted to Response:
 ### Catch-all (`*`) precedence
 
 A `*` catch-all resolves **globally last**, across both the method-specific router and the
-`ALL` router. Effective order: method real routes → ALL real routes → method `*` → ALL `*`.
-A catch-all never shadows a more specific route.
+`ALL` router. Effective order: method real routes → ALL real routes → method `*` → ALL
+`*`. A catch-all never shadows a more specific route.
 
 Since 1.8.8: dispatch does a real-routes-only pass first (router's
 `exec(pathname, { skipCatchAll: true })`), and only fires a catch-all when nothing real
 matched anywhere. Previously a method-specific catch-all (`app.get("*")`) shadowed
-`app.all("/files/*")` and could fake a `405` for unmatched `HEAD`. `app.all("*")` was always
-correct and is unchanged. Only `DeminoSimpleRouter` (the default) keeps a deferred internal
-catch-all; the other built-in routers match `*` positionally and ignore `skipCatchAll`.
+`app.all("/files/*")` and could fake a `405` for unmatched `HEAD`. `app.all("*")` was
+always correct and is unchanged. Only `DeminoSimpleRouter` (the default) keeps a deferred
+internal catch-all; the other built-in routers match `*` positionally and ignore
+`skipCatchAll`.
 
 ## Middleware Execution
 
@@ -183,17 +192,18 @@ catch-all; the other built-in routers match `*` positionally and ignore `skipCat
 **Termination**: First non-undefined return stops chain.
 
 **Sort Order**: Use `__midwarePreExecuteSortOrder` property to control position
-(ascending; lower runs first). The exported `DEMINO_SORT` constant publishes the
-reference points Demino assigns: `PRE` (100, before normal middleware), `DEFAULT`
-(1000, normal middleware), `HANDLER` (Infinity, final handler). Tag a middleware
-`mw.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE` to run it ahead of the normal
-chain (e.g. an auth gate) without hardcoding a magic number.
+(ascending; lower runs first). The exported `DEMINO_SORT` constant publishes the reference
+points Demino assigns: `PRE` (100, before normal middleware), `DEFAULT` (1000, normal
+middleware), `HANDLER` (Infinity, final handler). Tag a middleware
+`mw.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE` to run it ahead of the normal chain
+(e.g. an auth gate) without hardcoding a magic number.
 
 **Duplicates**: Set `__midwareDuplicable = true` to allow multiple instances.
 
 ## Dependencies
 
 ### JSR
+
 - @marianmeres/http-utils - HTTP errors/status codes
 - @marianmeres/midware - Middleware chaining
 - @marianmeres/simple-router - Default router implementation
@@ -204,11 +214,13 @@ chain (e.g. an auth gate) without hardcoding a magic number.
 - @std/path - Path utilities
 
 ### NPM
+
 - request-ip - Client IP detection
 
 ## Common Patterns
 
 ### Basic App
+
 ```ts
 const app = demino();
 app.get("/", () => "Hello");
@@ -216,26 +228,30 @@ Deno.serve(app);
 ```
 
 ### With Mount Path
+
 ```ts
 const api = demino("/api");
-api.get("/users", getUsers);  // handles /api/users
+api.get("/users", getUsers); // handles /api/users
 ```
 
 ### Middleware Registration
+
 ```ts
-app.use(globalMw);                    // All routes
-app.use("/protected", authMw);        // Specific route
+app.use(globalMw); // All routes
+app.use("/protected", authMw); // Specific route
 app.get("/data", validateMw, handler); // Method-specific
 ```
 
 ### Custom Error Handler
+
 ```ts
 app.error((req, info, ctx) => {
-  return { error: ctx.error.message };
+	return { error: ctx.error.message };
 });
 ```
 
 ### Composition
+
 ```ts
 const app = demino();
 const api = demino("/api");
@@ -243,6 +259,7 @@ Deno.serve(deminoCompose([app, api]));
 ```
 
 ### File-Based Routing
+
 ```ts
 const app = demino();
 await deminoFileBased(app, "./routes");
@@ -270,25 +287,33 @@ deno task release         # Publish to JSR
 ## Special Behaviors
 
 1. **HEAD requests**: Auto-generated from GET handlers
-2. **Trailing slashes**: `/foo` and `/foo/` are equivalent (use trailingSlash middleware to enforce)
+2. **Trailing slashes**: `/foo` and `/foo/` are equivalent (use trailingSlash middleware
+   to enforce)
 3. **Error logging**: All errors except 404s logged via `logger.error()`
-4. **Access logging**: Default logger forwards `access` to `console.log` (since 1.7.0). Set `logger: null` or override `access` to silence.
-5. **Mount path validation**: Must start with `/`, cannot end with `/`, no dynamic segments
-6. **Per-(method, route) middleware caching** (since 1.7.0): The assembled `Midware` for each route is built once on the first matching request and reused. The cache is invalidated when `app.use(...)` runs or when a route is (re-)registered.
+4. **Access logging**: Default logger forwards `access` to `console.log` (since 1.7.0).
+   Set `logger: null` or override `access` to silence.
+5. **Mount path validation**: Must start with `/`, cannot end with `/`, no dynamic
+   segments
+6. **Per-(method, route) middleware caching** (since 1.7.0): The assembled `Midware` for
+   each route is built once on the first matching request and reused. The cache is
+   invalidated when `app.use(...)` runs or when a route is (re-)registered.
 
 ## Common Modifications
 
 ### Add New Middleware
+
 1. Create file in `src/middleware/`
 2. Export factory function returning `DeminoHandler`
 3. Add export to `src/middleware/mod.ts`
 
 ### Add New Router
+
 1. Extend `DeminoRouter` abstract class
 2. Implement `on()` and `exec()` methods
 3. Use via `routerFactory` option
 
 ### Add New Utility
+
 1. Create file in `src/utils/`
 2. Add export to `src/utils/mod.ts`
 
@@ -302,8 +327,8 @@ throw new HTTP_ERROR.NotFound();
 
 // Custom handler
 app.error((req, info, ctx) => {
-  ctx.status = ctx.error?.status || 500;
-  return { error: ctx.error.message };
+	ctx.status = ctx.error?.status || 500;
+	return { error: ctx.error.message };
 });
 ```
 
@@ -317,22 +342,29 @@ app.static("/files", "/path/to/dir", options?);
 ## Rate Limiting
 
 ```ts
-app.use("/api", rateLimit(
-  (req, info, ctx) => req.headers.get("Authorization"),
-  { maxSize: 20, refillSizePerSecond: 10 }
-));
+app.use(
+	"/api",
+	rateLimit(
+		(req, info, ctx) => req.headers.get("Authorization"),
+		{ maxSize: 20, refillSizePerSecond: 10 },
+	),
+);
 ```
 
 ## Proxy
 
 ```ts
-app.get("/api/*", proxy("https://backend/*", {
-  preventSSRF: true,
-  timeout: 30000
-}));
+app.get(
+	"/api/*",
+	proxy("https://backend/*", {
+		preventSSRF: true,
+		timeout: 30000,
+	}),
+);
 ```
 
 **SSRF check coverage** (`isPrivateHost`, since 1.7.0):
+
 - localhost / `127.0.0.0/8`
 - `0.0.0.0`, `::`
 - Private IPv4: `10/8`, `100.64/10` (CGNAT), `169.254/16`, `172.16/12`, `192.168/16`
@@ -348,17 +380,17 @@ result.
 
 ```ts
 app.use((req, info, ctx) => {
-  ctx.getLogger()?.debug?.("Debug message");
+	ctx.getLogger()?.debug?.("Debug message");
 });
 ```
 
 ## Logger with Access Logging
 
 ```ts
-import { demino, createDeminoClog } from "@marianmeres/demino";
+import { createDeminoClog, demino } from "@marianmeres/demino";
 
 const app = demino("", [], {
-  logger: createDeminoClog("my-app"),
+	logger: createDeminoClog("my-app"),
 });
 
 // Or from existing Clog instance:
@@ -367,7 +399,7 @@ import { createDeminoClogFrom } from "@marianmeres/demino";
 
 const myClog = createClog("my-app", { debug: true });
 const app2 = demino("", [], {
-  logger: createDeminoClogFrom(myClog),
+	logger: createDeminoClogFrom(myClog),
 });
 ```
 
@@ -377,8 +409,8 @@ const app2 = demino("", [], {
 
 ### 1.10.0 (additive, no breaking change)
 
-- `ctx.routeMeta` + `handler.meta` + `withMeta(meta, handler)`: static per-route
-  metadata, stamped before any middleware runs (generic, not RBAC-specific)
+- `ctx.routeMeta` + `handler.meta` + `withMeta(meta, handler)`: static per-route metadata,
+  stamped before any middleware runs (generic, not RBAC-specific)
 - `app.routes()` (+ `DeminoRouteInfo`): enumerate `(method, route, meta)` for every
   registration — read-side companion for build-time audits/introspection
 - `DEMINO_SORT` (`PRE`/`DEFAULT`/`HANDLER`): publishes middleware sort-order points
@@ -425,5 +457,6 @@ For deeper context, consult:
 - [Tasks](./docs/tasks.md) — Step-by-step common procedures
 
 Domain docs (consult when working in these areas):
+
 - [Routing](./docs/domains/routing.md) — Router implementations and parameter syntax
 - [Middleware](./docs/domains/middleware.md) — Built-in middleware reference
