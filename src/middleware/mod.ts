@@ -1,3 +1,4 @@
+export * from "./authz.ts";
 export * from "./cookies.ts";
 export * from "./cors.ts";
 export * from "./etag.ts";

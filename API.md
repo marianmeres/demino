@@ -9,9 +9,11 @@ Complete API documentation for `@marianmeres/demino`.
   - [Demino Interface](#demino-interface)
   - [DeminoContext](#deminocontext)
   - [DeminoHandler](#deminohandler)
+  - [DeminoRouteInfo](#deminorouteinfo)
   - [DeminoOptions](#deminooptions)
   - [DeminoLogger](#deminologger)
   - [createResponseFrom()](#createresponsefrom)
+  - [withMeta()](#withmeta)
   - [supportedMethods](#supportedmethods)
   - [CONTENT_TYPE](#content_type)
 - [Routers](#routers)
@@ -28,6 +30,16 @@ Complete API documentation for `@marianmeres/demino`.
   - [redirect()](#redirect)
   - [trailingSlash()](#trailingslash)
   - [proxy()](#proxy)
+  - [authz()](#authz)
+  - [withPermission()](#withpermission)
+  - [withPublic()](#withpublic)
+  - [getSubject()](#getsubject)
+  - [createRouteResolver()](#createrouteresolver)
+  - [permissionMatrix()](#permissionmatrix)
+  - [assertCovered()](#assertcovered)
+  - [AuthzDecl](#authzdecl)
+  - [AuthzMatrixRow](#authzmatrixrow)
+  - [AUTHZ_META_KEY](#authz_meta_key)
 - [Composition & File-Based Routing](#composition--file-based-routing)
   - [deminoCompose()](#deminocompose)
   - [deminoFileBased()](#deminofilebased)
@@ -44,6 +56,8 @@ Complete API documentation for `@marianmeres/demino`.
   - [isFn()](#isfn)
   - [isPlainObject()](#isplainobject)
   - [isValidDate()](#isvaliddate)
+- [Constants](#constants)
+  - [DEMINO_SORT](#demino_sort)
 
 ---
 
@@ -115,8 +129,17 @@ app.all(route, ...handlers): Demino  // Matches all methods
 | `logger(logger)`                  | Set/unset application logger                  |
 | `mountPath()`                     | Get the mount path                            |
 | `info()`                          | Get debug info about routes                   |
+| `routes()`                        | Enumerate registered routes + meta (see below)|
 | `getOptions()`                    | Get constructor options                       |
 | `locals`                          | Application-wide locals object                |
+
+**`routes(): DeminoRouteInfo[]`** — enumerates every registered `(method, route)`
+together with its static `meta`, mirroring the dispatcher match-set (the `ALL`
+router, catch-alls, and auto-HEAD via its GET registration). The read-side
+companion to [`ctx.routeMeta`](#deminocontext), for build-time introspection and
+audits (permission coverage, OpenAPI, sitemaps, cache policy, …). Handlers
+without metadata report `meta: {}` (e.g. `app.static`). See
+[`DeminoRouteInfo`](#deminorouteinfo).
 
 **Middleware Registration:**
 
@@ -136,6 +159,7 @@ Request-scoped context object passed to every handler.
 interface DeminoContext {
 	params: Record<string, string>; // Route params (readonly)
 	locals: Record<string, any>; // Request-scoped data store
+	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta (frozen)
 	headers: Headers; // Response headers to set
 	status: number; // Response status (default: 200)
 	route: string; // Matched route pattern
@@ -146,6 +170,14 @@ interface DeminoContext {
 	__start: Date; // Request start timestamp
 }
 ```
+
+**`routeMeta`** — static metadata declared on the matched route handler (via
+`handler.meta` or [`withMeta()`](#withmeta)). Stamped onto the context BEFORE any
+middleware runs, so even global `app.use(...)` middleware can read it. Frozen;
+defaults to `{}`; cached per `(method, route)`. Auto-HEAD inherits the GET
+handler's meta. A generic primitive — useful for auth, rate-limit tiers, cache
+policy, audit tags, telemetry, OpenAPI, etc. Its read-side companion is
+[`app.routes()`](#demino-interface).
 
 **Example:**
 
@@ -179,6 +211,32 @@ type DeminoHandler = (
 - `Response` → Passed through directly
 - `Error` → Error response generated
 - Anything else → `toString()` as text/html
+
+**Optional properties:**
+
+- `handler.meta?: Record<string, unknown>` — static metadata for the route,
+  surfaced (frozen) as [`ctx.routeMeta`](#deminocontext) before any middleware
+  runs. Merge onto it with [`withMeta()`](#withmeta).
+- `handler.__midwarePreExecuteSortOrder?: number` — middleware execution order
+  (ascending; lower runs first). See [`DEMINO_SORT`](#demino_sort).
+
+---
+
+### DeminoRouteInfo
+
+One entry returned by [`app.routes()`](#demino-interface): a registered
+`(method, route)` pair and the static metadata declared on its final handler.
+
+```ts
+type DeminoRouteInfo = {
+	method: DeminoMethod | "ALL";
+	route: string;
+	meta: Readonly<Record<string, unknown>>;
+};
+```
+
+Auto-HEAD is reported via its GET registration; handlers without metadata report
+`meta: {}`.
 
 ---
 
@@ -240,6 +298,41 @@ function createResponseFrom(
 - Plain object/array/null/toJSON → JSON with `application/json`
 - Everything else → toString() with `text/html`
 - HEAD requests → Empty body
+
+---
+
+### withMeta()
+
+Merges static metadata onto a handler's `.meta` and returns the same handler (so
+it can wrap inline at registration). The merged object is surfaced (frozen) as
+[`ctx.routeMeta`](#deminocontext) before any middleware runs.
+
+```ts
+function withMeta<H extends DeminoHandler>(
+	meta: Record<string, unknown>,
+	handler: H,
+): H;
+```
+
+**Parameters:**
+
+- `meta` (`Record<string, unknown>`) — metadata to merge onto `handler.meta`.
+- `handler` (`H extends DeminoHandler`) — the handler to decorate (mutated and
+  returned).
+
+**Returns:** `H` — the same handler instance.
+
+**Example:**
+
+```ts
+app.get(
+	"/invoices/[id]",
+	withMeta({ permission: "invoice:read" }, (req, info, ctx) => {
+		// a global app.use(...) middleware can already read ctx.routeMeta.permission
+		return { id: ctx.params.id };
+	}),
+);
+```
 
 ---
 
@@ -605,6 +698,279 @@ app.get(
 
 ---
 
+### authz()
+
+Generic, policy-free authorization gate. Reads each route's declaration from
+[`ctx.routeMeta`](#deminocontext) (key `"authz"`, set via
+[`withPermission()`](#withpermission) / [`withPublic()`](#withpublic), or a
+fallback `resolve`) and enforces it through your opaque `check` callback. Demino
+keeps NO rbac/policy dependency — wire `@marianmeres/rbac` (or anything) inside
+`check`.
+
+Register it once, EARLY — right after any subject-resolving auth middleware. It
+runs in normal registration order (it is NOT self-pinned to an early sort order),
+so it composes with a preceding middleware that populates the subject.
+
+```ts
+function authz(options: AuthzOptions): DeminoHandler;
+
+interface AuthzOptions {
+	// REQUIRED. Opaque permission check; return true to allow. May be async.
+	check: (
+		subject: unknown,
+		permission: string,
+		ctx: DeminoContext,
+	) => boolean | Promise<boolean>;
+	// Resolve + store the subject when ctx.locals[subjectKey] is empty.
+	resolveSubject?: (
+		req: Request,
+		info: Deno.ServeHandlerInfo,
+		ctx: DeminoContext,
+	) => unknown | Promise<unknown>;
+	// Fallback declaration for routes with no static meta. See createRouteResolver().
+	resolve?: (method: string, route: string) => AuthzDecl | null;
+	subjectKey?: string; // ctx.locals slot for the subject. Default "subject".
+	denyByDefault?: boolean; // Deny (403) undeclared routes. Default true.
+	allowOptions?: boolean; // Let OPTIONS bypass the gate. Default true.
+}
+```
+
+**Resolution order per request:**
+
+1. `OPTIONS` → allow (when `allowOptions`).
+2. Resolve subject via `resolveSubject` if the slot is empty (even for public
+   routes, so downstream handlers see it).
+3. No declaration anywhere → deny (403), unless `denyByDefault: false` (then pass
+   through ungated).
+4. `{ public: true }` → allow.
+5. Permission required but no subject → 401.
+6. Run `check` for each permission with `every` (default) or `some`.
+7. All required pass → allow; otherwise → deny (403).
+
+**Example:**
+
+```ts
+import { Rbac } from "@marianmeres/rbac"; // the APP imports rbac, not demino
+import { authz, withPermission, withPublic } from "@marianmeres/demino/middleware";
+
+const rbac = new Rbac(); // ...roles/groups/rules...
+
+app.use(authz({
+	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+	check: (subject, permission) => rbac.can(subject as any, permission),
+}));
+
+app.get("/health", withPublic(() => "ok"));
+app.get("/invoices/[id]", withPermission("invoice:read", (req, info, ctx) => {
+	// reached only if check() returned true
+	return { id: ctx.params.id };
+}));
+```
+
+> All `authz` symbols are exported from both `@marianmeres/demino` and
+> `@marianmeres/demino/middleware`.
+
+---
+
+### withPermission()
+
+Declares the permission(s) a route requires, as static `authz` meta read by the
+[`authz()`](#authz) gate. Sugar over [`withMeta()`](#withmeta).
+
+```ts
+function withPermission<H extends DeminoHandler>(
+	permission: string | string[],
+	handler: H,
+	opts?: { mode?: "every" | "some" },
+): H;
+```
+
+**Parameters:**
+
+- `permission` (`string | string[]`) — required permission(s).
+- `handler` (`H extends DeminoHandler`) — the handler to decorate (mutated and
+  returned).
+- `opts.mode` (`"every" | "some"`, optional) — how multiple permissions combine.
+  Default: `"every"`.
+
+**Returns:** `H` — the same handler.
+
+**Example:**
+
+```ts
+app.get("/invoices/[id]", withPermission("invoice:read", handler));
+app.post(
+	"/invoices",
+	withPermission(["invoice:create", "billing:write"], handler, { mode: "every" }),
+);
+```
+
+---
+
+### withPublic()
+
+Declares a route public — the [`authz()`](#authz) gate allows it without a
+subject or permission check. Sugar over [`withMeta()`](#withmeta).
+
+```ts
+function withPublic<H extends DeminoHandler>(handler: H): H;
+```
+
+**Returns:** `H` — the same handler.
+
+**Example:**
+
+```ts
+app.get("/health", withPublic(() => "ok"));
+```
+
+---
+
+### getSubject()
+
+Typed accessor for the subject the [`authz()`](#authz) gate stored in
+`ctx.locals`. Returns `null` if absent. Avoids a viral generic on
+`DeminoContext`.
+
+```ts
+function getSubject<T>(ctx: DeminoContext, subjectKey?: string): T | null;
+```
+
+**Parameters:**
+
+- `ctx` (`DeminoContext`) — the request context.
+- `subjectKey` (`string`, optional) — the `ctx.locals` key to read. Default:
+  `"subject"`.
+
+**Example:**
+
+```ts
+app.get("/me", (req, info, ctx) => {
+	const user = getSubject<MyUser>(ctx);
+	return user ? `Hi ${user.name}` : "anon";
+});
+```
+
+---
+
+### createRouteResolver()
+
+Builds a `(method, route) => AuthzDecl | null` resolver from a route-pattern map,
+for use as [`AuthzOptions.resolve`](#authz) — centralizing policy in a route map
+instead of decorating handlers. `*` matches a single path segment; `**` matches
+the rest of the path. First match wins (array form preserves order; object form
+uses key order). Because it keys only on `(method, route)`, it is replayable by
+[`permissionMatrix()`](#permissionmatrix) at build time.
+
+```ts
+function createRouteResolver(
+	map: Array<[string, AuthzDecl]> | Record<string, AuthzDecl>,
+): (method: string, route: string) => AuthzDecl | null;
+```
+
+**Example:**
+
+```ts
+const resolve = createRouteResolver([
+	["/health", { public: true }],
+	["/api/*/me/**", { permission: "area.me:access" }],
+	["/api/**", { permission: "api:access" }],
+]);
+app.use(authz({ check, resolve }));
+```
+
+---
+
+### permissionMatrix()
+
+Build-time authorization coverage report over [`app.routes()`](#demino-interface).
+Each row states whether a registered route is `permission`-gated, `public`, or
+`MISSING` a declaration, and whether the declaration came from `static` meta or
+the `resolver`. Pair it with the SAME `resolve` you pass to [`authz()`](#authz)
+so the report reflects what the gate would enforce.
+
+```ts
+function permissionMatrix(
+	app: Demino,
+	opts?: { resolve?: (method: string, route: string) => AuthzDecl | null },
+): AuthzMatrixRow[];
+```
+
+**Example:**
+
+```ts
+console.table(permissionMatrix(app));
+```
+
+---
+
+### assertCovered()
+
+Asserts every matchable route has an explicit authorization declaration (static
+or via `resolve`); throws listing any `MISSING` routes. This is the real
+fail-closed guarantee — a runtime gate cannot cover 404/405 or static catch-alls,
+so coverage is asserted at build time / in CI.
+
+```ts
+function assertCovered(
+	app: Demino,
+	opts?: { resolve?: (method: string, route: string) => AuthzDecl | null },
+): void;
+```
+
+**Throws:** if any registered route lacks a declaration.
+
+**Example:**
+
+```ts
+// in a build-time check or CI test
+assertCovered(app); // throws listing any MISSING routes
+```
+
+---
+
+### AuthzDecl
+
+A per-route authorization declaration: either explicitly public, or requiring
+one or more (opaque) permissions.
+
+```ts
+type AuthzDecl =
+	| { public: true }
+	| { permission: string | string[]; mode?: "every" | "some" };
+```
+
+---
+
+### AuthzMatrixRow
+
+One row in the coverage matrix returned by
+[`permissionMatrix()`](#permissionmatrix).
+
+```ts
+interface AuthzMatrixRow {
+	method: DeminoMethod | "ALL";
+	route: string;
+	declaration: "permission" | "public" | "MISSING";
+	permission?: string | string[]; // present when declaration === "permission"
+	source: "static" | "resolver";
+}
+```
+
+---
+
+### AUTHZ_META_KEY
+
+The reserved [`ctx.routeMeta`](#deminocontext) key under which the authz
+declaration is stored. Intentionally a plain string (not a Symbol) so
+[`permissionMatrix()`](#permissionmatrix) can serialize a coverage report to JSON.
+
+```ts
+const AUTHZ_META_KEY = "authz";
+```
+
+---
+
 ## Composition & File-Based Routing
 
 ### deminoCompose()
@@ -894,4 +1260,31 @@ Type guard for valid Date objects.
 
 ```ts
 function isValidDate(v: any): v is Date;
+```
+
+---
+
+## Constants
+
+### DEMINO_SORT
+
+Named reference points for `handler.__midwarePreExecuteSortOrder` (ascending —
+lower runs first). Demino assigns `DEFAULT` to middleware and `HANDLER` to the
+final handler. `PRE` is a published slot below `DEFAULT` for positioning a
+middleware ahead of the normal chain without a magic number.
+
+```ts
+const DEMINO_SORT = {
+	PRE: 100, // runs before normal middleware
+	DEFAULT: 1_000, // default for middleware that don't set their own order
+	HANDLER: Infinity, // the final route handler (runs last)
+} as const;
+```
+
+**Example:**
+
+```ts
+const mw: DeminoHandler = (req, info, ctx) => {/* ... */};
+mw.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE; // runs before normal mws
+app.use(mw);
 ```

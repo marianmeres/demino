@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.7.0
+- **Version**: 1.11.0
 - **Runtime**: Deno
 - **Type**: Web server framework
 - **Entry Point**: src/mod.ts
@@ -99,6 +99,7 @@ type DeminoHandler = (
 interface DeminoContext {
 	params: Record<string, string>; // Route params (frozen)
 	locals: Record<string, any>; // Request-scoped storage
+	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta, frozen (since 1.10.0)
 	headers: Headers; // Response headers
 	status: number; // Response status
 	route: string; // Matched route pattern
@@ -406,6 +407,22 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 1.11.0 (additive, no breaking change)
+
+- `authz(...)` bundled middleware: generic, policy-free authorization gate over
+  `ctx.routeMeta`. Opaque `check(subject, permission, ctx) => boolean` (wire rbac or
+  anything; demino takes NO rbac dependency). Deny-by-default; OPTIONS bypass; auto-HEAD
+  inherits GET's decl; runs in registration order (not self-pinned).
+- `withPermission` / `withPublic`: route declaration sugar over `withMeta` (key
+  `"authz"`).
+- `getSubject<T>(ctx)`: typed subject accessor (avoids a viral `DeminoContext<L>`
+  generic).
+- `createRouteResolver(map)`: `(method, route) => decl` fallback matcher (`*`/`**`).
+- `permissionMatrix(app)` / `assertCovered(app)`: build-time fail-closed coverage audit
+  over `app.routes()` (the real guarantee — a runtime gate can't cover 404/405/static).
+- All in `src/middleware/authz.ts`, exported via `@marianmeres/demino` (and
+  `/middleware`).
 
 ### 1.10.0 (additive, no breaking change)
 

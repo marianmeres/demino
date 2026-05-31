@@ -98,11 +98,23 @@ Deno.serve(app)
 | `src/misc/compose.ts`             | `deminoCompose()` for multi-app                                                    |
 | `src/misc/file-based.ts`          | Directory-based routing                                                            |
 
+## Extension Points
+
+- **Static route metadata.** Handlers can carry `.meta` (set via `withMeta()`), surfaced
+  as the frozen `ctx.routeMeta` (stamped before any middleware runs) and enumerable via
+  `app.routes()` for build-time route introspection. A generic primitive — use it for
+  auth, rate-limit tiers, cache policy, audit tags, telemetry, OpenAPI, etc.
+- **Authorization.** `authz` is the bundled generic authorization gate built on
+  `routeMeta` / `app.routes()`; Demino keeps no rbac dependency. See
+  [domains/middleware.md](./domains/middleware.md#authz) and
+  [API.md](../API.md#authz).
+
 ## Security Boundaries
 
 Demino is a building-blocks framework. Security is delegated to:
 
-- **Authentication/Authorization**: Implement via middleware
+- **Authentication/Authorization**: Implement via middleware (or use the bundled `authz`
+  gate — generic and policy-free; see [domains/middleware.md](./domains/middleware.md#authz))
 - **Input validation**: Implement via middleware or handlers
 - **CORS**: Use bundled `cors()` middleware
 - **Rate limiting**: Use bundled `rateLimit()` middleware

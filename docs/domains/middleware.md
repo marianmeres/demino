@@ -16,6 +16,7 @@ can be registered via `app.use()` or as route-specific middleware.
 | `src/middleware/etag.ts`           | ETag/304 responses         |
 | `src/middleware/redirect.ts`       | URL redirects              |
 | `src/middleware/trailing-slash.ts` | Slash normalization        |
+| `src/middleware/authz.ts`          | Authorization gate + tools |
 
 ---
 
@@ -222,6 +223,60 @@ app.use(trailingSlash(false));
 ```
 
 Returns `308 Permanent Redirect` when normalization needed.
+
+---
+
+## authz
+
+Generic, policy-free authorization gate. Reads each route's declaration from
+`ctx.routeMeta["authz"]` and enforces it via your opaque `check` callback. Demino has
+NO rbac/policy dependency — wire `@marianmeres/rbac` (or anything) inside `check`.
+
+Register it once, EARLY (right after any subject-resolving auth middleware). It runs in
+normal registration order — it is NOT self-pinned to an early sort order — so it composes
+with a preceding middleware that populates the subject.
+
+```ts
+import { Rbac } from "@marianmeres/rbac"; // the APP imports rbac, not demino
+import { authz, withPermission, withPublic } from "@marianmeres/demino/middleware";
+
+const rbac = new Rbac(); // ...roles/groups/rules...
+
+app.use(authz({
+	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+	check: (subject, permission) => rbac.can(subject as any, permission),
+}));
+
+app.get("/health", withPublic(() => "ok"));
+app.get("/invoices/[id]", withPermission("invoice:read", (req, info, ctx) => {
+	// reached only if check() returned true
+}));
+```
+
+**Key options:** `check` (required), `resolveSubject`, `resolve`, `subjectKey` (default
+`"subject"`), `denyByDefault` (default `true`), `allowOptions` (default `true`).
+
+**Per-request flow:** OPTIONS bypass → resolve subject if empty → deny-by-default when no
+declaration (403) → `{ public: true }` allows → permission required but no subject (401) →
+run `check` per permission (`every`/`some`) → fail (403).
+
+**Companion helpers:**
+
+| Symbol                                | Purpose                                                       |
+| ------------------------------------- | ------------------------------------------------------------ |
+| `withPermission(perm, handler, opts?)`| Declare a route needs permission(s).                         |
+| `withPublic(handler)`                 | Declare a route public.                                      |
+| `getSubject<T>(ctx, key?)`            | Typed accessor for the stored subject.                       |
+| `createRouteResolver(map)`            | Build a `(method, route) => decl` resolver from a route map. |
+| `permissionMatrix(app, opts?)`        | Build-time coverage report over `app.routes()`.              |
+| `assertCovered(app, opts?)`           | Throw listing routes MISSING a declaration (fail-closed CI). |
+
+A runtime gate can't cover 404/405/static catch-alls, so assert coverage at build time
+with `assertCovered(app)`. See [API.md](../../API.md#authz) for exact signatures,
+`AuthzOptions`, `AuthzDecl`, and `AuthzMatrixRow`.
+
+All symbols are exported from both `@marianmeres/demino` and
+`@marianmeres/demino/middleware`.
 
 ---
 

@@ -378,6 +378,76 @@ included after all.
 
 ## Extra: Bundled middlewares
 
+### Authorization (`authz`)
+
+A generic, **policy-free** authorization gate built on the route-metadata primitive.
+Demino stays agnostic: it never knows what a permission _means_ — a route declares an
+opaque permission with `withPermission(...)` (or `withPublic(...)`), and you supply a
+`check(subject, permission, ctx) => boolean` that decides. Wire `@marianmeres/rbac` (or
+anything) inside `check`; Demino takes no dependency on it.
+
+```typescript
+import { authz, withPermission, withPublic } from "@marianmeres/demino";
+import { Rbac } from "@marianmeres/rbac"; // YOUR app imports rbac, not demino
+
+const rbac = new Rbac(); /* ...roles/groups/rules... */
+
+app.use(authz({
+	// resolve the subject (JWT/cookie/etc.); return null for unauthenticated
+	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+	// opaque check — meaning of `permission` is entirely yours
+	check: (subject, permission) => rbac.can(subject as any, permission),
+}));
+
+app.get("/health", withPublic(() => "ok"));
+app.get(
+	"/invoices/[id]",
+	withPermission("invoice:read", (req, info, ctx) => {
+		// reached only when check() returned true
+	}),
+);
+```
+
+Behavior: `OPTIONS` is bypassed; **deny-by-default** (a route with no declaration is 403 —
+set `denyByDefault: false` for incremental adoption); a route needing a permission with no
+subject is 401; `withPermission([...], h, { mode })` requires `every` (default) or `some`.
+Auto-HEAD inherits the GET handler's declaration. The gate runs in normal registration
+order — register it early (right after any subject-resolving middleware).
+
+**Ownership / ABAC** stays in your `check` (load the resource from `ctx` and decide, e.g.
+via an rbac rule). There is no built-in resource loader — keep coarse permission at the
+gate and row-level scoping in the data layer; re-check ownership in write transactions.
+
+**Route-pattern fallback** — for routes without a static declaration, supply a
+`(method, route) => decl` resolver. `createRouteResolver` builds one from a pattern map
+(`*` = one segment, `**` = the rest):
+
+```typescript
+import { authz, createRouteResolver } from "@marianmeres/demino";
+
+const resolve = createRouteResolver([
+	["/health", { public: true }],
+	["/api/**", { permission: "api:access" }],
+]);
+app.use(authz({ resolveSubject, check, resolve })); // static decls still win
+```
+
+**Build-time coverage (the fail-closed guarantee)** — a runtime gate cannot protect
+404/405 or static catch-alls, so the real guarantee is a build-time audit over
+`app.routes()`. `permissionMatrix(app)` returns every `(method, route)` with its
+declaration (`permission` | `public` | `MISSING`) and `source` (`static` | `resolver`);
+`assertCovered(app)` throws if any route is undeclared — run it in CI:
+
+```typescript
+import { assertCovered, permissionMatrix } from "@marianmeres/demino";
+
+Deno.test("no unguarded routes", () => assertCovered(app, { resolve }));
+// or inspect/print the full matrix:
+console.table(permissionMatrix(app, { resolve }));
+```
+
+Read the typed subject anywhere downstream with `getSubject<MyUser>(ctx)`.
+
 ### CORS
 
 Will create the "Cross-origin resource sharing" ("CORS") headers in the response based on
