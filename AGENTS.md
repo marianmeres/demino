@@ -116,10 +116,16 @@ interface Demino extends Deno.ServeHandler {
   logger(logger): Demino;
   mountPath(): string;
   info(): { routes, globalAppMiddlewaresCount };
+  routes(): DeminoRouteInfo[];       // Enumerate (method, route, meta) per registration
   getOptions(): DeminoOptions;
   locals: DeminoAppLocals;           // App-wide persistent data (ctx.appLocals)
 }
 ```
+
+`routes()` returns `{ method, route, meta }[]` mirroring the dispatcher match-set
+(ALL router, catch-alls, auto-HEAD). It is the read-side companion to `routeMeta` —
+intended for build-time introspection/audits (permission coverage, OpenAPI, sitemap).
+`meta` is `{}` for handlers without metadata (e.g. `app.static`).
 
 ## Response Conversion Rules
 
@@ -176,7 +182,12 @@ catch-all; the other built-in routers match `*` positionally and ignore `skipCat
 
 **Termination**: First non-undefined return stops chain.
 
-**Sort Order**: Use `__midwarePreExecuteSortOrder` property to control position.
+**Sort Order**: Use `__midwarePreExecuteSortOrder` property to control position
+(ascending; lower runs first). The exported `DEMINO_SORT` constant publishes the
+reference points Demino assigns: `PRE` (100, before normal middleware), `DEFAULT`
+(1000, normal middleware), `HANDLER` (Infinity, final handler). Tag a middleware
+`mw.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE` to run it ahead of the normal
+chain (e.g. an auth gate) without hardcoding a magic number.
 
 **Duplicates**: Set `__midwareDuplicable = true` to allow multiple instances.
 
@@ -361,6 +372,16 @@ const app2 = demino("", [], {
 ```
 
 ---
+
+## Recent Additions
+
+### 1.10.0 (additive, no breaking change)
+
+- `ctx.routeMeta` + `handler.meta` + `withMeta(meta, handler)`: static per-route
+  metadata, stamped before any middleware runs (generic, not RBAC-specific)
+- `app.routes()` (+ `DeminoRouteInfo`): enumerate `(method, route, meta)` for every
+  registration — read-side companion for build-time audits/introspection
+- `DEMINO_SORT` (`PRE`/`DEFAULT`/`HANDLER`): publishes middleware sort-order points
 
 ## Recent Breaking Changes
 

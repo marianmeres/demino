@@ -171,6 +171,7 @@ It consists of:
 - `headers` - any headers to be optionally used in the final response,
 - `error` - to be used in a custom error handler.
 - `route` - currently matched route definition
+- `routeMeta` - static metadata declared on the matched route handler (see below)
 - `getLogger` - function to get the logger instance (if any) initially provided via
   `DeminoOptions` or later via `app.logger(...)` api
 
@@ -192,6 +193,65 @@ app.use(async (req: Request, info: Deno.ServeHandlerInfo, ctx: DeminoContext) =>
 // ...and route handler acting as a pure renderer. This handler will not
 // be reached if the article is not found
 app.get("/[articleId]", (req, info, ctx) => render(ctx.locals.article));
+```
+
+### Static route metadata (`ctx.routeMeta` / `withMeta`)
+
+A route handler can carry static, opaque metadata that Demino surfaces on
+`ctx.routeMeta` **before any middleware runs** — so even the first global `app.use`
+middleware can read it as plain data (no injector, no execution-order trick). It is
+frozen, defaults to `{}`, is cached per `(method, route)`, and is inherited by
+auto-HEAD. This is generic (auth/permission, rate limits, cache policy, audit tags,
+telemetry, OpenAPI…), not tied to any one concern.
+
+```typescript
+import { demino, withMeta } from "@marianmeres/demino";
+
+const app = demino();
+
+// one global middleware reads the per-route declaration as data
+app.use((req, info, ctx) => {
+	const required = ctx.routeMeta.permission; // reliably present before this runs
+	// ...gate on it, attach a rate limit, set a cache policy, etc.
+});
+
+app.get(
+	"/invoices/[id]",
+	withMeta({ permission: "invoice:read" }, (req, info, ctx) => {
+		return { id: ctx.params.id };
+	}),
+);
+```
+
+You can also set `handler.meta = {...}` directly; `withMeta` just merges and returns
+the same handler for ergonomic inline use.
+
+### Route introspection (`app.routes()`)
+
+`app.routes()` enumerates every registered `(method, route, meta)` — mirroring the
+dispatcher match-set (ALL router, catch-alls, auto-HEAD). It is the read-side
+companion to `routeMeta`, intended for build-time introspection and audits
+(permission coverage, OpenAPI/sitemap generation, cache-policy checks):
+
+```typescript
+for (const { method, route, meta } of app.routes()) {
+	// e.g. assert every route declares a permission, or build a permission matrix
+}
+```
+
+### Middleware ordering (`DEMINO_SORT`)
+
+Middleware order is controlled by `handler.__midwarePreExecuteSortOrder` (ascending;
+lower runs first). The exported `DEMINO_SORT` constant publishes the reference points
+Demino assigns by default — `PRE` (100), `DEFAULT` (1000), `HANDLER` (Infinity) — so a
+middleware can position itself ahead of the normal chain deterministically:
+
+```typescript
+import { DEMINO_SORT } from "@marianmeres/demino";
+
+const gate: DeminoHandler = (req, info, ctx) => {/* runs first */};
+gate.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE;
+app.use(gate);
 ```
 
 ## Application Locals

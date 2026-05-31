@@ -55,6 +55,13 @@ export interface DeminoContext {
 	ip: string;
 	/** Matched route definition */
 	route: string;
+	/**
+	 * Static metadata declared on the matched route handler (via `handler.meta`
+	 * or the `withMeta` helper). Stamped onto the context BEFORE any middleware
+	 * runs, so even the first global `app.use` middleware can read it. Frozen and
+	 * opaque to Demino; defaults to a shared empty object (never undefined).
+	 */
+	readonly routeMeta: Readonly<Record<string, unknown>>;
 	/** Will retrieve the current application logger (if any) */
 	getLogger: () => DeminoLogger | null;
 	/** Userland app locals (arbitrary object available on the app instance /not just within one request/) */
@@ -86,7 +93,38 @@ export type DeminoHandlerArgs = [Request, Deno.ServeHandlerInfo, DeminoContext];
  * };
  * ```
  */
-export interface DeminoHandler extends MidwareUseFn<DeminoHandlerArgs> {}
+export interface DeminoHandler extends MidwareUseFn<DeminoHandlerArgs> {
+	/**
+	 * Optional static, opaque-to-Demino per-route data. When this handler is the
+	 * final (route) handler, Demino surfaces a frozen copy as `ctx.routeMeta`
+	 * before any middleware runs. Useful for declaring per-route facts that a
+	 * global middleware needs (auth/permission, rate limits, cache policy, audit
+	 * tags, telemetry labels, …). Mirrors the existing `.middlewares` /
+	 * `.__midwarePreExecuteSortOrder` handler-property conventions. See `withMeta`.
+	 */
+	meta?: Record<string, unknown>;
+}
+
+/**
+ * Ergonomic helper to attach static metadata to a route handler. Merges into any
+ * existing `handler.meta` and returns the same handler (so it can wrap inline).
+ * The merged object is surfaced as `ctx.routeMeta` (frozen) before any middleware
+ * runs. Demino treats the metadata as opaque.
+ *
+ * @example
+ * ```ts
+ * app.get("/invoices/[id]", withMeta({ permission: "invoice:read" }, (req, info, ctx) => {
+ *   // a global app.use middleware can already read ctx.routeMeta.permission
+ * }));
+ * ```
+ */
+export function withMeta<H extends DeminoHandler>(
+	meta: Record<string, unknown>,
+	handler: H,
+): H {
+	handler.meta = { ...handler.meta, ...meta };
+	return handler;
+}
 
 /**
  * Function signature for route registration methods (get, post, etc).
@@ -109,6 +147,19 @@ export type DeminoRouteMiddlewareInfo = Partial<
 		{ localMiddlewaresCount: number; globalMiddlewaresCount: number }
 	>
 >;
+
+/**
+ * One entry returned by `app.routes()`: a registered (method, route) pair and the
+ * static metadata declared on its final handler (see `handler.meta` / `withMeta`).
+ * Reflects exactly what the dispatcher can match, so it can drive build-time audits
+ * (permission coverage, OpenAPI, sitemaps, cache policy, …). Auto-HEAD is reported
+ * via its GET registration; handlers without metadata report `meta: {}`.
+ */
+export type DeminoRouteInfo = {
+	method: DeminoMethod | "ALL";
+	route: string;
+	meta: Readonly<Record<string, unknown>>;
+};
 
 /**
  * Application-wide locals object accessible from any context via ctx.appLocals.
@@ -185,6 +236,13 @@ export interface Demino extends Deno.ServeHandler {
 		routes: Record<string, DeminoRouteMiddlewareInfo>;
 		globalAppMiddlewaresCount: number;
 	};
+	/**
+	 * Enumerates every registered (method, route) pair together with the static
+	 * metadata declared on its final handler (`handler.meta` / `withMeta`).
+	 * Mirrors the dispatcher match-set, so it can drive build-time introspection
+	 * such as permission/coverage audits, OpenAPI or sitemap generation, etc.
+	 */
+	routes: () => DeminoRouteInfo[];
 	/** Will return initial constructor options */
 	getOptions: () => DeminoOptions;
 
@@ -304,6 +362,33 @@ export const CONTENT_TYPE = {
 };
 
 /**
+ * Named reference points for the middleware pre-execute sort order
+ * (`handler.__midwarePreExecuteSortOrder`). Demino sorts the assembled stack by
+ * this value ascending; lower runs earlier.
+ *
+ * Demino assigns `DEFAULT` to every middleware and `HANDLER` to the final route
+ * handler that don't already define a value. `PRE` is a published slot below
+ * `DEFAULT` so downstream code can deterministically position a middleware ahead
+ * of the normal chain (e.g. an auth/permission gate that must run first) without
+ * hardcoding a magic number.
+ *
+ * @example
+ * ```ts
+ * const gate: DeminoHandler = (req, info, ctx) => {  };
+ * gate.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE; // runs before normal mws
+ * app.use(gate);
+ * ```
+ */
+export const DEMINO_SORT = {
+	/** Runs before normal middleware (published slot below DEFAULT). */
+	PRE: 100,
+	/** Default for middleware that don't set their own order. */
+	DEFAULT: 1_000,
+	/** The final route handler (runs last). */
+	HANDLER: Infinity,
+} as const;
+
+/**
  * Creates a Response instance from various body types.
  * This is Demino's core response creation logic, exported for use in custom middlewares.
  *
@@ -383,6 +468,10 @@ export function createResponseFrom(
 	return new Response(responseBody, { status, headers });
 }
 
+/** Shared frozen empty object used as the default `ctx.routeMeta` (no per-request
+ * allocation; opaque and read-only). */
+const EMPTY_META: Readonly<Record<string, unknown>> = Object.freeze({});
+
 /** Internal DRY helper */
 function _createContext(
 	start: number,
@@ -392,13 +481,17 @@ function _createContext(
 	info: Deno.ServeHandlerInfo,
 	getLogger: () => DeminoLogger | null,
 	appLocals: DeminoAppLocals,
+	routeMeta: Readonly<Record<string, unknown>> = EMPTY_META,
 ): DeminoContext {
 	const _clientIp = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
 	});
+	// NB: `routeMeta` must be seeded inside this literal — `Object.seal` below
+	// would make a post-hoc assignment throw.
 	return Object.seal({
 		params: Object.freeze(params),
 		route,
+		routeMeta,
 		locals: {},
 		headers: new Headers(),
 		error: null,
@@ -512,7 +605,14 @@ export function demino(
 	// first request and reuse it for all subsequent requests to the same
 	// (method, route) pair. The cache is cleared on every `app.use(...)`.
 	const _midwareCache = new Map<string, Midware<DeminoHandlerArgs>>();
-	const _invalidateMidwareCache = () => _midwareCache.clear();
+	// Per-(method+route) resolved+frozen static route meta (from the final
+	// handler's `.meta`), surfaced as `ctx.routeMeta`. Same key/lifetime as
+	// `_midwareCache`, so it is invalidated together on every `app.use(...)`.
+	const _metaCache = new Map<string, Readonly<Record<string, unknown>>>();
+	const _invalidateMidwareCache = () => {
+		_midwareCache.clear();
+		_metaCache.clear();
+	};
 
 	// initially we are falling back to a console-backed adapter (the bare
 	// `console` object lacks an `access` method, so previously access logs
@@ -538,6 +638,14 @@ export function demino(
 	const _localMwsCounts: Record<
 		string,
 		Partial<Record<DeminoMethod | "ALL", number>>
+	> = {};
+
+	// see `app.routes` — per (route, method) frozen static meta from the final
+	// handler's `.meta`, captured at registration time (the registry has no
+	// matched request to read from, unlike the per-request `_metaCache`).
+	const _routeMeta: Record<
+		string,
+		Partial<Record<DeminoMethod | "ALL", Readonly<Record<string, unknown>>>>
 	> = {};
 
 	const _maybeSetXHeaders = (context: DeminoContext) => {
@@ -664,9 +772,7 @@ export function demino(
 					"PUT",
 				];
 				if (
-					ms.some((m) =>
-						_routers[m].exec(url.pathname, { skipCatchAll: true })
-					)
+					ms.some((m) => _routers[m].exec(url.pathname, { skipCatchAll: true }))
 				) {
 					throw createHttpError(HTTP_STATUS.METHOD_NOT_ALLOWED);
 				}
@@ -674,6 +780,24 @@ export function demino(
 
 			if (matched) {
 				try {
+					const cacheKey = `${method} ${matched.route}`;
+
+					// Resolve (or reuse) the static route meta for this
+					// (method, route) BEFORE creating the context — the context is
+					// sealed, so `routeMeta` must be seeded at construction. The
+					// final handler is the last element of the matched chain, so
+					// auto-HEAD and the ALL-router fallback inherit the right
+					// handler's meta for free. The frozen object is shared across
+					// requests (read-only); no per-request allocation.
+					let routeMeta = _metaCache.get(cacheKey);
+					if (routeMeta === undefined) {
+						const handler = [...matched.midwares].flat().at(-1) as
+							| DeminoHandler
+							| undefined;
+						routeMeta = Object.freeze({ ...handler?.meta });
+						_metaCache.set(cacheKey, routeMeta);
+					}
+
 					context = _createContext(
 						start,
 						matched.params,
@@ -682,12 +806,12 @@ export function demino(
 						info,
 						getLogger,
 						appLocals,
+						routeMeta,
 					);
 
 					// Build (or reuse) the assembled+sorted Midware for this
 					// (method, route) pair. The cache is invalidated whenever
 					// app.use(...) changes the global middleware sets.
-					const cacheKey = `${method} ${matched.route}`;
 					let midware = _midwareCache.get(cacheKey);
 					if (!midware) {
 						// everything is a middleware...
@@ -701,12 +825,14 @@ export function demino(
 							.map((mw, i, arr) => {
 								if (i === arr.length - 1) {
 									// handler: if sort order is not yet defined, make it big
-									mw.__midwarePreExecuteSortOrder ??= Infinity;
+									mw.__midwarePreExecuteSortOrder ??=
+										DEMINO_SORT.HANDLER;
 								} else {
-									// middleware: let's create some magic value, so we have some known boundary...
-									// in other words, if we would ever need to manually set a mw position after normal ones,
-									// we'll know to set a value greater than 1_000
-									mw.__midwarePreExecuteSortOrder ??= 1_000;
+									// middleware: assign the known DEFAULT boundary so userland
+									// can deterministically position relative to it (e.g.
+									// DEMINO_SORT.PRE before, or > DEFAULT after).
+									mw.__midwarePreExecuteSortOrder ??=
+										DEMINO_SORT.DEFAULT;
 								}
 								return mw;
 							});
@@ -812,6 +938,12 @@ export function demino(
 						0,
 						args.flat().length - 1,
 					);
+
+					// capture the final handler's static meta for `app.routes()`
+					_routeMeta[_fullRoute] ??= {};
+					_routeMeta[_fullRoute][method] = Object.freeze({
+						...(args.flat().at(-1) as DeminoHandler)?.meta,
+					});
 
 					if (options?.verbose) {
 						_doLog("debug", green(` ✔ ${method} ${mountPath + route}`));
@@ -939,6 +1071,21 @@ export function demino(
 			});
 		});
 		return { routes, globalAppMiddlewaresCount: _globalAppMws.length };
+	};
+
+	_app.routes = () => {
+		const out: DeminoRouteInfo[] = [];
+		Object.entries(_routers).forEach((entry) => {
+			const [m, router] = entry as [DeminoMethod | "ALL", DeminoRouter];
+			router.info().forEach((route) => {
+				out.push({
+					method: m,
+					route,
+					meta: _routeMeta[route]?.[m] ?? EMPTY_META,
+				});
+			});
+		});
+		return out;
 	};
 
 	_app.getOptions = () => options ?? {};
