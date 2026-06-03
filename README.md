@@ -567,6 +567,37 @@ app.use(
 );
 ```
 
+### BodyLimit
+
+Rejects oversized requests _before_ the body is read, protecting the server from memory
+exhaustion caused by large (accidental or malicious) uploads. It is a pure header gate —
+it never consumes the request body, so it composes cleanly with downstream body parsing
+and streaming/progress handling.
+
+```ts
+// global limit (note: the global form is `app.use(mw)` with NO route argument)
+app.use(bodyLimit({ maxSize: 20 * 1024 * 1024 })); // 20 MiB
+
+// or a stricter per-route limit (the stricter limit wins)
+app.post("/upload", bodyLimit({ maxSize: 5 * 1024 * 1024 }), handler);
+```
+
+Behavior:
+
+- `Content-Length` present and `> maxSize` → `413 Payload Too Large` (rejected before any
+  byte is buffered).
+- `Content-Length` present and within `maxSize` → allowed. `Deno.serve` uses the declared
+  length as the read ceiling, so a handler can never receive more than the advertised
+  bytes — an under-declared `Content-Length` cannot smuggle extra bytes past the limit.
+- Body present but **no** `Content-Length` (e.g. `Transfer-Encoding: chunked`) →
+  `411 Length Required`, unless `allowUnknownLength: true` is set (in which case you must
+  bound the stream yourself while reading it).
+- No body (GET/HEAD/empty POST) → passes through untouched.
+
+> This is request-side protection (defense in depth). It is good practice to _also_
+> configure a body size limit in any reverse proxy in front of the app (e.g. nginx
+> `client_max_body_size`).
+
 ### Cookies
 
 Parses request cookies and provides helpers for setting/deleting response cookies. Accepts

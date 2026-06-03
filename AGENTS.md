@@ -46,6 +46,8 @@ src/
 │   └── express-like-router.ts # Express-style router (deprecated)
 ├── middleware/
 │   ├── mod.ts                # Middleware exports barrel
+│   ├── authz.ts              # Policy-free authorization gate
+│   ├── body-limit.ts         # Request body size limit (413/411 gate)
 │   ├── cors.ts               # CORS headers
 │   ├── cookies.ts            # Cookie parsing/setting
 │   ├── rate-limit.ts         # Token bucket rate limiting
@@ -407,6 +409,16 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 1.13.0 (additive, no breaking change)
+
+- `bodyLimit({ maxSize, allowUnknownLength? })` middleware: pre-handler request body size
+  gate that prevents memory exhaustion from large uploads. Header-only (never consumes
+  `req.body`). `Content-Length` > `maxSize` → `413`; declared length is the read ceiling
+  so it cannot be under-declared to bypass; body with no `Content-Length` (chunked) →
+  `411` unless `allowUnknownLength: true`. `__midwareDuplicable` (strictest layered limit
+  wins); NOT self-pinned to PRE. In `src/middleware/body-limit.ts`, exported via
+  `@marianmeres/demino` (and `/middleware`).
 
 ### 1.11.0 (additive, no breaking change)
 
