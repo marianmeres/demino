@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import { join } from "@std/path";
+import { demino } from "../../src/demino.ts";
 import { deminoFileBased, routesCompare } from "../../src/misc/file-based.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -73,5 +74,74 @@ runTestServerTests([
 			);
 		},
 		raw: true,
+	},
+	{
+		name: "missing root dir throws NotFound (ENOENT) by default",
+		raw: true,
+		fn: async () => {
+			const app = demino();
+			app.logger(null);
+			const err = await assertRejects(
+				() =>
+					deminoFileBased(app, "./__demino_does_not_exist__", {
+						verbose: false,
+					}),
+				Deno.errors.NotFound,
+			);
+			assertMatch(err.message, /does not exist/i);
+			assertEquals((err as { code?: string }).code, "ENOENT");
+		},
+	},
+	{
+		name: "ignoreMissingRootDir skips a missing dir (no throw, warns)",
+		raw: true,
+		fn: async () => {
+			const app = demino();
+			app.logger(null);
+			const warnings: string[] = [];
+			// deno-lint-ignore no-explicit-any
+			const logger: any = {
+				debug() {},
+				log() {},
+				error() {},
+				warn: (...a: unknown[]) => warnings.push(a.join(" ")),
+			};
+
+			// real dir + a missing one — must not throw
+			await deminoFileBased(app, [root1, "./__demino_missing__"], {
+				verbose: false,
+				ignoreMissingRootDir: true,
+				logger,
+			});
+
+			// warned about the missing one...
+			assert(
+				warnings.some((w) => /__demino_missing__/.test(w)),
+				`expected a warning mentioning the missing dir, got: ${
+					JSON.stringify(warnings)
+				}`,
+			);
+			// ...and routes from the real dir were still registered
+			assert(app.routes().length > 0, "expected routes from the real root dir");
+		},
+	},
+	{
+		name: "root that is a file (not a dir) always throws, even with ignore flag",
+		raw: true,
+		fn: async () => {
+			const app = demino();
+			app.logger(null);
+			// point at this very test file — exists, but is not a directory
+			const notADir = join(_dirname, "file-based.test.ts");
+			await assertRejects(
+				() =>
+					deminoFileBased(app, notADir, {
+						verbose: false,
+						ignoreMissingRootDir: true,
+					}),
+				TypeError,
+				"is not a directory",
+			);
+		},
 	},
 ]);

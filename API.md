@@ -1011,8 +1011,25 @@ interface DeminoFileBasedOptions {
 	verbose?: boolean;
 	logger?: DeminoLogger | null;
 	doImport?: (modulePath: string) => Promise<any>;
+	ignoreMissingRootDir?: boolean;
 }
 ```
+
+**Parameters:**
+
+- `app` (`Demino`) — Application instance to register routes on.
+- `rootDirs` (`string | string[]`) — Directory (or directories) to scan for routes.
+- `options` (`DeminoFileBasedOptions`, optional)
+  - `verbose` (`boolean`) — Log discovered routes via `logger`. Default: `true`.
+  - `logger` (`DeminoLogger | null`) — Custom logger. Default: `console`.
+  - `doImport` (`(modulePath: string) => Promise<any>`) — Override the default
+    `file://` dynamic importer. Useful for bundling, mocking, or custom module
+    resolution.
+  - `ignoreMissingRootDir` (`boolean`) — Skip a non-existent root directory (with a
+    `logger.warn`) instead of throwing. Default: `false`. See **Missing root
+    directory** below.
+
+**Returns:** `Promise<Demino>` — The same `app` instance (for chaining).
 
 **Directory Structure:**
 
@@ -1033,6 +1050,27 @@ const app = demino();
 await deminoFileBased(app, "./routes");
 Deno.serve(app);
 ```
+
+**Missing root directory:**
+
+By default a missing root directory is a hard error — it throws a `Deno.errors.NotFound`
+(carrying `code: "ENOENT"`). At boot time an absent routes directory almost always means a
+typo or a wrong working directory, and silently producing a zero-route app is a worse
+failure to debug. Match on `e instanceof Deno.errors.NotFound` or `e.code === "ENOENT"`
+(not the error `name`) when catching it.
+
+Set `ignoreMissingRootDir: true` for the legitimate "optional dir" case (e.g. a core
+dir plus a conditionally-present plugins/overrides dir) — missing roots are then
+skipped with a `logger.warn`:
+
+```ts
+await deminoFileBased(app, ["./routes", "./plugins"], {
+	ignoreMissingRootDir: true, // absent dirs are skipped, not fatal
+});
+```
+
+A root that exists but is **not** a directory always throws a `TypeError`, regardless of
+`ignoreMissingRootDir`.
 
 ---
 

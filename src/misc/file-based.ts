@@ -24,6 +24,20 @@ export interface DeminoFileBasedOptions {
 	 * resolution.
 	 */
 	doImport?: (modulePath: string) => Promise<Record<string, unknown>>;
+	/**
+	 * By default a missing root directory is a hard error (a `Deno.errors.NotFound`
+	 * with `code: "ENOENT"`), because at boot time it almost always signals a typo
+	 * or a wrong working directory, and silently producing a zero-route app is a far
+	 * worse failure mode to debug.
+	 *
+	 * Set this to `true` for the legitimate "optional dir" case (e.g. a core dir plus
+	 * a conditionally-present plugins/overrides dir): a missing root is then skipped
+	 * with a `logger.warn` instead of throwing. Note: a root that exists but is *not*
+	 * a directory is still always an error regardless of this flag.
+	 *
+	 * @default false
+	 */
+	ignoreMissingRootDir?: boolean;
 }
 
 /**
@@ -106,6 +120,44 @@ export async function deminoFileBased(
 	const doImport = options?.doImport ?? _defaultImporter;
 
 	for (const rootDir of rootDirs) {
+		// Verify the root dir exists and is a directory *before* walking it.
+		// `walkSync` is lazy and would otherwise throw a raw Deno ENOENT from
+		// `readdir` mid-iteration, leaking the implementation and an unresolved
+		// (relative) path. We surface a clear, actionable error instead.
+		let stat: Deno.FileInfo | null = null;
+		try {
+			stat = Deno.statSync(rootDir);
+		} catch (e) {
+			if (!(e instanceof Deno.errors.NotFound)) throw e;
+		}
+
+		if (!stat?.isDirectory) {
+			const resolved = resolve(rootDir);
+			// exists but is a file/other → always an error (not the "optional dir"
+			// scenario `ignoreMissingRootDir` is meant for).
+			if (stat) {
+				throw new TypeError(
+					`deminoFileBased: root "${rootDir}" exists but is not a directory ` +
+						`(resolved to ${resolved}).`,
+				);
+			}
+			// genuinely missing
+			if (options?.ignoreMissingRootDir) {
+				log?.warn?.(
+					`deminoFileBased: skipping missing root directory "${rootDir}" ` +
+						`(resolved to ${resolved}).`,
+				);
+				continue;
+			}
+			const err = new Deno.errors.NotFound(
+				`deminoFileBased: root directory "${rootDir}" does not exist ` +
+					`(resolved to ${resolved}). Check the path and the process working directory.`,
+			);
+			// preserve the ENOENT contract (manually-constructed Deno errors lack `code`)
+			(err as { code?: string }).code = "ENOENT";
+			throw err;
+		}
+
 		for (
 			const dirEntry of walkSync(rootDir, {
 				includeDirs: false,

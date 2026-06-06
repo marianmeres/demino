@@ -714,6 +714,11 @@ await deminoFileBased(app, "./routes");
 
 Note that this feature is designed to work **with the default router only**.
 
+A missing root directory is a hard error by default (it throws a `Deno.errors.NotFound`),
+since at boot time it usually signals a typo or a wrong working directory. For the
+legitimate "optional dir" case, pass `ignoreMissingRootDir: true` to skip absent roots
+with a warning instead. See [API.md](API.md#deminofilebased) for all options.
+
 ## Extra: Apps composition (Route groups)
 
 Multiple Demino apps on different mount paths can be composed into a single app. This is

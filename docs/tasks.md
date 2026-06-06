@@ -172,6 +172,8 @@ Deno.serve(app);
 - [ ] `_middleware.ts` default exports array of middlewares
 - [ ] No directories starting with `_` or `.` (except `_middleware.ts`)
 - [ ] Using default router (file-based routing requires DeminoSimpleRouter)
+- [ ] Root dir exists — a missing root throws `Deno.errors.NotFound` (`code: "ENOENT"`)
+      by default; pass `ignoreMissingRootDir: true` only for genuinely optional dirs
 
 ---
 

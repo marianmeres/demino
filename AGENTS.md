@@ -300,6 +300,10 @@ deno task release         # Publish to JSR
 6. **Per-(method, route) middleware caching** (since 1.7.0): The assembled `Midware` for
    each route is built once on the first matching request and reused. The cache is
    invalidated when `app.use(...)` runs or when a route is (re-)registered.
+7. **File-based missing root dir**: `deminoFileBased()` throws `Deno.errors.NotFound`
+   (`code: "ENOENT"`) when a root directory is absent — fail-loud at boot, not a
+   silently-empty app. Pass `ignoreMissingRootDir: true` to skip absent roots with a
+   `logger.warn`. A root that exists but is not a directory always throws `TypeError`.
 
 ## Common Modifications
 
