@@ -34,8 +34,12 @@ runTestServerTests([
 				return "woke up";
 			});
 			app.get("/xslow", proxy("/slow", { timeout: 20 }));
-			await assertResp(fetch(`${base}/xslow`), 500, /timed out/i);
+			await assertResp(fetch(`${base}/xslow`), 504, /timed out/i);
 			clearTimeout(_sleepTimer.id);
+
+			// unreachable upstream (connection refused) -> 502 Bad Gateway
+			app.get("/xdead", proxy("http://127.0.0.1:1"));
+			await assertResp(fetch(`${base}/xdead`), 502, /unreachable/i);
 
 			// target as full url
 			app.get("/full", proxy(`${base}/d`));

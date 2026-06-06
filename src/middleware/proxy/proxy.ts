@@ -1,4 +1,10 @@
 import { TimeoutError } from "@marianmeres/midware";
+import {
+	createHttpError,
+	fetchOrThrow,
+	HTTP_ERROR,
+	HTTP_STATUS,
+} from "@marianmeres/http-utils";
 import type { DeminoContext, DeminoHandler } from "../../demino.ts";
 import {
 	isHostAllowed,
@@ -64,6 +70,7 @@ export interface ProxyOptions {
  * - Response body transformation
  * - Configurable caching strategy
  * - Custom error handling
+ * - Maps upstream failures to gateway statuses (502 unreachable, 504 timeout)
  *
  * Note: Does NOT support WebSocket proxying.
  *
@@ -239,7 +246,10 @@ export function proxy(
 					signal,
 				});
 
-				const resp = await fetch(proxyReq);
+				// `fetchOrThrow` turns opaque transport failures (DNS, refused,
+				// unreachable) into a typed `NetworkError` with the real reason,
+				// while passing deliberate aborts/timeouts through untouched.
+				const resp = await fetchOrThrow(proxyReq, undefined, "Upstream");
 
 				// Create response with cleaned headers
 				let respHeaders = new Headers(resp.headers);
@@ -288,14 +298,45 @@ export function proxy(
 				clearTimeout(tid);
 			}
 		} catch (error) {
-			// Use custom error handler if provided
+			// Custom error handler (if provided) receives the original, typed
+			// error and takes full control of the response.
 			if (onError) {
 				return await onError(error as Error, req, ctx);
 			}
-			// Otherwise rethrow
-			throw error;
+			// Otherwise rethrow, mapping upstream failures to conventional
+			// gateway statuses so they don't collapse into a generic 500.
+			throw toGatewayError(error);
 		}
 	};
 
 	return _proxy;
+}
+
+/**
+ * Maps upstream proxy failures to conventional gateway statuses:
+ * - transport failure (unreachable upstream) -> 502 Bad Gateway
+ * - upstream timeout                          -> 504 Gateway Timeout
+ *
+ * Any other error (self-proxy, SSRF/host policy, misconfiguration) is left
+ * untouched and surfaces with its own status (or demino's 500 fallback). The
+ * original error is preserved as `cause`.
+ */
+function toGatewayError(error: unknown): unknown {
+	if (error instanceof HTTP_ERROR.NetworkError) {
+		return createHttpError(
+			HTTP_STATUS.ERROR_SERVER.BAD_GATEWAY.CODE,
+			error.message,
+			null,
+			error,
+		);
+	}
+	if (error instanceof TimeoutError) {
+		return createHttpError(
+			HTTP_STATUS.ERROR_SERVER.GATEWAY_TIMEOUT.CODE,
+			error.message,
+			null,
+			error,
+		);
+	}
+	return error;
 }
