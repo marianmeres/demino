@@ -157,6 +157,7 @@ Request-scoped context object passed to every handler.
 
 ```ts
 interface DeminoContext {
+	readonly url: URL; // Effective request URL (proxy-aware)
 	params: Record<string, string>; // Route params (readonly)
 	locals: Record<string, any>; // Request-scoped data store
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta (frozen)
@@ -170,6 +171,14 @@ interface DeminoContext {
 	__start: Date; // Request start timestamp
 }
 ```
+
+**`url`** — the effective request `URL`. Prefer it over `new URL(req.url)` whenever
+you need the request's scheme/host/origin (absolute self-links, absolute redirects).
+By default `ctx.url` equals `new URL(req.url)`; when the app sets
+[`trustProxy`](#deminooptions), it is rebuilt from the reverse proxy's
+`X-Forwarded-Proto`/`-Host`/`-Port` so it reflects the client-facing URL instead of
+the internal proxy→app hop. Always defined. Routing is unaffected — Demino always
+dispatches on `url.pathname`, which `trustProxy` never rewrites.
 
 **`routeMeta`** — static metadata declared on the matched route handler (via
 `handler.meta` or [`withMeta()`](#withmeta)). Stamped onto the context BEFORE any
@@ -252,7 +261,31 @@ interface DeminoOptions {
 	verbose?: boolean; // Enable verbose logging
 	logger?: DeminoLogger | null; // Application logger
 	errorHandler?: DeminoHandler; // Custom error handler
+	trustProxy?: boolean | { allowedHosts?: string[] }; // Proxy-aware ctx.url (default OFF)
 }
+```
+
+**`trustProxy`** (default OFF) — controls how [`ctx.url`](#deminocontext) is built from
+reverse-proxy forwarding headers. Forwarded headers are client-spoofable unless the
+origin is locked to the trusted proxy, so this is opt-in.
+
+- `false`/`undefined` — `ctx.url === new URL(req.url)`; forwarding headers ignored.
+- `true` — trust `X-Forwarded-Proto` only (`http|https`). The host is **not** reflected.
+- `{ allowedHosts }` — additionally trust `X-Forwarded-Host` (and `X-Forwarded-Port`),
+  but only when the forwarded host passes `isHostAllowed` (exact or `*.domain`). A
+  non-matching forwarded host is dropped in favor of the request host. An empty/omitted
+  `allowedHosts` trusts no forwarded host. **Recommended production form.**
+
+Only the left-most (immediate-hop) token of each header is read, so the single trusted
+proxy in front must be configured to overwrite (not append) these headers (nginx's
+default). The internal origin port never leaks into an absolute self-URL. Note:
+[`ctx.ip`](#deminocontext) trusts `X-Forwarded-For` **ungated** and is intentionally
+not routed through this flag.
+
+```ts
+const app = demino("", [], {
+	trustProxy: { allowedHosts: ["example.com", "*.example.com"] },
+});
 ```
 
 ---

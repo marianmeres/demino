@@ -99,6 +99,7 @@ type DeminoHandler = (
 
 ```ts
 interface DeminoContext {
+	url: URL; // Effective request URL, proxy-aware (since 1.15.0). readonly
 	params: Record<string, string>; // Route params (frozen)
 	locals: Record<string, any>; // Request-scoped storage
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta, frozen (since 1.10.0)
@@ -112,6 +113,13 @@ interface DeminoContext {
 	__start: Date; // Request timestamp
 }
 ```
+
+`ctx.url` (since 1.15.0) is the effective request `URL`. Prefer it over
+`new URL(req.url)` whenever you need the request scheme/host/origin (absolute
+self-links, absolute redirects). By default it equals `new URL(req.url)`; with
+[`trustProxy`](#trustproxy--proxy-aware-ctxurl-since-1150) it is rebuilt from the
+proxy's `X-Forwarded-Proto`/`-Host`/`-Port`. Always defined. Routing is unaffected —
+dispatch always uses `url.pathname`, which `trustProxy` never rewrites.
 
 ### Demino Interface
 
@@ -383,6 +391,47 @@ app.get(
 DNS-rebinding-resistant SSRF protection, resolve via `Deno.resolveDns` and re-check each
 result.
 
+## trustProxy / proxy-aware ctx.url (since 1.15.0)
+
+Behind a TLS-terminating reverse proxy (nginx/Cloudflare → app over plain HTTP on
+e.g. `127.0.0.1:8888`), `req.url`'s scheme is `http:` on the proxy→app hop. Two
+fixes:
+
+**1. Same-origin redirects emit a RELATIVE `Location` (always on, trust-free).**
+`redirect()` and `trailingSlash()` no longer use `Response.redirect` (which forces an
+absolute URL). For a same-origin target they emit a relative `Location`
+(`/path?query#hash`), so the client resolves it against the URL it actually used and
+keeps its `https`. Cross-origin targets (`redirect("https://other.example")`) stay
+absolute & unchanged. Same-origin is judged against `ctx.url`.
+
+**2. `DeminoOptions.trustProxy` makes `ctx.url` proxy-aware (opt-in, default OFF).**
+
+```ts
+demino("", [], { trustProxy: { allowedHosts: ["example.com", "*.example.com"] } });
+```
+
+- `false`/unset → `ctx.url === new URL(req.url)` (forwarded headers never influence it).
+- `true` → trust `X-Forwarded-Proto` only (`http|https`). Host NOT reflected.
+- `{ allowedHosts }` → also trust `X-Forwarded-Host`/`-Port`, but ONLY when the
+  forwarded host passes `isHostAllowed` (exact or `*.domain`). A non-matching forwarded
+  host is dropped in favor of the request host. Empty/omitted `allowedHosts` trusts no
+  forwarded host. **Recommended production form.**
+
+Security model: forwarded headers are client-spoofable unless the origin is locked to
+the trusted proxy — keep OFF unless that holds. Proto is low-risk (enum); host is
+high-risk (forged host ⇒ cache poisoning / link hijack / open redirect) → allowlist
+only. Only the LEFT-MOST (immediate-hop) header token is read, so the single trusted
+proxy must OVERWRITE (not append) these headers (nginx default). The internal origin
+port never leaks into an absolute self-URL. `resolveRequestUrl` is private (not
+exported). Routing is unaffected (always `url.pathname`).
+
+**`trustProxy` also gates `ctx.ip`** (behavior change in 1.15.0 — see below). With it
+OFF, `ctx.ip` is the **direct socket peer** and `X-Forwarded-For`/`X-Real-IP`/
+`CF-Connecting-IP` are ignored (a forged `X-Forwarded-For` has zero effect, and
+`rateLimit()` keyed on `ctx.ip` can't be spoofed). With it ON, `ctx.ip` is resolved
+from those forwarding headers (via `request-ip`, left-most `X-Forwarded-For`), falling
+back to the socket. Previously `ctx.ip` trusted `X-Forwarded-For` **ungated**.
+
 ## Context Logger Access
 
 ```ts
@@ -413,6 +462,26 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 1.15.0 (additive, no breaking change)
+
+- **Proxy-aware redirects + `ctx.url`.** Fixes `http://` `Location` headers emitted
+  behind a TLS-terminating proxy. `redirect()` and `trailingSlash()` now emit a
+  **relative** `Location` for same-origin targets (was absolute via `Response.redirect`)
+  — trust-free, fixes every deployment. New opt-in `DeminoOptions.trustProxy`
+  (`boolean | { allowedHosts }`, default OFF) rebuilds the new `ctx.url` from
+  `X-Forwarded-Proto`/`-Host`/`-Port` for code that needs an absolute self-URL; host is
+  reflected only against an `allowedHosts` allowlist. `proxy()` now derives its outbound
+  `X-Forwarded-*` from `ctx.url` (correct chained-proxy scheme). See
+  [trustProxy / proxy-aware ctx.url](#trustproxy--proxy-aware-ctxurl-since-1150). No new
+  public symbol beyond `DeminoOptions.trustProxy` + `DeminoContext.url`
+  (`resolveRequestUrl` stays private). **Behavior note:** a same-origin `redirect()` /
+  `trailingSlash()` `Location` is now relative instead of absolute (functionally
+  equivalent for clients) — a consumer asserting an absolute `Location` must update.
+  `trustProxy` host trust validates the forwarded host **after** WHATWG URL parsing
+  (so terminator chars like `evil.com#.example.com` can't smuggle a host past the
+  allowlist), folds case, range-checks the port (1..65535), and rejects empty-label
+  hosts. See also the **`ctx.ip`** behavior change under *Recent Breaking Changes*.
 
 ### 1.13.0 (additive, no breaking change)
 
@@ -449,6 +518,18 @@ const app2 = demino("", [], {
 - `DEMINO_SORT` (`PRE`/`DEFAULT`/`HANDLER`): publishes middleware sort-order points
 
 ## Recent Breaking Changes
+
+### 1.15.0
+
+- **`ctx.ip` is now gated by `trustProxy`.** Previously `ctx.ip` trusted
+  `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` **ungated** (spoofable by any client
+  that can reach the origin directly). Now: with `trustProxy` **off** (default),
+  `ctx.ip` is the direct socket peer and those headers are ignored; with it **on**,
+  `ctx.ip` is resolved from them (via `request-ip`), unchanged from before. **Action:**
+  an app behind a proxy that reads `ctx.ip` (or keys `rateLimit()` on it) must set
+  `trustProxy` to keep seeing the real client IP — otherwise `ctx.ip` becomes the
+  proxy's address. This is the secure default and matches how `ctx.url` treats
+  forwarded headers.
 
 ### 1.7.0
 

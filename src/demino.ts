@@ -5,6 +5,7 @@ import { serveDir, type ServeDirOptions } from "@std/http/file-server";
 import requestIp from "request-ip";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
+import { isHostAllowed } from "./middleware/proxy/utils.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
 
@@ -39,6 +40,21 @@ export interface Logger {
  * ```
  */
 export interface DeminoContext {
+	/**
+	 * The effective request URL as a parsed `URL`. Prefer this over
+	 * `new URL(req.url)` whenever you need the request's scheme/host/origin —
+	 * e.g. building an absolute self-link or emitting an absolute redirect.
+	 *
+	 * By default it equals `new URL(req.url)`. When the app is created with
+	 * {@link DeminoOptions.trustProxy}, it is rebuilt from the reverse proxy's
+	 * `X-Forwarded-Proto`/`-Host`/`-Port` headers so it reflects the
+	 * client-facing URL rather than the internal proxy→app hop (which is plain
+	 * HTTP on e.g. `127.0.0.1:8888`). Always defined; never `undefined`.
+	 *
+	 * NB: routing is unaffected — Demino always dispatches on `url.pathname`,
+	 * which `trustProxy` never rewrites.
+	 */
+	readonly url: URL;
 	/** Route's parsed params (if available). */
 	params: Record<string, string>;
 	/** Userland read/write key-value map. */
@@ -51,7 +67,13 @@ export interface DeminoContext {
 	__start: Date;
 	/** Internal: error ref for the error handler */
 	error: (Error & { status?: number }) | null;
-	/** Client ip address */
+	/**
+	 * Client IP address. Gated by {@link DeminoOptions.trustProxy}: with it off
+	 * (default), this is the direct socket peer and forwarding headers are ignored
+	 * (a forged `X-Forwarded-For` has no effect); with it on, it is resolved from
+	 * `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` (via `request-ip`), falling
+	 * back to the socket peer.
+	 */
 	ip: string;
 	/** Matched route definition */
 	route: string;
@@ -472,23 +494,159 @@ export function createResponseFrom(
  * allocation; opaque and read-only). */
 const EMPTY_META: Readonly<Record<string, unknown>> = Object.freeze({});
 
+/**
+ * Builds the effective request URL surfaced as `ctx.url`, honoring reverse-proxy
+ * forwarding headers when (and only when) `trustProxy` opts in. Private on purpose
+ * — not exported. See {@link DeminoOptions.trustProxy} for the security model.
+ *
+ * Pathname/search are taken verbatim from `req.url`; only scheme/host/port may be
+ * rewritten, so routing (which uses `url.pathname`) is never affected.
+ */
+function resolveRequestUrl(
+	req: Request,
+	trustProxy: DeminoOptions["trustProxy"],
+): URL {
+	const url = new URL(req.url);
+	if (!trustProxy) return url;
+
+	const h = req.headers;
+
+	// X-Forwarded-Proto — low-risk enum, trusted whenever the flag is on.
+	// Immediate-hop semantics: read the LEFT-MOST token (the trusted proxy must
+	// OVERWRITE, not append). http<->https are both "special" schemes, so the
+	// protocol setter always accepts the change.
+	const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim()
+		.toLowerCase();
+	if (proto === "http" || proto === "https") url.protocol = `${proto}:`;
+
+	// X-Forwarded-Host — high-risk (forged host => cache poisoning, link hijack,
+	// open redirect), so it is reflected ONLY against an explicit allowlist. An
+	// empty/omitted list trusts no forwarded host (proto only). `true` (boolean)
+	// never reaches here.
+	const allowedHosts = typeof trustProxy === "object"
+		? trustProxy.allowedHosts
+		: undefined;
+	if (allowedHosts?.length) {
+		const xfHost = h.get("x-forwarded-host")?.split(",")[0]?.trim();
+		const xfPort = h.get("x-forwarded-port")?.split(",")[0]?.trim();
+		const authority = xfHost
+			? resolveForwardedAuthority(xfHost, xfPort, allowedHosts)
+			: null;
+		if (authority) {
+			url.hostname = authority.hostname;
+			// The origin's INTERNAL port (e.g. 8888) is meaningless to the client
+			// and must never leak into an absolute self-URL; `resolveForwardedAuthority`
+			// already resolved/cleared it. Empty string clears it (URL then uses the
+			// protocol default and normalizes :443/:80 away).
+			url.port = authority.port;
+		}
+	}
+
+	return url;
+}
+
+/**
+ * Range-checks a forwarded port string. Returns the normalized port (1..65535) or
+ * `null` — `null` means "no usable port" so the caller clears it rather than leaking
+ * the internal origin port. The digit-shape regex alone is NOT enough: the WHATWG
+ * `URL.port` setter silently no-ops on values > 65535 (leaving a stale internal port)
+ * and accepts `0`.
+ */
+function _normalizeForwardedPort(port: string | undefined): string | null {
+	if (!port || !/^\d+$/.test(port)) return null;
+	const n = Number(port);
+	return n >= 1 && n <= 65535 ? String(n) : null;
+}
+
+/**
+ * Parses and validates a single `X-Forwarded-Host` value (`host` or `host:port`)
+ * against the allowlist, returning the normalized `{ hostname, port }` to adopt or
+ * `null` to reject (keep the request host).
+ *
+ * SECURITY — validate AFTER parsing, never before. The forwarded value is run through
+ * the WHATWG URL parser so the string we validate is byte-identical to the host we
+ * apply. Validating the raw header instead would let a terminator char smuggle a
+ * foreign host past the allowlist (e.g. `evil.com#.good.com` ends with `.good.com` as
+ * a raw string, yet the URL parser resolves its host to `evil.com`). Parsing also
+ * folds case (so a mixed-case forwarded host still matches a lowercase allowlist).
+ * A non-bare authority (smuggled userinfo / path / query / fragment) and empty-label
+ * hosts (`.good.com`, `a..good.com`) are rejected outright.
+ */
+function resolveForwardedAuthority(
+	xfHost: string,
+	xfPort: string | undefined,
+	allowedHosts: string[],
+): { hostname: string; port: string } | null {
+	let parsed: URL;
+	try {
+		// Illegal chars (NUL, internal whitespace) and an out-of-range explicit
+		// `:port` make this throw — all correctly rejected (fail closed).
+		parsed = new URL(`http://${xfHost}`);
+	} catch {
+		return null;
+	}
+	// Require a BARE authority. Anything the parser split off (userinfo, path, query,
+	// fragment) means the header carried a host-terminating char trying to smuggle a
+	// host past the allowlist — reject loudly instead of adopting the truncated host.
+	if (
+		parsed.username || parsed.password || parsed.search || parsed.hash ||
+		parsed.pathname !== "/"
+	) {
+		return null;
+	}
+	const hostname = parsed.hostname; // already lowercased + normalized
+	// Reject empty labels (leading/double/trailing dot) — not a real hostname.
+	if (!hostname || hostname.split(".").some((label) => label === "")) {
+		return null;
+	}
+	if (!isHostAllowed(hostname, allowedHosts)) return null;
+	// Port: an explicit port carried by the host wins, then X-Forwarded-Port, else
+	// clear (so the protocol default applies). All range-checked.
+	const port = _normalizeForwardedPort(parsed.port) ??
+		_normalizeForwardedPort(xfPort) ?? "";
+	return { hostname, port };
+}
+
+/**
+ * Resolves the client IP surfaced as `ctx.ip`, gated by `trustProxy` for the SAME
+ * reason as {@link resolveRequestUrl}: `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP`
+ * are client-spoofable whenever the origin is reachable without going through the proxy.
+ *
+ * - `trustProxy` off → the DIRECT socket peer address only; forwarding headers are
+ *   ignored (secure default; a forged `X-Forwarded-For` has zero effect).
+ * - `trustProxy` on → the forwarded client IP via `request-ip` (CF-Connecting-IP, the
+ *   left-most `X-Forwarded-For`, X-Real-IP, …), falling back to the socket peer.
+ *
+ * Private on purpose — not exported.
+ */
+function resolveClientIp(
+	req: Request,
+	info: Deno.ServeHandlerInfo,
+	trustProxy: DeminoOptions["trustProxy"],
+): string {
+	const socketIp = (info?.remoteAddr as Deno.NetAddr)?.hostname ?? "";
+	if (!trustProxy) return socketIp;
+	const fromHeaders = requestIp.getClientIp({
+		headers: Object.fromEntries(req.headers), // requestIp needs plain object
+	});
+	return fromHeaders || socketIp;
+}
+
 /** Internal DRY helper */
 function _createContext(
 	start: number,
 	params: Record<string, string>,
 	route: string,
-	req: Request,
-	info: Deno.ServeHandlerInfo,
 	getLogger: () => DeminoLogger | null,
 	appLocals: DeminoAppLocals,
+	url: URL,
+	ip: string,
 	routeMeta: Readonly<Record<string, unknown>> = EMPTY_META,
 ): DeminoContext {
-	const _clientIp = requestIp.getClientIp({
-		headers: Object.fromEntries(req.headers), // requestIp needs plain object
-	});
-	// NB: `routeMeta` must be seeded inside this literal — `Object.seal` below
-	// would make a post-hoc assignment throw.
+	// NB: `routeMeta` and `url` must be seeded inside this literal — `Object.seal`
+	// below would make a post-hoc assignment throw.
 	return Object.seal({
+		url,
 		params: Object.freeze(params),
 		route,
 		routeMeta,
@@ -496,7 +654,7 @@ function _createContext(
 		headers: new Headers(),
 		error: null,
 		status: HTTP_STATUS.OK,
-		ip: _clientIp || (info?.remoteAddr as Deno.NetAddr)?.hostname,
+		ip,
 		__start: new Date(start),
 		getLogger,
 		appLocals,
@@ -534,6 +692,37 @@ export interface DeminoOptions {
 	logger?: DeminoLogger | undefined | null;
 	/** As a convenience shortcut, you can pass in custom error handler directly in options */
 	errorHandler?: DeminoHandler;
+	/**
+	 * Trust reverse-proxy forwarding headers when building {@link DeminoContext.url}.
+	 *
+	 * **OFF by default.** `X-Forwarded-Proto`/`-Host`/`-Port` are client-spoofable
+	 * whenever the origin (e.g. `127.0.0.1:8888`) is reachable without going through
+	 * the proxy, so enabling this is only safe when the origin is locked to the
+	 * trusted proxy (firewall, private network, unix socket, …).
+	 *
+	 * - `false`/`undefined` — `ctx.url === new URL(req.url)` (current behavior; the
+	 *   forwarding headers never influence output).
+	 * - `true` — trust `X-Forwarded-Proto` (low-risk `http|https` enum). The host is
+	 *   NOT reflected (a forged host enables cache poisoning / link hijack / open
+	 *   redirect), so `ctx.url`'s host stays the request host.
+	 * - `{ allowedHosts }` — additionally trust `X-Forwarded-Host` (and
+	 *   `X-Forwarded-Port`), but ONLY when the forwarded host passes the allowlist
+	 *   (exact or `*.domain`, via `isHostAllowed`). A non-matching forwarded host is
+	 *   dropped in favor of the request host. **Recommended production form.** An
+	 *   empty/omitted `allowedHosts` trusts no forwarded host (proto only).
+	 *
+	 * Only the LEFT-MOST (immediate-hop) token of each header is read, so the single
+	 * trusted proxy in front MUST be configured to OVERWRITE — not append — these
+	 * headers (nginx's default `proxy_set_header X-Forwarded-Proto $scheme` does).
+	 *
+	 * This flag ALSO gates `ctx.ip`: with `trustProxy` off, `ctx.ip` is the direct
+	 * socket peer and `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` are ignored;
+	 * with it on (any form — `true` or `{ allowedHosts }`), `ctx.ip` is resolved from
+	 * those forwarding headers (via `request-ip`). See {@link resolveClientIp}.
+	 *
+	 * Vocabulary is the de-facto `X-Forwarded-*` set (matches the proxy middleware).
+	 */
+	trustProxy?: boolean | { allowedHosts?: string[] };
 }
 
 /**
@@ -721,16 +910,21 @@ export function demino(
 		const method: "ALL" | DeminoMethod = req.method.toUpperCase() as
 			| "ALL"
 			| DeminoMethod;
-		const url = new URL(req.url);
+		// Proxy-aware effective request URL (= `new URL(req.url)` unless
+		// `trustProxy` opts in). Routing below still uses `url.pathname`, which
+		// `resolveRequestUrl` never rewrites, so dispatch is unaffected. `ip` is
+		// gated by the same flag (forwarded headers are spoofable when untrusted).
+		const url = resolveRequestUrl(req, options?.trustProxy);
+		const ip = resolveClientIp(req, info, options?.trustProxy);
 		const start = Date.now();
 		let context = _createContext(
 			start,
 			{},
 			"",
-			req,
-			info,
 			getLogger,
 			appLocals,
+			url,
+			ip,
 		);
 
 		// console.log("_app METHOD", method);
@@ -802,10 +996,10 @@ export function demino(
 						start,
 						matched.params,
 						matched.route,
-						req,
-						info,
 						getLogger,
 						appLocals,
+						url,
+						ip,
 						routeMeta,
 					);
 

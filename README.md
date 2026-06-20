@@ -376,6 +376,46 @@ app.static('/files', '/path/to/my/files/dir', options?);
 All features described below are extensions to the base framework. Some batteries _are_
 included after all.
 
+## Extra: Behind a reverse proxy (`trustProxy`, `ctx.url`)
+
+Behind a TLS-terminating proxy (nginx/Cloudflare → app over plain HTTP), the
+proxy→app hop is `http`, so `new URL(req.url).protocol` is `http:` on an HTTPS site.
+Two things help:
+
+**Relative redirects (always on, no config).** `redirect()` and `trailingSlash()` emit
+a **relative** `Location` for same-origin targets, so the client resolves it against
+the URL it actually used and keeps its `https`. Cross-origin targets
+(`redirect("https://other.example")`) stay absolute. This alone fixes the classic
+`https → http → https` redirect chain behind a proxy — no trust, no config.
+
+**`ctx.url` + `trustProxy` (opt-in).** When you need an *absolute* self-URL (canonical
+links, absolute redirects), read `ctx.url` instead of `new URL(req.url)`. By default
+`ctx.url` equals `new URL(req.url)`. Set `trustProxy` to rebuild it from the proxy's
+`X-Forwarded-*` headers:
+
+```ts
+const app = demino("", [], {
+	// false/unset (default): forwarded headers ignored
+	// true: trust X-Forwarded-Proto only (host not reflected)
+	// { allowedHosts }: also trust X-Forwarded-Host/-Port, allowlist-validated
+	trustProxy: { allowedHosts: ["example.com", "*.example.com"] },
+});
+
+app.get("/", (req, info, ctx) => {
+	ctx.url.href; // e.g. "https://example.com/" even though the app speaks http
+});
+```
+
+Forwarded headers are **client-spoofable** unless the origin is locked to the proxy, so
+this is OFF by default. `X-Forwarded-Proto` is low-risk (an `http|https` enum) and
+trusted whenever the flag is on; `X-Forwarded-Host` is high-risk (a forged host enables
+cache poisoning / link hijack / open redirect) and is reflected only when it matches
+`allowedHosts` (validated **after** URL parsing, so terminator tricks like
+`evil.com#.example.com` can't smuggle a host past the allowlist). The same flag gates
+`ctx.ip`: off → the direct socket peer (`X-Forwarded-For` ignored); on → resolved from
+the forwarding headers. `ctx.ip` was previously ungated — see
+[Breaking changes](#breaking-changes-1150).
+
 ## Extra: Bundled middlewares
 
 ### Authorization (`authz`)
@@ -502,6 +542,10 @@ app.use(trailingSlash(true));
 // app.use(trailingSlash(false))
 ```
 
+The 301 emits a **relative** `Location` (correct behind a TLS-terminating proxy) and
+preserves the query string. See
+[Behind a reverse proxy](#extra-behind-a-reverse-proxy-trustproxy-ctxurl).
+
 ### Proxy
 
 Proxies requests to a different server with comprehensive features including SSRF
@@ -547,6 +591,10 @@ with provided optional `status`.
 ```ts
 app.use("/old", redirect("/new"));
 ```
+
+Same-origin targets emit a **relative** `Location` (so they work correctly behind a
+TLS-terminating proxy); absolute/cross-origin targets are emitted unchanged. See
+[Behind a reverse proxy](#extra-behind-a-reverse-proxy-trustproxy-ctxurl).
 
 ### RateLimit
 
@@ -799,6 +847,23 @@ Named events can be sent using the `event:` field:
 ```typescript
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
+
+## Breaking changes (1.15.0)
+
+### `ctx.ip` is now gated by `trustProxy`
+
+`ctx.ip` previously trusted `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP`
+**unconditionally**, which is spoofable by any client that can reach the origin without
+going through the proxy. Now `ctx.ip` follows
+[`trustProxy`](#extra-behind-a-reverse-proxy-trustproxy-ctxurl): with it **off**
+(default) it is the direct socket peer and those headers are ignored; with it **on** it
+is resolved from them (unchanged from before). If your app sits behind a proxy and reads
+`ctx.ip` (or keys `rateLimit()` on it), set `trustProxy` to keep seeing the real client
+IP. This is the secure default and matches how `ctx.url` treats forwarded headers.
+
+> Same-origin `redirect()` / `trailingSlash()` `Location` headers are now **relative**
+> instead of absolute (functionally equivalent for clients). Only relevant if you assert
+> an exact absolute `Location` in tests.
 
 ## Breaking changes (1.7.0)
 

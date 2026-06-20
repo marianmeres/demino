@@ -32,6 +32,40 @@ runTestServerTests([
 		},
 	},
 	{
+		// Part 1 (the bug fix): the 301 must emit a RELATIVE `Location` (not an
+		// absolute one built from `req.url`, which would carry the proxy->app hop's
+		// `http://`), and must preserve the query string.
+		name: "trailing slash emits a relative Location and preserves query",
+		fn: async ({ app, base }) => {
+			app.use(trailingSlash(true));
+			app.get("/foo/bar", () => "foo");
+
+			const MP = HTTP_STATUS.MOVED_PERMANENTLY;
+			const prm: RequestInit = { redirect: "manual" };
+
+			// relative, NOT http(s)://...
+			await assertResp(fetch(`${base}/foo/bar`, prm), MP, "", {
+				location: /^\/foo\/bar\/$/,
+			});
+			// query preserved
+			await assertResp(fetch(`${base}/foo/bar?x=1&y=2`, prm), MP, "", {
+				location: /^\/foo\/bar\/\?x=1&y=2$/,
+			});
+		},
+	},
+	{
+		name: "trailing slash (remove) emits a relative Location",
+		fn: async ({ app, base }) => {
+			app.use(trailingSlash(false));
+			app.get("/foo/bar", () => "foo");
+
+			const MP = HTTP_STATUS.MOVED_PERMANENTLY;
+			await assertResp(fetch(`${base}/foo/bar/`, { redirect: "manual" }), MP, "", {
+				location: /^\/foo\/bar$/,
+			});
+		},
+	},
+	{
 		name: "trailing slash auto redirect",
 		fn: async ({ app, base }) => {
 			const _log: string[] = [];

@@ -214,13 +214,18 @@ export function proxy(
 					(name) => proxyHeaders.delete(name),
 				);
 
-				// X-Forwarded-* headers
-				proxyHeaders.set("x-forwarded-host", url.host);
-				proxyHeaders.set("x-forwarded-proto", url.protocol.replace(":", ""));
+				// X-Forwarded-* headers. Derive scheme/host/port from `ctx.url`
+				// (proxy-aware) rather than the raw `url` so that when THIS app is
+				// itself behind a trusted proxy (`trustProxy`), the chained-downstream
+				// request advertises the original client-facing scheme/host instead of
+				// the internal proxy->app hop. With `trustProxy` off, `ctx.url` ===
+				// `new URL(req.url)`, so this is byte-identical to the previous behavior.
+				proxyHeaders.set("x-forwarded-host", ctx.url.host);
+				proxyHeaders.set("x-forwarded-proto", ctx.url.protocol.replace(":", ""));
 				proxyHeaders.set("x-forwarded-for", ctx.ip);
 				proxyHeaders.set(
 					"x-forwarded-port",
-					url.port || (url.protocol === "https:" ? "443" : "80"),
+					ctx.url.port || (ctx.url.protocol === "https:" ? "443" : "80"),
 				);
 				proxyHeaders.set("x-real-ip", ctx.ip);
 

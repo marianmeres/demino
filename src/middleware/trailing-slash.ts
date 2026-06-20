@@ -48,9 +48,12 @@ export function trailingSlash(
 	const midware: DeminoHandler = (
 		req: Request,
 		_i: Deno.ServeHandlerInfo,
-		_ctx: DeminoContext,
+		ctx: DeminoContext,
 	) => {
-		const url = new URL(req.url);
+		// Mutable copy of the effective request URL — never mutate the shared
+		// `ctx.url`. Only `pathname`/`search` are read, so the scheme/host are
+		// irrelevant here anyway (the emitted `Location` is relative).
+		const url = new URL(ctx.url);
 
 		// no-op if not GET or can't say explicitly or we are at the root
 		if (
@@ -65,16 +68,28 @@ export function trailingSlash(
 		const last = url.pathname.split("/").at(-1);
 		if (last?.includes(".")) return;
 
+		// This is always a SAME-ORIGIN redirect (same host, tweaked path), so emit
+		// a RELATIVE `Location`. Behind a TLS-terminating proxy the proxy->app hop
+		// is plain HTTP; an absolute `Location` from `req.url` would wrongly carry
+		// `http://` on an HTTPS site. A relative target sidesteps that entirely —
+		// the client resolves it against the URL it used and keeps its scheme.
+
 		// add slash
 		if (flag && !url.pathname.endsWith("/")) {
 			url.pathname += "/";
-			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`); // debug
-			return Response.redirect(url.toString(), HTTP_STATUS.MOVED_PERMANENTLY);
+			options?.logger?.(`[trailingSlash] 301 -> '${url.pathname}${url.search}'`); // debug
+			return new Response(null, {
+				status: HTTP_STATUS.MOVED_PERMANENTLY,
+				headers: { location: url.pathname + url.search },
+			});
 		} // remove slash
 		else if (!flag && url.pathname.endsWith("/")) {
 			url.pathname = url.pathname.slice(0, -1);
-			options?.logger?.(`[trailingSlash] 301 -> '${url.toString()}'`);
-			return Response.redirect(url.toString(), HTTP_STATUS.MOVED_PERMANENTLY);
+			options?.logger?.(`[trailingSlash] 301 -> '${url.pathname}${url.search}'`);
+			return new Response(null, {
+				status: HTTP_STATUS.MOVED_PERMANENTLY,
+				headers: { location: url.pathname + url.search },
+			});
 		}
 	};
 
