@@ -569,6 +569,8 @@ For deeper context, consult:
 - [Architecture](./docs/architecture.md) — System design, components, request lifecycle
 - [Conventions](./docs/conventions.md) — Code style, patterns, error handling
 - [Tasks](./docs/tasks.md) — Step-by-step common procedures
+- [Reverse proxies and `X-Forwarded-*` spoofing](./docs/reverse-proxy-and-forwarded-headers.md)
+  — threat model behind `trustProxy`, `ctx.url`, and `ctx.ip` gating
 
 Domain docs (consult when working in these areas):
 

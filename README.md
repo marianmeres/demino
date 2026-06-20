@@ -416,6 +416,10 @@ cache poisoning / link hijack / open redirect) and is reflected only when it mat
 the forwarding headers. `ctx.ip` was previously ungated — see
 [Breaking changes](#breaking-changes-1150).
 
+For the full threat model (why these headers are spoofable, the per-header risk
+gradient, and the operator preconditions for safely enabling `trustProxy`), see
+[docs/reverse-proxy-and-forwarded-headers.md](docs/reverse-proxy-and-forwarded-headers.md).
+
 ## Extra: Bundled middlewares
 
 ### Authorization (`authz`)
