@@ -648,6 +648,128 @@ Deno.test("access log", async () => {
 	return srv?.server?.finished;
 });
 
+// Captures the `error` and `access` log channels into arrays (mirrors the
+// `access log` test above; NOT usable via `runTestServerTests`, which force-calls
+// `app.logger(null)`).
+function capturingLogger(): {
+	logger: DeminoLogger;
+	errors: { status: number; method: string; url: string; ip: string; error: string }[];
+	access: { req: Request; status: number }[];
+} {
+	// deno-lint-ignore no-explicit-any
+	const errors: any[] = [];
+	// deno-lint-ignore no-explicit-any
+	const access: any[] = [];
+	return {
+		logger: {
+			...({} as unknown as Logger),
+			error: (v: unknown) => errors.push(v),
+			access: (d: unknown) => access.push(d),
+		},
+		errors,
+		access,
+	};
+}
+
+// A thrown 404 from a matched `*` catch-all must NOT pollute the error log (it's
+// the carsinc SEO-redirect / scanner case) — it belongs in the access log, which
+// carries the URL.
+Deno.test("thrown 404 from a catch-all is not error-logged", async () => {
+	let srv: Srv | null = null;
+	const { logger, errors, access } = capturingLogger();
+	const app = demino("", [], { logger });
+	app.get("*", () => {
+		throw createHttpError(HTTP_STATUS.NOT_FOUND);
+	});
+	try {
+		srv = await startTestServer(app);
+		const res = await fetch(`${srv.base}/wp-login.php`);
+		assertEquals(res.status, 404);
+		await res.text();
+		// no error-log noise...
+		assertEquals(errors.length, 0);
+		// ...but the access log saw it, with the URL
+		assertEquals(access.length, 1);
+		assertEquals(new URL(access[0].req.url).pathname, "/wp-login.php");
+	} finally {
+		srv?.ac?.abort();
+	}
+	return srv?.server?.finished;
+});
+
+// A 5xx is error-logged exactly ONCE (regression test for the old double-log),
+// with request context, and the original throw preserved (via `.cause`) as a
+// stringified stack.
+Deno.test("thrown 5xx is error-logged once, with request context", async () => {
+	let srv: Srv | null = null;
+	const { logger, errors } = capturingLogger();
+	const app = demino("", [], { logger });
+	app.get("/boom", () => {
+		throw new Error("kaboom");
+	});
+	try {
+		srv = await startTestServer(app);
+		const res = await fetch(`${srv.base}/boom`);
+		assertEquals(res.status, 500);
+		await res.text();
+		assertEquals(errors.length, 1); // once, not twice
+		const e = errors[0];
+		assertEquals(e.status, 500);
+		assertEquals(e.method, "GET");
+		assertEquals(new URL(e.url).pathname, "/boom");
+		assertEquals(typeof e.ip, "string");
+		assertEquals(typeof e.error, "string");
+		assertEquals(e.error.includes("kaboom"), true); // original preserved via cause
+	} finally {
+		srv?.ac?.abort();
+	}
+	return srv?.server?.finished;
+});
+
+// A thrown 4xx (403) is a client fault — not error-logged (read it from the
+// access log).
+Deno.test("thrown 4xx (403) is not error-logged", async () => {
+	let srv: Srv | null = null;
+	const { logger, errors } = capturingLogger();
+	const app = demino("", [], { logger });
+	app.get("/secret", () => {
+		throw createHttpError(403);
+	});
+	try {
+		srv = await startTestServer(app);
+		const res = await fetch(`${srv.base}/secret`);
+		assertEquals(res.status, 403);
+		await res.text();
+		assertEquals(errors.length, 0);
+	} finally {
+		srv?.ac?.abort();
+	}
+	return srv?.server?.finished;
+});
+
+// A 5xx originating in dispatch (501 for an unknown method) never enters the
+// matched-handler catch, yet is now error-logged WITH context (previously: no URL).
+Deno.test("5xx from dispatch (501) is error-logged with context", async () => {
+	let srv: Srv | null = null;
+	const { logger, errors } = capturingLogger();
+	const app = demino("", [], { logger });
+	app.get("/", () => "ok");
+	try {
+		srv = await startTestServer(app);
+		const res = await fetch(`${srv.base}/`, { method: "PROPFIND" });
+		assertEquals(res.status, 501);
+		await res.text();
+		assertEquals(errors.length, 1);
+		const e = errors[0];
+		assertEquals(e.status, 501);
+		assertEquals(e.method, "PROPFIND");
+		assertEquals(new URL(e.url).pathname, "/");
+	} finally {
+		srv?.ac?.abort();
+	}
+	return srv?.server?.finished;
+});
+
 runTestServerTests([
 	{
 		name: "context contains matched route definition",

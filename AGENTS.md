@@ -300,7 +300,11 @@ deno task release         # Publish to JSR
 1. **HEAD requests**: Auto-generated from GET handlers
 2. **Trailing slashes**: `/foo` and `/foo/` are equivalent (use trailingSlash middleware
    to enforce)
-3. **Error logging**: All errors except 404s logged via `logger.error()`
+3. **Error logging** (since 1.16.0): Only server faults (status `>= 500`) are logged via
+   `logger.error()`, as a structured `{ status, method, url, ip, error }` object (logged
+   once; `url`=proxy-aware `ctx.url.href`, `error`=stringified stack). Client errors
+   (`4xx` incl. `404`, and a `*` catch-all that throws `404`) are NOT error-logged — read
+   them from the access log. `logger(null)` silences all.
 4. **Access logging**: Default logger forwards `access` to `console.log` (since 1.7.0).
    Set `logger: null` or override `access` to silence.
 5. **Mount path validation**: Must start with `/`, cannot end with `/`, no dynamic

@@ -879,10 +879,28 @@ export function demino(
 			);
 		}
 
-		// always log all errors (except 404) unless not explicitly turned off via `.logger(null)`
-		// to see 404s use access log
-		if (r.status != 404) {
-			_doLog("error", context.error);
+		// Single error-logging site. Only server faults (5xx) are error-logged,
+		// and with request context. Client errors (4xx incl. 404) are intentionally
+		// NOT error-logged — they're routine (stale/bad requests, scanners, auth
+		// rejections) and already visible in the access log, which carries the URL.
+		// Silence everything (incl. 5xx) via `.logger(null)`.
+		if (r.status >= 500) {
+			// The original throw is preserved as `.cause` of the re-thrown HttpError
+			// (see the matched-handler inner catch below); fall back to the error
+			// itself for errors thrown outside that catch (e.g. 501 dispatch).
+			const cause = (context.error as { cause?: unknown })?.cause ??
+				context.error;
+			_doLog("error", {
+				status: r.status,
+				method: req.method,
+				// proxy-aware client-facing URL (see DeminoContext.url / trustProxy),
+				// not the internal proxy→app hop that raw `req.url` would expose.
+				url: context.url.href,
+				ip: context.ip,
+				// Stringified (stack) on purpose: a bare Error serializes to `{}`
+				// under JSON loggers, which would drop the very stack we're logging.
+				error: `${(cause as { stack?: string })?.stack ?? cause}`,
+			});
 		}
 
 		return r;
@@ -1080,8 +1098,12 @@ export function demino(
 					//
 					return result as Response;
 				} catch (e: unknown) {
-					const err = e as Error & { status?: number; stack?: string };
-					_doLog("error", `${err.stack ?? e}`);
+					// Normalize status + propagate. The single error-logging site is
+					// `_createErrorResponse` (gated at >= 500, with request context);
+					// logging here too would double-log 5xx and log 4xx noise (e.g. a
+					// `*` catch-all that throws 404). The original throw is carried as
+					// `.cause` so no stack is lost.
+					const err = e as Error & { status?: number };
 					const status = err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
 					throw createHttpError(status, null, null, e);
 				}

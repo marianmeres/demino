@@ -292,7 +292,25 @@ app.error((req, info, ctx) => {
 });
 ```
 
-By default all errors (except `404`s) are logged using application's `logger.error(...)`.
+By default, **server faults** (status `>= 500`) are logged via the application's
+`logger.error(...)`. **Client errors** (`4xx`, including `404`s — and including a `*`
+catch-all handler that _throws_ `404`) are intentionally **not** error-logged: they're
+routine (stale/bad requests, scanners, auth rejections) and are already visible in the
+access log, which carries the URL. The logged value is a structured object:
+
+```ts
+logger.error({
+	status, // the response status (>= 500)
+	method, // req.method
+	url, // proxy-aware `ctx.url.href` (not the internal proxy→app hop)
+	ip, // proxy-aware `ctx.ip` (gated by trustProxy)
+	error, // the original throw, stringified to its stack
+});
+```
+
+`error` is stringified on purpose: a bare `Error` serializes to `{}` under JSON loggers,
+which would drop the very stack you're logging. To silence everything (including 5xx), use
+`app.logger(null)`.
 
 ## Application log
 
