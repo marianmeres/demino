@@ -163,6 +163,12 @@ export function isHostAllowed(
 	});
 }
 
+/** Request header carrying the proxy hop count, used to break loops. */
+export const PROXY_HOPS_HEADER = "x-demino-proxy-hops";
+
+/** Maximum number of demino-proxy hops before a request is treated as a loop. */
+export const MAX_PROXY_HOPS = 32;
+
 /**
  * Standard headers that should be removed from proxy requests
  */

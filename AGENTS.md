@@ -395,6 +395,15 @@ app.get(
 DNS-rebinding-resistant SSRF protection, resolve via `Deno.resolveDns` and re-check each
 result.
 
+**WebSocket proxying** (since 1.17.0): well-formed upgrade requests are tunneled to the
+upstream by default (`webSockets: false` disables; malformed upgrades fall through to the
+HTTP path). Upstream is dialed FIRST (full target policy + forwarded headers incl.
+cookies/auth/`X-Forwarded-*`/hop-counter; subprotocols negotiated end-to-end), client is
+upgraded only after the upstream handshake succeeds → dial failures stay regular HTTP
+errors (502/504/`onError`). Close code + reason propagate both ways. `timeout` bounds the
+handshake only. N/A for tunnels: `maxRedirects`, `cache`, response transforms. Impl:
+`src/middleware/proxy/websocket.ts` (internal, not exported).
+
 ## trustProxy / proxy-aware ctx.url (since 1.15.0)
 
 Behind a TLS-terminating reverse proxy (nginx/Cloudflare → app over plain HTTP on
@@ -466,6 +475,21 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 1.17.0 (additive, no breaking change)
+
+- **`proxy()` WebSocket tunneling.** New `ProxyOptions.webSockets` (default `true`):
+  well-formed WebSocket upgrade requests are tunneled to the upstream instead of being
+  forwarded as a plain (never upgradable) GET. Upstream-dialed-first design keeps HTTP
+  error semantics for failed handshakes (502/504/`onError`); full target policy + header
+  forwarding (cookies/auth, `X-Forwarded-*`, hop-counter loop guard) + end-to-end
+  subprotocol negotiation + bidirectional close propagation. `timeout` bounds the
+  handshake only. See [Proxy](#proxy). Internal impl in
+  `src/middleware/proxy/websocket.ts`; tests in `tests/middleware/proxy-websocket.test.ts`.
+- **`proxy()` redirect re-validation.** Upstream redirects are followed manually and every
+  hop re-checked against the self/SSRF/`allowedHosts` policy; bounded by new
+  `ProxyOptions.maxRedirects` (default 5). Non-replayable 307/308 returned to the client
+  unfollowed.
 
 ### 1.15.0 (additive, no breaking change)
 

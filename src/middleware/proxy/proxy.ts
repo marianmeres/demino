@@ -9,14 +9,12 @@ import type { DeminoContext, DeminoHandler } from "../../demino.ts";
 import {
 	isHostAllowed,
 	isPrivateHost,
+	MAX_PROXY_HOPS,
+	PROXY_HOPS_HEADER,
 	PROXY_REQUEST_REMOVE_HEADERS,
 	PROXY_RESPONSE_REMOVE_HEADERS,
 } from "./utils.ts";
-
-/** Request header carrying the proxy hop count, used to break loops. */
-const PROXY_HOPS_HEADER = "x-demino-proxy-hops";
-/** Maximum number of demino-proxy hops before a request is treated as a loop. */
-const MAX_PROXY_HOPS = 32;
+import { isWebSocketUpgradeRequest, proxyWebSocket } from "./websocket.ts";
 
 export interface ProxyOptions {
 	/** Timeout in milliseconds for the proxy request (default: 60000) */
@@ -35,6 +33,16 @@ export interface ProxyOptions {
 	preventSSRF: boolean;
 	/** Whitelist of allowed target hosts. Supports wildcards (e.g., "*.example.com") */
 	allowedHosts: string[];
+	/**
+	 * Enable transparent WebSocket proxying (default: true). A well-formed
+	 * WebSocket upgrade request (GET + `Upgrade: websocket` + `Sec-WebSocket-Key`
+	 * + version 13) is tunneled to the upstream instead of being forwarded as a
+	 * plain — and therefore never upgradable — GET. Set to `false` to restore
+	 * the pre-1.17.0 behavior (upgrade headers stripped, forwarded as HTTP).
+	 * See the `proxy()` docs for tunnel semantics and which options do not
+	 * apply to tunnels.
+	 */
+	webSockets: boolean;
 	/** Custom headers to add to the proxy request */
 	headers: Record<string, string>;
 	/** Function to transform request headers before proxying */
@@ -86,8 +94,22 @@ export interface ProxyOptions {
  * - Configurable caching strategy
  * - Custom error handling
  * - Maps upstream failures to gateway statuses (502 unreachable, 504 timeout)
+ * - Transparent WebSocket proxying (see below)
  *
- * Note: Does NOT support WebSocket proxying.
+ * WebSocket proxying (since 1.17.0, on by default — `webSockets: false` to
+ * disable): a well-formed WebSocket upgrade request is tunneled to the
+ * upstream (`http(s)` targets are dialed as `ws(s)`). The upstream is dialed
+ * FIRST — the full target policy (self-proxy / SSRF / `allowedHosts`) applies,
+ * request headers (cookies, authorization, custom `headers`,
+ * `transformRequestHeaders`, `X-Forwarded-*`, hop-counter loop guard) are
+ * forwarded, and subprotocols are negotiated end-to-end — and the client is
+ * upgraded only after the upstream handshake succeeds, so a failed dial
+ * surfaces as a regular HTTP error (502 unreachable, 504 handshake timeout,
+ * `onError`), not a silently dropped socket. Close code + reason propagate in
+ * both directions. `timeout` bounds only the upstream handshake, never the
+ * tunnel lifetime. Not applicable to tunnels: `maxRedirects` (upstream
+ * WebSocket redirects are not followed), `cache`, `transformResponseHeaders`,
+ * `transformResponseBody` (the 101 response is runtime-generated).
  *
  * @param target - Target URL (string or function). Strings ending with `/*` append the request pathname.
  * @param options - Optional configuration
@@ -99,6 +121,12 @@ export interface ProxyOptions {
  *
  * // GET /api/users -> GET https://backend.example.com/api/users
  * app.get("/api/*", proxy("https://backend.example.com/*"));
+ * ```
+ *
+ * @example WebSocket proxying (enabled by default)
+ * ```ts
+ * // ws://this-app/ws/chat -> wss://backend.example.com/ws/chat
+ * app.get("/ws/*", proxy("https://backend.example.com/*"));
  * ```
  *
  * @example Dynamic proxy using route params
@@ -157,6 +185,7 @@ export function proxy(
 		maxRedirects = 5,
 		preventSSRF = false,
 		allowedHosts,
+		webSockets = true,
 		headers: customHeaders,
 		transformRequestHeaders,
 		transformResponseHeaders,
@@ -195,90 +224,128 @@ export function proxy(
 		}
 	};
 
+	// Resolves the effective target URL for this request (string targets get
+	// the `/*` pathname + search auto-processing, function targets are manual).
+	const resolveTarget = async (
+		req: Request,
+		ctx: DeminoContext,
+		url: URL,
+	): Promise<URL> => {
+		let _target: URL | string;
+
+		// plain string (do some auto processing)
+		if (typeof target === "string") {
+			_target = new URL(target, url);
+			// FEATURE: if our target ends with "/*" append the full req.url.pathname to it
+			if (_target.pathname.endsWith("/*")) {
+				_target.pathname = _target.pathname.slice(0, -2) + url.pathname;
+			}
+			// also reuse search query if not exists
+			if (!_target.search) _target.search = url.search;
+		} // but not with functions, they are fully manual
+		else if (typeof target === "function") {
+			_target = await target(req, ctx);
+			if (typeof _target !== "string" || !_target) {
+				throw new TypeError(`Invalid target, expecting valid url`);
+			}
+		} else {
+			throw new TypeError(
+				`Invalid target parameter, expecting string or a function`,
+			);
+		}
+
+		return new URL(_target, url);
+	};
+
+	// Builds the outgoing proxy headers (shared by the HTTP path and the
+	// WebSocket dial): hop-counter loop guard, header removal list,
+	// X-Forwarded-*, custom headers, `transformRequestHeaders`.
+	const buildProxyHeaders = async (
+		req: Request,
+		ctx: DeminoContext,
+		targetUrl: URL,
+	): Promise<Headers> => {
+		// Loop guard. The exact self-URL check in `assertTargetAllowed` only
+		// catches an identical target; a loop through a slightly different URL
+		// (trailing slash, another proxy that bounces back, …) would recurse.
+		// Carry a hop counter so a chain that keeps re-entering a demino proxy
+		// is cut off instead of exhausting connections. It rides on the request
+		// headers, so it survives self- and cross-proxy hops.
+		const hops = Number(req.headers.get(PROXY_HOPS_HEADER) ?? 0) || 0;
+		if (hops >= MAX_PROXY_HOPS) {
+			throw new Error(
+				`Proxy loop detected (exceeded ${MAX_PROXY_HOPS} hops)`,
+			);
+		}
+
+		// Build proxy headers
+		let proxyHeaders = new Headers(req.headers);
+		proxyHeaders.set("host", targetUrl.host);
+		proxyHeaders.set(PROXY_HOPS_HEADER, String(hops + 1));
+		const origin = req.headers.get("origin");
+		if (origin) proxyHeaders.set("origin", origin);
+
+		// Remove standard problematic headers
+		[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
+			(name) => proxyHeaders.delete(name),
+		);
+
+		// X-Forwarded-* headers. Derive scheme/host/port from `ctx.url`
+		// (proxy-aware) rather than the raw `url` so that when THIS app is
+		// itself behind a trusted proxy (`trustProxy`), the chained-downstream
+		// request advertises the original client-facing scheme/host instead of
+		// the internal proxy->app hop. With `trustProxy` off, `ctx.url` ===
+		// `new URL(req.url)`, so this is byte-identical to the previous behavior.
+		proxyHeaders.set("x-forwarded-host", ctx.url.host);
+		proxyHeaders.set("x-forwarded-proto", ctx.url.protocol.replace(":", ""));
+		proxyHeaders.set("x-forwarded-for", ctx.ip);
+		proxyHeaders.set(
+			"x-forwarded-port",
+			ctx.url.port || (ctx.url.protocol === "https:" ? "443" : "80"),
+		);
+		proxyHeaders.set("x-real-ip", ctx.ip);
+
+		// Add custom headers
+		if (customHeaders) {
+			for (const [key, value] of Object.entries(customHeaders)) {
+				proxyHeaders.set(key, value);
+			}
+		}
+
+		// Apply header transformation if provided
+		if (transformRequestHeaders) {
+			proxyHeaders = await transformRequestHeaders(proxyHeaders, req, ctx);
+		}
+
+		return proxyHeaders;
+	};
+
 	const _proxy: DeminoHandler = async (req, _i, ctx) => {
 		try {
+			// WebSocket upgrade? Tunnel it on a dedicated path: the upstream is
+			// dialed FIRST (same target policy, same outgoing headers) and the
+			// client is upgraded only once the upstream handshake succeeded — so
+			// handshake failures keep plain HTTP error semantics (502/504/
+			// `onError`). NOT wrapped in the AbortController timeout flow below:
+			// `timeout` must bound the handshake only, never the tunnel lifetime
+			// (a WebSocket legitimately outlives any request timeout).
+			if (webSockets && isWebSocketUpgradeRequest(req)) {
+				const url = new URL(req.url);
+				const targetUrl = await resolveTarget(req, ctx, url);
+				assertTargetAllowed(targetUrl, url);
+				const proxyHeaders = await buildProxyHeaders(req, ctx, targetUrl);
+				return await proxyWebSocket(req, targetUrl, proxyHeaders, { timeout });
+			}
+
 			const doProxy = async (signal?: AbortSignal) => {
 				const url = new URL(req.url);
-				let _target: URL | string;
-
-				// plain string (do some auto processing)
-				if (typeof target === "string") {
-					_target = new URL(target, url);
-					// FEATURE: if our target ends with "/*" append the full req.url.pathname to it
-					if (_target.pathname.endsWith("/*")) {
-						_target.pathname = _target.pathname.slice(0, -2) + url.pathname;
-					}
-					// also reuse search query if not exists
-					if (!_target.search) _target.search = url.search;
-				} // but not with functions, they are fully manual
-				else if (typeof target === "function") {
-					_target = await target(req, ctx);
-					if (typeof _target !== "string" || !_target) {
-						throw new TypeError(`Invalid target, expecting valid url`);
-					}
-				} else {
-					throw new TypeError(
-						`Invalid target parameter, expecting string or a function`,
-					);
-				}
-
-				const targetUrl = new URL(_target, url);
+				const targetUrl = await resolveTarget(req, ctx, url);
 
 				// Validate the initial target (self-proxy, SSRF, host allowlist).
 				// Redirect hops below are re-validated with the same policy.
 				assertTargetAllowed(targetUrl, url);
 
-				// Loop guard. The exact self-URL check in `assertTargetAllowed` only
-				// catches an identical target; a loop through a slightly different URL
-				// (trailing slash, another proxy that bounces back, …) would recurse.
-				// Carry a hop counter so a chain that keeps re-entering a demino proxy
-				// is cut off instead of exhausting connections. It rides on the request
-				// headers, so it survives self- and cross-proxy hops.
-				const hops = Number(req.headers.get(PROXY_HOPS_HEADER) ?? 0) || 0;
-				if (hops >= MAX_PROXY_HOPS) {
-					throw new Error(
-						`Proxy loop detected (exceeded ${MAX_PROXY_HOPS} hops)`,
-					);
-				}
-
-				// Build proxy headers
-				let proxyHeaders = new Headers(req.headers);
-				proxyHeaders.set("host", targetUrl.host);
-				proxyHeaders.set(PROXY_HOPS_HEADER, String(hops + 1));
-				const origin = req.headers.get("origin");
-				if (origin) proxyHeaders.set("origin", origin);
-
-				// Remove standard problematic headers
-				[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
-					(name) => proxyHeaders.delete(name),
-				);
-
-				// X-Forwarded-* headers. Derive scheme/host/port from `ctx.url`
-				// (proxy-aware) rather than the raw `url` so that when THIS app is
-				// itself behind a trusted proxy (`trustProxy`), the chained-downstream
-				// request advertises the original client-facing scheme/host instead of
-				// the internal proxy->app hop. With `trustProxy` off, `ctx.url` ===
-				// `new URL(req.url)`, so this is byte-identical to the previous behavior.
-				proxyHeaders.set("x-forwarded-host", ctx.url.host);
-				proxyHeaders.set("x-forwarded-proto", ctx.url.protocol.replace(":", ""));
-				proxyHeaders.set("x-forwarded-for", ctx.ip);
-				proxyHeaders.set(
-					"x-forwarded-port",
-					ctx.url.port || (ctx.url.protocol === "https:" ? "443" : "80"),
-				);
-				proxyHeaders.set("x-real-ip", ctx.ip);
-
-				// Add custom headers
-				if (customHeaders) {
-					for (const [key, value] of Object.entries(customHeaders)) {
-						proxyHeaders.set(key, value);
-					}
-				}
-
-				// Apply header transformation if provided
-				if (transformRequestHeaders) {
-					proxyHeaders = await transformRequestHeaders(proxyHeaders, req, ctx);
-				}
+				const proxyHeaders = await buildProxyHeaders(req, ctx, targetUrl);
 
 				// Turns a terminal upstream response into the cleaned, transformed
 				// Response handed back to the client.

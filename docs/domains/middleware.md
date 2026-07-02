@@ -109,8 +109,9 @@ app.get(
 	proxy("https://backend/*", {
 		preventSSRF: true, // Block private IPs (default: false)
 		allowedHosts: ["*.example.com"], // Host whitelist
-		timeout: 30000, // Request timeout (ms)
+		timeout: 30000, // Request timeout (ms); for WebSockets: handshake timeout
 		maxRedirects: 5, // Upstream redirects to follow, re-validated per hop (default 5)
+		webSockets: true, // Tunnel WebSocket upgrade requests (default: true)
 		transformRequestHeaders: (h) => h, // Modify outgoing headers
 		transformResponseHeaders: (h, r) => h, // Modify response headers
 		transformResponseBody: (b, r) => b, // Modify response body
@@ -135,7 +136,20 @@ client unfollowed.
 **Caveat:** string-only check, no DNS lookup. DNS-rebinding bypasses this guard. For
 DNS-rebinding-resistant SSRF, resolve via `Deno.resolveDns` and re-check each result.
 
-> Does NOT support WebSockets.
+**WebSocket proxying** (since 1.17.0, on by default — `webSockets: false` to disable): a
+well-formed WebSocket upgrade request (GET + `Upgrade: websocket` + `Sec-WebSocket-Key` +
+version 13) is tunneled to the upstream; `http(s)` targets are dialed as `ws(s)`. The
+upstream is dialed **first** — the full target policy (self-proxy / SSRF / `allowedHosts`)
+applies, request headers (cookies, authorization, custom `headers`,
+`transformRequestHeaders`, `X-Forwarded-*`, hop-counter loop guard) are forwarded, and
+subprotocols are negotiated end-to-end — and the client is upgraded only after the
+upstream handshake succeeds, so a failed dial surfaces as a regular HTTP error (502
+unreachable, 504 handshake timeout, `onError`), not a dropped socket. Close code + reason
+propagate in both directions. `timeout` bounds only the upstream handshake, never the
+tunnel lifetime. Not applicable to tunnels: `maxRedirects` (upstream WebSocket redirects
+are not followed), `cache`, `transformResponseHeaders`, `transformResponseBody` (the 101
+response is runtime-generated). A malformed upgrade request falls through to the regular
+HTTP proxy path.
 
 ---
 

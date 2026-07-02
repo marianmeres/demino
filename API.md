@@ -682,6 +682,7 @@ interface ProxyOptions {
 	maxRedirects: number; // Default: 5. Upstream redirects to follow (each hop re-validated)
 	preventSSRF: boolean; // Block private IPs (string-only check, no DNS)
 	allowedHosts: string[]; // Host whitelist (supports wildcards)
+	webSockets: boolean; // Default: true. Tunnel WebSocket upgrade requests
 	headers: Record<string, string>; // Custom headers
 	transformRequestHeaders: (headers, req, ctx) => Headers;
 	transformResponseHeaders: (headers, resp) => Headers;
@@ -717,11 +718,30 @@ resolved. A public hostname that resolves (or is DNS-rebound) to a private IP by
 guard. For DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and
 re-check each address.
 
+**WebSocket proxying (since 1.17.0):** enabled by default (`webSockets: false` to
+disable). A well-formed WebSocket upgrade request (GET + `Upgrade: websocket` +
+`Sec-WebSocket-Key` + version 13) is tunneled to the upstream; `http(s)` targets are
+dialed as `ws(s)`. The upstream is dialed _first_ — the full target policy (self-proxy /
+SSRF / `allowedHosts`) applies, request headers (cookies, authorization, custom `headers`,
+`transformRequestHeaders`, `X-Forwarded-*`, hop-counter loop guard) are forwarded, and
+subprotocols are negotiated end-to-end — and the client is upgraded only after the
+upstream handshake succeeds, so a failed dial surfaces as a regular HTTP error (502
+unreachable, 504 handshake timeout, or your `onError`), not a dropped socket. Close code +
+reason propagate in both directions. `timeout` bounds only the upstream handshake, never
+the tunnel lifetime. Not applicable to tunnels: `maxRedirects` (upstream WebSocket
+redirects are not followed), `cache`, `transformResponseHeaders`,
+`transformResponseBody` (the 101 response is runtime-generated). A malformed upgrade
+request falls through to the regular HTTP proxy path.
+
 **Example:**
 
 ```ts
 // Wildcard path proxying
 app.get("/api/*", proxy("https://backend.example.com/*"));
+
+// WebSocket tunneling (enabled by default)
+// ws://this-app/ws/chat -> wss://backend.example.com/ws/chat
+app.get("/ws/*", proxy("https://backend.example.com/*"));
 
 // Dynamic target
 app.get(

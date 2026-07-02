@@ -572,8 +572,8 @@ preserves the query string. See
 
 Proxies requests to a different server with comprehensive features including SSRF
 protection, host whitelisting, header/body transformation, and custom error handling.
-Target can be specified as a URL string (absolute or relative) or a function. Does NOT
-support WebSockets.
+Target can be specified as a URL string (absolute or relative) or a function. WebSocket
+upgrade requests are transparently tunneled to the upstream (since 1.17.0, see below).
 
 Basic usage:
 
@@ -600,6 +600,18 @@ Advanced features include:
 - Response body transformation
 - Configurable timeout and caching
 - Custom error handling
+- Transparent WebSocket proxying (on by default; `webSockets: false` to disable)
+
+> **WebSockets** (since 1.17.0): a well-formed WebSocket upgrade request is tunneled to
+> the upstream (`http(s)` targets are dialed as `ws(s)`). The upstream is dialed FIRST —
+> the full target policy (self-proxy / SSRF / `allowedHosts`) applies, request headers
+> (cookies, authorization, custom `headers`, `transformRequestHeaders`, `X-Forwarded-*`,
+> hop-counter loop guard) are forwarded, and subprotocols are negotiated end-to-end — and
+> the client is upgraded only after the upstream handshake succeeds, so a failed dial
+> surfaces as a regular HTTP error (502 unreachable, 504 handshake timeout, `onError`).
+> Close code + reason propagate in both directions. `timeout` bounds only the upstream
+> handshake, never the tunnel lifetime. Not applied to tunnels: `maxRedirects`, `cache`,
+> and the response transforms.
 
 > **SSRF caveat:** `preventSSRF` is a string-only check on the target hostname. It does
 > NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to a
