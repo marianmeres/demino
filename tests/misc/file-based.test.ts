@@ -145,3 +145,23 @@ runTestServerTests([
 		},
 	},
 ]);
+
+Deno.test("deminoFileBased: a trailing slash in rootDir still registers routes", async () => {
+	// A trailing separator used to survive `normalize` and then eat the leading "/"
+	// of every derived route, silently producing a zero-route app. It must behave
+	// exactly like the no-trailing-slash form.
+	const app = demino();
+	app.logger(null);
+	await deminoFileBased(app, root1 + "/", { verbose: false });
+
+	const routes = app.routes().map((r) => r.route);
+	assert(routes.length > 0, "expected routes to be registered");
+	assert(
+		routes.every((r) => r.startsWith("/")),
+		`every route must start with "/", got: ${routes.join(", ")}`,
+	);
+	assert(
+		routes.includes("/a"),
+		`expected "/a" among routes, got: ${routes.join(", ")}`,
+	);
+});

@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { type Demino, demino } from "../../src/demino.ts";
 import {
 	assertCovered,
@@ -110,6 +110,57 @@ Deno.test("authz: array permissions — every (default) vs some", async () => {
 		// some: needs any
 		await assertResp(fetch(`${base}/some`, { headers: { "x-user": "u|a" } }), 200);
 		await assertResp(fetch(`${base}/some`, { headers: { "x-user": "u|c" } }), 403);
+	});
+});
+
+Deno.test("authz: empty permission array is rejected at declaration (fail-closed)", () => {
+	assertThrows(
+		() => withPermission([], () => "x"),
+		TypeError,
+		"must not be empty",
+	);
+});
+
+Deno.test("authz: empty permission via resolve denies (403, never fails open)", async () => {
+	const app = demino();
+	app.use(
+		authz({
+			resolveSubject,
+			check,
+			// a hand-built decl with an empty permission list must not fail open
+			resolve: () => ({ permission: [] } as AuthzDecl),
+		}),
+	);
+	app.get("/x", () => "ok"); // no static decl -> resolve supplies the (empty) perms
+
+	await withServer(app, async (base) => {
+		// authenticated subject, but the vacuous permission list must still 403
+		await assertResp(fetch(`${base}/x`, { headers: { "x-user": "u|a,b" } }), 403);
+	});
+});
+
+Deno.test("authz: a non-preflight OPTIONS on a matched route is still gated", async () => {
+	const app = demino();
+	app.use(authz({ resolveSubject, check }));
+	app.all("/admin", withPermission("admin:*", () => "secret"));
+
+	await withServer(app, async (base) => {
+		// bare OPTIONS (NOT a preflight) matches the app.all route -> the gate runs
+		// and denies (401, no subject); it must not bypass unauthenticated.
+		const bare = await fetch(`${base}/admin`, { method: "OPTIONS" });
+		await bare.text();
+		assertEquals(bare.status, 401);
+
+		// a genuine preflight (carries Access-Control-Request-Method) bypasses the gate
+		const pre = await fetch(`${base}/admin`, {
+			method: "OPTIONS",
+			headers: { "access-control-request-method": "GET" },
+		});
+		await pre.text();
+		assert(
+			pre.status !== 401 && pre.status !== 403,
+			`preflight gated: ${pre.status}`,
+		);
 	});
 });
 

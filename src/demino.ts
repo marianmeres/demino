@@ -73,6 +73,11 @@ export interface DeminoContext {
 	 * (a forged `X-Forwarded-For` has no effect); with it on, it is resolved from
 	 * `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` (via `request-ip`), falling
 	 * back to the socket peer.
+	 *
+	 * Caveat with `trustProxy` on: the left-most `X-Forwarded-For` is client-spoofable
+	 * unless the front proxy OVERWRITES the header (not the appending default). Treat
+	 * `ctx.ip` as untrusted for security decisions otherwise — see
+	 * {@link DeminoOptions.trustProxy}.
 	 */
 	ip: string;
 	/** Matched route definition */
@@ -617,6 +622,14 @@ function resolveForwardedAuthority(
  * - `trustProxy` on → the forwarded client IP via `request-ip` (CF-Connecting-IP, the
  *   left-most `X-Forwarded-For`, X-Real-IP, …), falling back to the socket peer.
  *
+ * SECURITY — the LEFT-MOST `X-Forwarded-For` entry is only trustworthy if the front
+ * proxy OVERWRITES the header with the real peer (e.g. nginx
+ * `proxy_set_header X-Forwarded-For $remote_addr`). With the common APPENDING config
+ * (nginx's `$proxy_add_x_forwarded_for`), a client that sends its own `X-Forwarded-For`
+ * lands as the left-most token, so `ctx.ip` becomes client-controlled. Do not use
+ * `ctx.ip` for security decisions (rate-limit keys, authz, IP allowlists) unless your
+ * proxy overwrites the header.
+ *
  * Private on purpose — not exported.
  */
 function resolveClientIp(
@@ -972,24 +985,6 @@ export function demino(
 				matched = _routers.ALL.exec(url.pathname);
 			}
 
-			// special case not match for HEAD - if handler for some other method exist, we want 405, not 404
-			if (!matched && method === "HEAD") {
-				// prettier-ignore
-				const ms: DeminoMethod[] = [
-					"DELETE",
-					"GET",
-					"OPTIONS",
-					"PATCH",
-					"POST",
-					"PUT",
-				];
-				if (
-					ms.some((m) => _routers[m].exec(url.pathname, { skipCatchAll: true }))
-				) {
-					throw createHttpError(HTTP_STATUS.METHOD_NOT_ALLOWED);
-				}
-			}
-
 			if (matched) {
 				try {
 					const cacheKey = `${method} ${matched.route}`;
@@ -1122,6 +1117,23 @@ export function demino(
 					throw createHttpError(status, null, null, e);
 				}
 			} else {
+				// No route matched for this method. If the SAME path is served by
+				// other methods, that's a 405 (with the mandatory `Allow` header), not
+				// a 404. Catch-alls are excluded (`skipCatchAll`) so a `*` route can
+				// neither fabricate an `Allow` set nor mask a genuine 404 — and since a
+				// matching catch-all would already have been matched above, reaching
+				// here means none applied. Auto-HEAD is covered because a GET route also
+				// populates the HEAD router.
+				const allow = supportedMethods.filter((m) =>
+					_routers[m].exec(url.pathname, { skipCatchAll: true })
+				);
+				if (allow.length) {
+					// RFC 9110 §15.5.6: a 405 response MUST include `Allow`. Set it on
+					// the context headers, which `_createErrorResponse` folds into the
+					// error Response.
+					context.headers.set("Allow", allow.join(", "));
+					throw createHttpError(HTTP_STATUS.METHOD_NOT_ALLOWED);
+				}
 				throw createHttpError(HTTP_STATUS.NOT_FOUND);
 			}
 		} catch (e: unknown) {

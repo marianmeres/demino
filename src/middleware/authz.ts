@@ -93,7 +93,12 @@ export interface AuthzOptions {
 	 * pass through ungated (and still surface as `MISSING` in the matrix).
 	 */
 	denyByDefault?: boolean;
-	/** Bypass `OPTIONS` requests (CORS preflight). Default `true`. */
+	/**
+	 * Bypass genuine CORS preflight requests — an `OPTIONS` that carries
+	 * `Access-Control-Request-Method`. Default `true`. A bare `OPTIONS` that is NOT a
+	 * preflight is still gated, so it cannot reach an `app.all()`/`app.options()`
+	 * handler unauthenticated.
+	 */
 	allowOptions?: boolean;
 }
 
@@ -132,8 +137,15 @@ export function authz(options: AuthzOptions): DeminoHandler {
 		info: Deno.ServeHandlerInfo,
 		ctx: DeminoContext,
 	) => {
-		// CORS preflight — never gated
-		if (allowOptions && req.method === "OPTIONS") return;
+		// CORS preflight — never gated. Scope strictly to a genuine preflight (it
+		// carries Access-Control-Request-Method) so a bare OPTIONS to an
+		// app.all()/app.options() route can't slip past the gate unauthenticated.
+		if (
+			allowOptions && req.method === "OPTIONS" &&
+			req.headers.has("access-control-request-method")
+		) {
+			return;
+		}
 
 		// Populate the subject if a resolver is given and nothing set it yet.
 		// Done before the public short-circuit so handlers always see the subject.
@@ -162,6 +174,12 @@ export function authz(options: AuthzOptions): DeminoHandler {
 			? decl.permission
 			: [decl.permission];
 		const mode = decl.mode ?? "every";
+
+		// An empty permission list must never fail open: a vacuous "every" would
+		// grant access without any check. Treat it as a misconfigured deny. (The
+		// static `withPermission` helper rejects it up front; this guards decls that
+		// reach the gate via `resolve` or a hand-built `routeMeta`.)
+		if (!perms.length) throw new HTTP_ERROR.Forbidden();
 
 		let ok = mode === "every";
 		for (const p of perms) {
@@ -206,6 +224,14 @@ export function withPermission<H extends DeminoHandler>(
 	handler: H,
 	opts?: { mode?: "every" | "some" },
 ): H {
+	// An empty permission list would fail open at the gate (vacuous "every"). Reject
+	// it at declaration time so the mistake surfaces at boot, not as a silent hole.
+	if (Array.isArray(permission) && permission.length === 0) {
+		throw new TypeError(
+			"withPermission: permission list must not be empty (would fail open). " +
+				"Use withPublic() for an intentionally open route.",
+		);
+	}
 	return withMeta(
 		{ [AUTHZ_META_KEY]: { permission, ...(opts?.mode ? { mode: opts.mode } : {}) } },
 		handler,

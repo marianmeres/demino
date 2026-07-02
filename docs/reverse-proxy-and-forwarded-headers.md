@@ -123,6 +123,13 @@ keys [`rateLimit()`](../README.md#ratelimit) on it) must set `trustProxy` to kee
 the real client IP. The upside: with `trustProxy` off, a client cannot spoof its IP to
 evade or poison an IP-keyed rate limiter.
 
+> **With `trustProxy` on, `ctx.ip` is only as trustworthy as your proxy config.** Demino
+> reads the **left-most** `X-Forwarded-For` token, which is client-controlled if the proxy
+> *appends* (nginx's `$proxy_add_x_forwarded_for`) rather than *overwrites*
+> (`$remote_addr`). Treat `ctx.ip` as untrusted for security decisions (rate-limit keys,
+> authz, IP allowlists) unless your proxy overwrites the header — see the
+> [overwrite-not-append rule](#the-immediate-hop--overwrite-not-append-rule) below.
+
 ## Two non-obvious pitfalls
 
 The general principle "validate untrusted input against what you expect" has two sharp

@@ -67,8 +67,13 @@ Deno.test("hello world", async () => {
 		await assertResp(fetch(`${srv.base}`), 200, /world/i);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}/2`), 200, /world/i);
-		// this is get only
-		await assertResp(fetch(`${srv.base}/2`, { method: "POST" }), 404);
+		// this is get only -> a wrong-method request is 405 (with Allow), not 404
+		await assertResp(
+			fetch(`${srv.base}/2`, { method: "POST" }),
+			405,
+			undefined,
+			{ Allow: /GET/ },
+		);
 		// midware returns string
 		await assertResp(fetch(`${srv.base}/3`), 200, /world/i);
 		// midware returns awaited Response

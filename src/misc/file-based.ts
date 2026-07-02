@@ -104,7 +104,15 @@ export async function deminoFileBased(
 	options?: DeminoFileBasedOptions,
 ): Promise<Demino> {
 	if (!Array.isArray(rootDirs)) rootDirs = [rootDirs];
-	rootDirs = rootDirs.map(normalize);
+	// Normalize AND strip any trailing separator. A trailing slash (e.g. "./routes/")
+	// survives `normalize`, and later `filepath.slice(rootDir.length)` would then eat
+	// the leading "/" of every derived route — producing routes like "users" (no
+	// leading slash) that all fail registration, i.e. a silent zero-route app. Keep a
+	// bare root ("/") intact.
+	rootDirs = rootDirs.map((d) => {
+		const n = normalize(d);
+		return n.length > 1 ? n.replace(/[/\\]+$/, "") || n : n;
+	});
 
 	const log: DeminoLogger = options?.logger ?? (console as unknown as Logger);
 
