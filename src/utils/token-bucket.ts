@@ -41,8 +41,9 @@ export class TokenBucket {
 	/** Current quantity in the bucket */
 	#currentSize: number;
 
-	/** Last refill timestamp */
-	#lastRefill: Date;
+	/** Monotonic timestamp (`performance.now()`, ms) of the last refill. Monotonic —
+	 * not wall-clock — so a backward system-clock step can't stall token accrual. */
+	#lastRefill: number;
 
 	/** How much capacity will be refilled per second */
 	#refillSizePerSec: number;
@@ -77,7 +78,7 @@ export class TokenBucket {
 
 		this.#maxSize = maxSize;
 		this.#currentSize = maxSize;
-		this.#lastRefill = new Date();
+		this.#lastRefill = performance.now();
 		this.#refillSizePerSec = refillPerSecond;
 	}
 
@@ -88,10 +89,10 @@ export class TokenBucket {
 	 * @returns This TokenBucket instance for chaining
 	 */
 	refill(): TokenBucket {
-		const now = new Date();
-		const elapsedMs = now.valueOf() - this.#lastRefill.valueOf();
+		const now = performance.now();
+		const elapsedMs = now - this.#lastRefill;
 
-		// clock skew protection
+		// non-positive delta guard (monotonic clock should never go backward)
 		if (elapsedMs <= 0) return this;
 
 		const secondsPassed = elapsedMs / 1000;
@@ -115,10 +116,8 @@ export class TokenBucket {
 		} else {
 			// Advance lastRefill by exactly the time accounted for by `countToAdd`,
 			// so the unconsumed fraction carries to the next refill call.
-			this.#lastRefill = new Date(
-				this.#lastRefill.valueOf() +
-					(countToAdd * 1000) / this.#refillSizePerSec,
-			);
+			this.#lastRefill = this.#lastRefill +
+				(countToAdd * 1000) / this.#refillSizePerSec;
 		}
 
 		this.#currentSize = newSize;

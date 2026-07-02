@@ -7,6 +7,24 @@ import { assertResp, runTestServerTests } from "../_utils.ts";
 // re-check and reach the internal resource.
 runTestServerTests([
 	{
+		name: "proxy: hop counter is forwarded and a loop (too many hops) is rejected",
+		fn: async ({ app, base }) => {
+			// upstream echoes back the hop counter it received
+			app.get("/echo", (r) => r.headers.get("x-demino-proxy-hops") ?? "none");
+			app.get("/p", proxy(`${base}/echo`, { allowedHosts: ["localhost"] }));
+
+			// a normal request forwards an incremented hop counter (0 -> 1)
+			await assertResp(fetch(`${base}/p`), 200, "1");
+
+			// a request that already reached the hop limit is treated as a loop -> 500
+			const looped = await fetch(`${base}/p`, {
+				headers: { "x-demino-proxy-hops": "32" },
+			});
+			await looped.text();
+			assertEquals(looped.status, 500);
+		},
+	},
+	{
 		name: "proxy re-validates redirect hops (SSRF via redirect is blocked)",
 		fn: async ({ app, base }) => {
 			// `localhost` and `127.0.0.1` are the same server but DIFFERENT hostnames,

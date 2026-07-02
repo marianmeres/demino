@@ -879,14 +879,37 @@ export function demino(
 		info: Deno.ServeHandlerInfo,
 		context: DeminoContext,
 	): Promise<Response> => {
-		let r = await _errorHandler?.(req, info, context);
-		if (!(r instanceof Response)) {
+		let handlerResult: unknown;
+		try {
+			handlerResult = await _errorHandler?.(req, info, context);
+		} catch (handlerError) {
+			// A custom error handler that throws must NOT escape `_app` — that would
+			// bubble out of the outer catch (it runs inside it), skip the access log,
+			// and hand Deno a rejected promise (raw, unlogged 500). Log the secondary
+			// failure and fall back to the default response built from the ORIGINAL
+			// error below.
+			_doLog("error", {
+				status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+				method: req.method,
+				url: context.url.href,
+				ip: context.ip,
+				error: `custom errorHandler threw: ${
+					(handlerError as { stack?: string })?.stack ?? handlerError
+				}`,
+			});
+			handlerResult = undefined;
+		}
+
+		let r: Response;
+		if (handlerResult instanceof Response) {
+			r = handlerResult;
+		} else {
 			_maybeSetXHeaders(context);
 			// make sure to reset any content-type we might have (the factory below will set the proper one)
 			context.headers.delete("content-type");
 			r = createResponseFrom(
 				req,
-				r || getErrorMessage(context.error),
+				handlerResult || getErrorMessage(context.error),
 				context.headers,
 				context.error?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
 			);
@@ -1209,7 +1232,9 @@ export function demino(
 	_app.delete = _createRouteFn("DELETE");
 	_app.get = _createRouteFn("GET");
 	_app.head = (...args) => {
-		console.warn(
+		// Route through the configurable logger (not raw console) so it honors
+		// `.logger(null)` and custom sinks instead of always hitting stderr.
+		(getLogger()?.warn ?? console.warn)(
 			"WARN: Are you sure to implement a custom HEAD request handler? " +
 				"HEAD requests are handled automatically in Demino by default (as long as GET handler exists).",
 		);

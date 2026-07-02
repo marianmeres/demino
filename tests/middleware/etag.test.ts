@@ -29,6 +29,23 @@ runTestServerTests([
 		},
 	},
 	{
+		name: "etag: If-None-Match uses weak comparison (W/ prefix ignored)",
+		fn: async ({ app, base }) => {
+			app.get("/d", withETag(() => "hello"));
+
+			const g = await fetch(`${base}/d`);
+			await g.text();
+			const strong = g.headers.get("etag")!; // e.g. "\"abc\""
+
+			// sending the WEAK variant of the same tag must still 304 the strong one
+			const r = await fetch(`${base}/d`, {
+				headers: { "if-none-match": `W/${strong}` },
+			});
+			await r.text();
+			assertEquals(r.status, 304);
+		},
+	},
+	{
 		name: "etag: 304 carries Vary (and Cache-Control) forward",
 		fn: async ({ app, base }) => {
 			app.get(

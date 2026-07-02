@@ -95,6 +95,14 @@ Deno.test("isHostAllowed: exact match", () => {
 	assertEquals(isHostAllowed("other.com", ["api.example.com"]), false);
 });
 
+Deno.test("isHostAllowed: matching is case-insensitive", () => {
+	// hostnames are case-insensitive; a mixed-case allowlist entry must still match
+	assertEquals(isHostAllowed("api.example.com", ["API.Example.COM"]), true);
+	assertEquals(isHostAllowed("API.EXAMPLE.COM", ["api.example.com"]), true);
+	assertEquals(isHostAllowed("sub.example.com", ["*.Example.com"]), true);
+	assertEquals(isHostAllowed("other.com", ["API.Example.COM"]), false);
+});
+
 Deno.test("isHostAllowed: wildcard subdomain", () => {
 	assertEquals(isHostAllowed("api.example.com", ["*.example.com"]), true);
 	assertEquals(isHostAllowed("example.com", ["*.example.com"]), true);

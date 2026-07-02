@@ -13,6 +13,11 @@ import {
 	PROXY_RESPONSE_REMOVE_HEADERS,
 } from "./utils.ts";
 
+/** Request header carrying the proxy hop count, used to break loops. */
+const PROXY_HOPS_HEADER = "x-demino-proxy-hops";
+/** Maximum number of demino-proxy hops before a request is treated as a loop. */
+const MAX_PROXY_HOPS = 32;
+
 export interface ProxyOptions {
 	/** Timeout in milliseconds for the proxy request (default: 60000) */
 	timeout: number;
@@ -223,9 +228,23 @@ export function proxy(
 				// Redirect hops below are re-validated with the same policy.
 				assertTargetAllowed(targetUrl, url);
 
+				// Loop guard. The exact self-URL check in `assertTargetAllowed` only
+				// catches an identical target; a loop through a slightly different URL
+				// (trailing slash, another proxy that bounces back, …) would recurse.
+				// Carry a hop counter so a chain that keeps re-entering a demino proxy
+				// is cut off instead of exhausting connections. It rides on the request
+				// headers, so it survives self- and cross-proxy hops.
+				const hops = Number(req.headers.get(PROXY_HOPS_HEADER) ?? 0) || 0;
+				if (hops >= MAX_PROXY_HOPS) {
+					throw new Error(
+						`Proxy loop detected (exceeded ${MAX_PROXY_HOPS} hops)`,
+					);
+				}
+
 				// Build proxy headers
 				let proxyHeaders = new Headers(req.headers);
 				proxyHeaders.set("host", targetUrl.host);
+				proxyHeaders.set(PROXY_HOPS_HEADER, String(hops + 1));
 				const origin = req.headers.get("origin");
 				if (origin) proxyHeaders.set("origin", origin);
 

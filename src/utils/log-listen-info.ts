@@ -33,7 +33,12 @@ export function logListenInfo(localAddr: Deno.NetAddr) {
 	const { hostname, port } = localAddr;
 	const protocol = "http";
 
-	if (hostname === "0.0.0.0") {
+	// IPv6 literals must be bracketed in a URL authority (`http://[::1]:8000/`).
+	const fmtHost = (h: string) => (h.includes(":") ? `[${h}]` : h);
+
+	// Both the IPv4 (`0.0.0.0`) and IPv6 (`::`) unspecified addresses mean
+	// "all interfaces" — enumerate the concrete addresses in both cases.
+	if (hostname === "0.0.0.0" || hostname === "::") {
 		console.log("\n ✅ %cDemino listening:", "color:green;");
 		console.log(
 			`    ➜  Local:   %c${protocol}://localhost:${port}/`,
@@ -42,16 +47,22 @@ export function logListenInfo(localAddr: Deno.NetAddr) {
 
 		const interfaces = Deno.networkInterfaces();
 		for (const iface of interfaces) {
-			if (iface.family === "IPv4" && !iface.address.startsWith("127.")) {
+			const isV4 = iface.family === "IPv4" && !iface.address.startsWith("127.");
+			// Skip IPv6 loopback (`::1`) and link-local (`fe80::…`, needs a zone id
+			// to be usable) — only advertise routable IPv6 addresses.
+			const isV6 = iface.family === "IPv6" &&
+				iface.address !== "::1" &&
+				!iface.address.toLowerCase().startsWith("fe80:");
+			if (isV4 || isV6) {
 				console.log(
-					`    ➜  Network: %c${protocol}://${iface.address}:${port}/`,
+					`    ➜  Network: %c${protocol}://${fmtHost(iface.address)}:${port}/`,
 					"color:cyan;",
 				);
 			}
 		}
 	} else {
 		console.log(
-			`\n ✅ %cDemino listening: %c${protocol}://${hostname}:${port}/`,
+			`\n ✅ %cDemino listening: %c${protocol}://${fmtHost(hostname)}:${port}/`,
 			"color:green;",
 			"color:cyan;",
 		);

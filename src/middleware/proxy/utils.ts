@@ -146,13 +146,18 @@ export function isHostAllowed(
 ): boolean {
 	if (!allowedHosts || allowedHosts.length === 0) return true;
 
+	// Hostnames are case-insensitive (RFC 4343). `URL.hostname` is already
+	// lower-cased, but a caller-supplied allowlist entry may not be — compare both
+	// folded so a mixed-case entry doesn't silently fail to match a real host.
+	const host = hostname.toLowerCase();
 	return allowedHosts.some((allowed) => {
+		allowed = allowed.toLowerCase();
 		// Exact match
-		if (allowed === hostname) return true;
+		if (allowed === host) return true;
 		// Wildcard subdomain match (e.g., "*.example.com")
 		if (allowed.startsWith("*.")) {
 			const domain = allowed.slice(2);
-			return hostname === domain || hostname.endsWith("." + domain);
+			return host === domain || host.endsWith("." + domain);
 		}
 		return false;
 	});

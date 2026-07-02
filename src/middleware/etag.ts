@@ -127,7 +127,16 @@ export function withETag(
 		if (ifNoneMatch) {
 			// Support both single and multiple ETags in If-None-Match
 			const requestETags = ifNoneMatch.split(",").map((e) => e.trim());
-			if (requestETags.includes(etagValue) || requestETags.includes("*")) {
+			// RFC 9110 §13.1.2: If-None-Match uses the WEAK comparison function — the
+			// `W/` prefix is ignored, so `"abc"` and `W/"abc"` are equivalent. A plain
+			// string compare would spuriously miss a matching weak/strong variant and
+			// serve a full 200 where a 304 was warranted.
+			const _bare = (t: string) => t.replace(/^W\//, "");
+			const _target = _bare(etagValue);
+			if (
+				requestETags.includes("*") ||
+				requestETags.some((t) => _bare(t) === _target)
+			) {
 				// 304 Not Modified. Carry forward the caching-relevant headers a
 				// cache needs to keep a stored response valid (RFC 9110 §15.4.5),
 				// not just Cache-Control — dropping Vary in particular can cause a
