@@ -46,3 +46,44 @@ Deno.test("DEMINO_SORT.PRE: a tagged middleware runs before a default one", asyn
 		await assertResp(fetch(`${base}/`), 200, "gate,normal");
 	});
 });
+
+Deno.test(
+	"sort order does not leak across routes when a handler fn is reused (regression)",
+	async () => {
+		// `shared` is the terminal handler on /health AND an early middleware on
+		// /page. Demino must derive each function's order per assembly, not stamp it
+		// onto the shared function object — otherwise /health pinning it to HANDLER
+		// (Infinity) reorders /page's chain, and the outcome depends on which route
+		// is hit first.
+		const shared: DeminoHandler = (_r, _i, ctx) => {
+			(ctx.locals.o ??= [] as string[]) as string[];
+			(ctx.locals.o as string[]).push("shared");
+		};
+		const late: DeminoHandler = (_r, _i, ctx) => {
+			(ctx.locals.o as string[]).push("late");
+		};
+		late.__midwarePreExecuteSortOrder = 2000; // after DEFAULT (1000)
+
+		const app = demino();
+		app.get("/health", shared); // shared as the final handler here
+		app.get(
+			"/page",
+			shared, // early middleware -> must still run before `late`
+			late,
+			(_r, _i, ctx) => (ctx.locals.o as string[]).join(","),
+		);
+
+		await withServer(app, async (base) => {
+			// Hit /health FIRST so a buggy impl pins `shared` to HANDLER (Infinity).
+			// (`shared` returns undefined as the terminal handler here -> 204.)
+			await assertResp(fetch(`${base}/health`), 204);
+			// /page must still run shared before late, regardless of /health.
+			await assertResp(fetch(`${base}/page`), 200, "shared,late");
+			// order must be stable no matter the dispatch order.
+			await assertResp(fetch(`${base}/page`), 200, "shared,late");
+		});
+
+		// the shared function object must NOT have been mutated by the framework
+		assertEquals(shared.__midwarePreExecuteSortOrder, undefined);
+	},
+);

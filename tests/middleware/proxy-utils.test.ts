@@ -47,6 +47,44 @@ Deno.test("isPrivateHost: public hosts", () => {
 	}
 });
 
+Deno.test("isPrivateHost: IPv4-mapped IPv6 in HEX form (URL-normalized) is private", () => {
+	// WHATWG URL normalizes `[::ffff:127.0.0.1]` to the hex serialization
+	// `[::ffff:7f00:1]`. A dotted-decimal-only check would let these through,
+	// which is exactly what the proxy passes to isPrivateHost (SSRF bypass).
+	const truthy = [
+		"::ffff:7f00:1", // 127.0.0.1
+		"::ffff:a9fe:a9fe", // 169.254.169.254 (cloud metadata)
+		"::ffff:c0a8:101", // 192.168.1.1
+		"::ffff:0a00:1", // 10.0.0.1
+		"[::ffff:7f00:1]", // bracketed
+		"64:ff9b::7f00:1", // NAT64 of 127.0.0.1
+		"64:ff9b::a9fe:a9fe", // NAT64 of 169.254.169.254
+	];
+	for (const h of truthy) {
+		assertEquals(isPrivateHost(h), true, `expected ${h} to be private`);
+	}
+});
+
+Deno.test("isPrivateHost: what the proxy actually sees after URL normalization is private", () => {
+	// Prove the end-to-end path: the value the proxy passes is `new URL(...).hostname`.
+	for (const raw of ["::ffff:127.0.0.1", "::ffff:169.254.169.254", "::ffff:10.0.0.1"]) {
+		const hostname = new URL(`http://[${raw}]/`).hostname; // e.g. "[::ffff:7f00:1]"
+		assertEquals(
+			isPrivateHost(hostname),
+			true,
+			`expected ${raw} -> ${hostname} private`,
+		);
+	}
+});
+
+Deno.test("isPrivateHost: public IPv4-mapped IPv6 stays public", () => {
+	// 8.8.8.8 mapped -> ::ffff:808:808 must NOT be misclassified as private.
+	const falsy = ["::ffff:808:808", "::ffff:0808:0808", "64:ff9b::808:808"];
+	for (const h of falsy) {
+		assertEquals(isPrivateHost(h), false, `expected ${h} to be public`);
+	}
+});
+
 Deno.test("isHostAllowed: empty/missing whitelist allows all", () => {
 	assertEquals(isHostAllowed("anything.com"), true);
 	assertEquals(isHostAllowed("anything.com", []), true);

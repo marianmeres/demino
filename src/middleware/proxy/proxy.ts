@@ -16,6 +16,16 @@ import {
 export interface ProxyOptions {
 	/** Timeout in milliseconds for the proxy request (default: 60000) */
 	timeout: number;
+	/**
+	 * Maximum number of upstream redirects to follow (default: 5). Each hop is
+	 * re-validated against the SSRF / `allowedHosts` policy before it is fetched,
+	 * so a permitted upstream cannot bounce the proxy into an internal host.
+	 * Exceeding the limit surfaces as an error (mapped to a 500). Set to `0` to
+	 * reject any upstream redirect. A body-preserving redirect (307/308) whose
+	 * one-shot request body cannot be replayed is handed back to the client
+	 * unfollowed rather than re-issued with an altered request.
+	 */
+	maxRedirects: number;
 	/** Enable SSRF protection by blocking private/internal IPs (default: false) */
 	preventSSRF: boolean;
 	/** Whitelist of allowed target hosts. Supports wildcards (e.g., "*.example.com") */
@@ -139,6 +149,7 @@ export function proxy(
 ): DeminoHandler {
 	const {
 		timeout = 60_000,
+		maxRedirects = 5,
 		preventSSRF = false,
 		allowedHosts,
 		headers: customHeaders,
@@ -154,6 +165,30 @@ export function proxy(
 	if (isNaN(timeout) || timeout < 0) {
 		throw new TypeError(`Invalid timeout value '${timeout}'`);
 	}
+	if (!Number.isInteger(maxRedirects) || maxRedirects < 0) {
+		throw new TypeError(
+			`Invalid maxRedirects value '${maxRedirects}' (expecting a non-negative integer)`,
+		);
+	}
+
+	// Applies the full target policy (self-proxy, SSRF, host allowlist). Re-run for
+	// EVERY hop — the initial target and each redirect destination — so a permitted
+	// upstream cannot redirect the proxy into an internal/blocked host.
+	const assertTargetAllowed = (targetUrl: URL, reqUrl: URL) => {
+		if (targetUrl.toString() === reqUrl.toString()) {
+			throw new Error("Cannot proxy to self");
+		}
+		if (preventSSRF && isPrivateHost(targetUrl.hostname)) {
+			throw new Error(
+				`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`,
+			);
+		}
+		if (!isHostAllowed(targetUrl.hostname, allowedHosts)) {
+			throw new Error(
+				`Host '${targetUrl.hostname}' is not in the allowed hosts list`,
+			);
+		}
+	};
 
 	const _proxy: DeminoHandler = async (req, _i, ctx) => {
 		try {
@@ -184,24 +219,9 @@ export function proxy(
 
 				const targetUrl = new URL(_target, url);
 
-				// Prevent proxying to ourselves
-				if (targetUrl.toString() === url.toString()) {
-					throw new Error("Cannot proxy to self");
-				}
-
-				// SSRF protection
-				if (preventSSRF && isPrivateHost(targetUrl.hostname)) {
-					throw new Error(
-						`SSRF protection: Cannot proxy to private host '${targetUrl.hostname}'`,
-					);
-				}
-
-				// Host whitelist validation
-				if (!isHostAllowed(targetUrl.hostname, allowedHosts)) {
-					throw new Error(
-						`Host '${targetUrl.hostname}' is not in the allowed hosts list`,
-					);
-				}
+				// Validate the initial target (self-proxy, SSRF, host allowlist).
+				// Redirect hops below are re-validated with the same policy.
+				assertTargetAllowed(targetUrl, url);
 
 				// Build proxy headers
 				let proxyHeaders = new Headers(req.headers);
@@ -241,47 +261,105 @@ export function proxy(
 					proxyHeaders = await transformRequestHeaders(proxyHeaders, req, ctx);
 				}
 
-				// Create and execute proxy request
-				const proxyReq = new Request(targetUrl, {
-					method: req.method,
-					headers: proxyHeaders,
-					body: req.body,
-					redirect: "follow",
-					cache,
-					signal,
-				});
+				// Turns a terminal upstream response into the cleaned, transformed
+				// Response handed back to the client.
+				const finalizeResponse = async (resp: Response): Promise<Response> => {
+					let respHeaders = new Headers(resp.headers);
+					[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
+						(name) => respHeaders.delete(name),
+					);
 
-				// `fetchOrThrow` turns opaque transport failures (DNS, refused,
-				// unreachable) into a typed `NetworkError` with the real reason,
-				// while passing deliberate aborts/timeouts through untouched.
-				const resp = await fetchOrThrow(proxyReq, undefined, "Upstream");
+					// Apply response header transformation if provided
+					if (transformResponseHeaders) {
+						respHeaders = await transformResponseHeaders(respHeaders, resp);
+					}
 
-				// Create response with cleaned headers
-				let respHeaders = new Headers(resp.headers);
-				[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
-					(name) => respHeaders.delete(name),
-				);
+					// Apply response body transformation if provided
+					let respBody: BodyInit | null = resp.body;
+					if (transformResponseBody) {
+						respBody = await transformResponseBody(respBody, resp);
+						// Remove Content-Length header as the body length has changed
+						respHeaders.delete("content-length");
+					}
 
-				// Apply response header transformation if provided
-				if (transformResponseHeaders) {
-					respHeaders = await transformResponseHeaders(respHeaders, resp);
+					return new Response(respBody, {
+						status: resp.status,
+						statusText: resp.statusText,
+						headers: respHeaders,
+					});
+				};
+
+				// Follow redirects MANUALLY so every hop is re-validated against the
+				// SSRF / allowlist policy. fetch's own `redirect: "follow"` would skip
+				// those checks, letting a permitted upstream bounce us into an internal
+				// host. `req.body` is a one-shot stream: a body-preserving redirect
+				// (307/308) we cannot replay is handed back to the client rather than
+				// re-issued with an altered request (fail safe, never fail open).
+				let currentUrl = targetUrl;
+				let hopMethod = req.method;
+				let hopBody: BodyInit | null | undefined = req.body;
+				let hopHeaders = proxyHeaders;
+
+				for (let hop = 0;; hop++) {
+					const proxyReq = new Request(currentUrl, {
+						method: hopMethod,
+						headers: hopHeaders,
+						body: hopBody,
+						redirect: "manual",
+						cache,
+						signal,
+					});
+
+					// `fetchOrThrow` turns opaque transport failures (DNS, refused,
+					// unreachable) into a typed `NetworkError` with the real reason,
+					// while passing deliberate aborts/timeouts through untouched.
+					const resp = await fetchOrThrow(proxyReq, undefined, "Upstream");
+
+					const location = resp.headers.get("location");
+					const isRedirect = resp.status >= 300 && resp.status < 400 &&
+						resp.status !== 304 && !!location;
+					if (!isRedirect) return await finalizeResponse(resp);
+
+					if (hop >= maxRedirects) {
+						await resp.body?.cancel();
+						throw new Error(
+							`Upstream exceeded the redirect limit (${maxRedirects})`,
+						);
+					}
+
+					const nextUrl = new URL(location!, currentUrl);
+					// Re-apply the FULL target policy to the redirect destination.
+					assertTargetAllowed(nextUrl, url);
+
+					// RFC 7231: 303 (and 301/302 for a non-GET/HEAD original, by
+					// near-universal practice) switch to GET and drop the body;
+					// 307/308 preserve method + body.
+					const m = hopMethod.toUpperCase();
+					const switchToGet = resp.status === 303 ||
+						((resp.status === 301 || resp.status === 302) &&
+							m !== "GET" && m !== "HEAD");
+
+					if (!switchToGet && hopBody != null) {
+						// Body-preserving redirect, but the one-shot body was already sent
+						// and cannot be replayed — return the 3xx to the client instead.
+						return await finalizeResponse(resp);
+					}
+
+					// discard the redirect response body before the next hop
+					await resp.body?.cancel();
+
+					const nextHeaders = new Headers(hopHeaders);
+					nextHeaders.set("host", nextUrl.host);
+					if (switchToGet) {
+						hopMethod = "GET";
+						["content-length", "content-type", "transfer-encoding"].forEach(
+							(h) => nextHeaders.delete(h),
+						);
+					}
+					hopBody = undefined;
+					currentUrl = nextUrl;
+					hopHeaders = nextHeaders;
 				}
-
-				// Apply response body transformation if provided
-				let respBody: BodyInit | null = resp.body;
-				if (transformResponseBody) {
-					respBody = await transformResponseBody(respBody, resp);
-					// Remove Content-Length header as the body length has changed
-					respHeaders.delete("content-length");
-				}
-
-				const r = new Response(respBody, {
-					status: resp.status,
-					statusText: resp.statusText,
-					headers: respHeaders,
-				});
-
-				return r;
 			};
 
 			if (!timeout) {

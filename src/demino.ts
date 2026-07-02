@@ -1033,30 +1033,44 @@ export function demino(
 							...[...matched.midwares],
 						]
 							.flat()
-							.filter(Boolean)
-							.map((mw, i, arr) => {
-								if (i === arr.length - 1) {
-									// handler: if sort order is not yet defined, make it big
-									mw.__midwarePreExecuteSortOrder ??=
-										DEMINO_SORT.HANDLER;
-								} else {
-									// middleware: assign the known DEFAULT boundary so userland
-									// can deterministically position relative to it (e.g.
-									// DEMINO_SORT.PRE before, or > DEFAULT after).
-									mw.__midwarePreExecuteSortOrder ??=
-										DEMINO_SORT.DEFAULT;
-								}
-								return mw;
-							});
+							.filter(Boolean);
 
 						// this is likely a bug (while technically ok)
 						if (!midwares.length) {
 							throw new TypeError(`No DeminoHandler found`);
 						}
 
-						midware = new Midware<DeminoHandlerArgs>(midwares, {
-							// we will sort the stack (see the dance above)
-							preExecuteSortEnabled: true,
+						// Sort the stack by pre-execute order WITHOUT mutating the
+						// handler functions. Previously the effective order was written
+						// back onto each function via `??=`; because a function object is
+						// shared across every route/app that references it, that leaked one
+						// route's HANDLER/DEFAULT assignment into every other route, silently
+						// reordering middleware depending on which route was dispatched
+						// (cache-populated) first. Here the order is derived per assembly: an
+						// explicit `__midwarePreExecuteSortOrder` wins, otherwise the final
+						// element is HANDLER and the rest DEFAULT (the published boundary
+						// userland positions relative to). Stable sort keeps registration
+						// order among equal keys.
+						const _lastIdx = midwares.length - 1;
+						const sorted = midwares
+							.map((mw, i) => ({
+								mw,
+								i,
+								order: mw.__midwarePreExecuteSortOrder ??
+									(i === _lastIdx
+										? DEMINO_SORT.HANDLER
+										: DEMINO_SORT.DEFAULT),
+							}))
+							.sort((a, b) =>
+								// `===` guard avoids `Infinity - Infinity` (NaN)
+								a.order === b.order ? a.i - b.i : a.order - b.order
+							)
+							.map((d) => d.mw);
+
+						midware = new Midware<DeminoHandlerArgs>(sorted, {
+							// already pre-sorted above; Midware must not re-sort (it reads
+							// the per-fn property, which we deliberately no longer set)
+							preExecuteSortEnabled: false,
 							// and we will check for duplicated middleware usage
 							duplicatesCheckEnabled: true,
 						});
