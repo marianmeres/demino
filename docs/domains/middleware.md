@@ -110,6 +110,7 @@ app.get(
 		preventSSRF: true, // Block private IPs (default: false)
 		allowedHosts: ["*.example.com"], // Host whitelist
 		timeout: 30000, // Request timeout (ms)
+		maxRedirects: 5, // Upstream redirects to follow, re-validated per hop (default 5)
 		transformRequestHeaders: (h) => h, // Modify outgoing headers
 		transformResponseHeaders: (h, r) => h, // Modify response headers
 		transformResponseBody: (b, r) => b, // Modify response body
@@ -121,7 +122,15 @@ app.get(
 **`preventSSRF` covers** (since 1.7.0): localhost (`127.0.0.0/8`, `*.localhost`),
 unspecified (`0.0.0.0`, `::`), private IPv4 (`10/8`, `100.64/10` CGNAT, `169.254/16`,
 `172.16/12`, `192.168/16`), private IPv6 (`::1`, `fe80::/10`, `fc00::/7`), IPv4-mapped
-IPv6 (`::ffff:1.2.3.4`), and bracketed IPv6 (`[::1]`).
+IPv6 in dotted **and** hex form (`::ffff:1.2.3.4`, `::ffff:7f00:1`) plus NAT64
+(`64:ff9b::`), and bracketed IPv6 (`[::1]`). The hex form matters because WHATWG URL
+normalizes mapped literals to it (`[::ffff:127.0.0.1]` → `[::ffff:7f00:1]`).
+
+**Redirect re-validation** (since 1.17.0): upstream redirects are followed **manually**
+and each hop is re-checked against the self / SSRF / `allowedHosts` policy, so a permitted
+upstream cannot 3xx the proxy into an internal host. Bounded by `maxRedirects` (default 5;
+exceeding it errors). A 307/308 whose one-shot body cannot be replayed is returned to the
+client unfollowed.
 
 **Caveat:** string-only check, no DNS lookup. DNS-rebinding bypasses this guard. For
 DNS-rebinding-resistant SSRF, resolve via `Deno.resolveDns` and re-check each result.

@@ -118,7 +118,10 @@ Demino is a building-blocks framework. Security is delegated to:
 - **Input validation**: Implement via middleware or handlers
 - **CORS**: Use bundled `cors()` middleware
 - **Rate limiting**: Use bundled `rateLimit()` middleware
-- **SSRF protection**: Use `proxy()` middleware with `preventSSRF: true`
+- **SSRF protection**: Use `proxy()` middleware with `preventSSRF: true` (and/or
+  `allowedHosts`). Blocks private/loopback/link-local/CGNAT targets (IPv4, IPv6, and
+  IPv4-mapped/NAT64 forms) and re-validates every redirect hop. String-only check — see the
+  DNS-rebinding caveat in [domains/middleware.md](./domains/middleware.md#proxy)
 
 The framework does NOT provide built-in:
 

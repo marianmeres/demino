@@ -679,6 +679,7 @@ function proxy(
 
 interface ProxyOptions {
 	timeout: number; // Default: 60000
+	maxRedirects: number; // Default: 5. Upstream redirects to follow (each hop re-validated)
 	preventSSRF: boolean; // Block private IPs (string-only check, no DNS)
 	allowedHosts: string[]; // Host whitelist (supports wildcards)
 	headers: Record<string, string>; // Custom headers
@@ -699,13 +700,22 @@ interface ProxyOptions {
 - Private IPv4: `10/8`, `172.16/12`, `192.168/16`, `169.254/16` (link-local), `100.64/10`
   (CGNAT)
 - Private IPv6: `::1`, `fe80::/10`, `fc00::/7`
-- IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
+- IPv4-mapped IPv6 in dotted and hex form (`::ffff:127.0.0.1`, `::ffff:7f00:1`) and NAT64
+  (`64:ff9b::`). The hex form is what WHATWG URL normalization produces
+  (`new URL("http://[::ffff:127.0.0.1]/").hostname` === `[::ffff:7f00:1]`).
 - Bracketed IPv6 hostnames (`[::1]`)
 
-**Caveat:** This is a _string-only_ check on the target hostname — DNS is not resolved. A
-public hostname that resolves (or is DNS-rebound) to a private IP bypasses this guard. For
-DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and re-check each
-address.
+**Redirect re-validation (since 1.17.0):** the proxy follows upstream redirects _manually_
+(never `fetch`'s transparent `redirect: "follow"`) and re-applies the full self-proxy /
+SSRF / `allowedHosts` policy to _every hop_, so a permitted upstream cannot 3xx the proxy
+into an internal host. Bounded by `maxRedirects` (default 5); exceeding it errors (→ 500).
+A body-preserving 307/308 whose one-shot request body cannot be replayed is returned to the
+client unfollowed.
+
+**Caveat:** `preventSSRF` is a _string-only_ check on the target hostname — DNS is not
+resolved. A public hostname that resolves (or is DNS-rebound) to a private IP bypasses this
+guard. For DNS-rebinding-resistant SSRF protection, resolve the hostname yourself and
+re-check each address.
 
 **Example:**
 

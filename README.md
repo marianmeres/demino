@@ -590,8 +590,11 @@ app.get(
 
 Advanced features include:
 
-- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6, CGNAT
-  100.64.0.0/10, and link-local — see caveat below)
+- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6 in dotted
+  and hex form, NAT64, CGNAT 100.64.0.0/10, and link-local — see caveat below)
+- Redirect re-validation: upstream redirects are followed manually and **every hop** is
+  re-checked against the SSRF / `allowedHosts` policy (a permitted upstream cannot 3xx the
+  proxy into an internal host); bounded by `maxRedirects` (default 5)
 - Host whitelisting with wildcard support
 - Request/response header transformation
 - Response body transformation
