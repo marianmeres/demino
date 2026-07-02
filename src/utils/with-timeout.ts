@@ -67,9 +67,17 @@ export function withTimeout<T>(
 		// underlying work on timeout (e.g. abort an in-flight fetch). Functions
 		// that don't take a signal will simply ignore it.
 		const ac = new AbortController();
-		const _promise = fn(...args, ac.signal) as Promise<T>;
+		let _promise: Promise<T>;
+		try {
+			// Normalize a SYNCHRONOUS throw from `fn` into a rejected promise, so the
+			// wrapper always returns a promise the caller can `.catch()` — rather than
+			// throwing inline before `.catch()`/`.finally()` can attach.
+			_promise = Promise.resolve(fn(...args, ac.signal) as T | Promise<T>);
+		} catch (err) {
+			return Promise.reject(err);
+		}
 
-		if (!timeout) return Promise.resolve(_promise);
+		if (!timeout) return _promise;
 
 		let _timeoutId: ReturnType<typeof setTimeout>;
 		const _clock = new Promise<never>((_, reject) => {

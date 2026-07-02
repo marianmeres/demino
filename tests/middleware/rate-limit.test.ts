@@ -4,6 +4,22 @@ import { assertResp, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
+		name: "rate limit: 429 carries a Retry-After header",
+		fn: async ({ app, base }) => {
+			app.get(
+				"/",
+				rateLimit(() => "one-client", { maxSize: 1, refillSizePerSecond: 1 }),
+				() => "ok",
+			);
+			// first request consumes the only token
+			await assertResp(fetch(`${base}/`), 200, "ok");
+			// second is limited -> 429 with a positive integer Retry-After
+			await assertResp(fetch(`${base}/`), 429, undefined, {
+				"Retry-After": /^[1-9][0-9]*$/,
+			});
+		},
+	},
+	{
 		// Regression: pre-1.7.0 the `lastAccess` field was set once on first
 		// contact and never refreshed. With cleanupProbability set high, an
 		// active client could be evicted mid-stream — and its bucket recreated

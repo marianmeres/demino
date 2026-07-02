@@ -19,6 +19,33 @@ Deno.test("cors() default config does NOT enable credentials", () => {
 
 runTestServerTests([
 	{
+		name: "cors: Vary: Origin is set even when the origin does not match (array)",
+		fn: async ({ app, base }) => {
+			app.use(cors({ allowOrigin: ["https://allowed.example"] }));
+			app.get("/x", () => "ok");
+
+			// non-allowed origin: no ACAO, but Vary: Origin MUST still be present so a
+			// shared cache cannot reuse this response for a matching origin.
+			await assertResp(
+				fetch(`${base}/x`, { headers: { origin: "https://evil.example" } }),
+				200,
+				"ok",
+				{ "Access-Control-Allow-Origin": false, Vary: /origin/i },
+			);
+
+			// matching origin: ACAO echoed, Vary: Origin present
+			await assertResp(
+				fetch(`${base}/x`, { headers: { origin: "https://allowed.example" } }),
+				200,
+				"ok",
+				{
+					"Access-Control-Allow-Origin": "https://allowed.example",
+					Vary: /origin/i,
+				},
+			);
+		},
+	},
+	{
 		name: "cors sanity check",
 		fn: async ({ app, base }) => {
 			app.get("/", () => "");

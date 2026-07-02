@@ -4,6 +4,56 @@ import { runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
+		name:
+			"etag: HEAD shares the GET validator (same ETag), and conditional HEAD 304s",
+		fn: async ({ app, base }) => {
+			app.get("/d", withETag(() => ({ hello: "world" })));
+
+			const g = await fetch(`${base}/d`);
+			await g.text();
+			const gEtag = g.headers.get("etag");
+			assertEquals(typeof gEtag, "string");
+
+			const h = await fetch(`${base}/d`, { method: "HEAD" });
+			await h.text();
+			// HEAD must return the SAME ETag as GET (not the empty-body hash)
+			assertEquals(h.headers.get("etag"), gEtag);
+
+			// a conditional HEAD carrying the GET validator must 304
+			const cond = await fetch(`${base}/d`, {
+				method: "HEAD",
+				headers: { "if-none-match": gEtag! },
+			});
+			await cond.text();
+			assertEquals(cond.status, 304);
+		},
+	},
+	{
+		name: "etag: 304 carries Vary (and Cache-Control) forward",
+		fn: async ({ app, base }) => {
+			app.get(
+				"/v",
+				withETag((_r, _i, ctx) => {
+					ctx.headers.set("Vary", "Accept-Encoding");
+					ctx.headers.set("Cache-Control", "max-age=60");
+					return "body";
+				}),
+			);
+
+			const g = await fetch(`${base}/v`);
+			await g.text();
+			const etag = g.headers.get("etag")!;
+
+			const c = await fetch(`${base}/v`, { headers: { "if-none-match": etag } });
+			await c.text();
+			assertEquals(c.status, 304);
+			// Vary must survive onto the 304 (else a shared cache can serve the wrong
+			// negotiated variant); Cache-Control too.
+			assertEquals(c.headers.get("vary"), "Accept-Encoding");
+			assertEquals(c.headers.get("cache-control"), "max-age=60");
+		},
+	},
+	{
 		name: "etag generates ETag and handles 304",
 		fn: async ({ app, base }) => {
 			app.get(

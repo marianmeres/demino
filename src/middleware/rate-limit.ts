@@ -172,6 +172,12 @@ export function rateLimit(
 		}
 
 		if (!bucket.consume(consumeSize)) {
+			// Advise the client when to retry (RFC 9110 §10.2.3): the time for the
+			// bucket to accrue the shortfall at the sustained refill rate (>= 1s). Set
+			// on ctx.headers, which the error response includes.
+			const deficit = Math.max(0, consumeSize - bucket.size);
+			const retryAfter = Math.max(1, Math.ceil(deficit / refillSizePerSecond));
+			ctx.headers.set("Retry-After", String(retryAfter));
 			throw new HTTP_ERROR.TooManyRequests();
 		}
 	};

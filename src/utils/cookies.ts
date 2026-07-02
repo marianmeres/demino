@@ -78,6 +78,14 @@ export function serializeCookie(
 	value: string,
 	options: CookieOptions = {},
 ): string {
+	// `name`/`value` are percent-encoded (safe), but `path`/`domain` are emitted
+	// verbatim. Reject any illegal character (`;`, whitespace, and CTLs incl. CR/LF)
+	// so caller-supplied — potentially user-derived — values cannot inject extra
+	// cookie attributes or, via CRLF, forge a second `Set-Cookie` header. Per RFC 6265
+	// a cookie-av octet is `%x20-3A / %x3C-7E` (printable, minus `;`).
+	if (options.path != null) _assertCookieAttr("path", options.path);
+	if (options.domain != null) _assertCookieAttr("domain", options.domain);
+
 	let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
 
 	if (options.maxAge != null) {
@@ -103,4 +111,16 @@ export function serializeCookie(
 	}
 
 	return cookie;
+}
+
+/** Rejects a `Path`/`Domain` attribute value that carries characters outside the
+ * cookie-av grammar (`%x20-3A / %x3C-7E`) — i.e. `;`, whitespace, or control chars
+ * (including CR/LF). Prevents attribute injection and Set-Cookie header splitting. */
+function _assertCookieAttr(kind: "path" | "domain", v: string): void {
+	if (!/^[\x20-\x3A\x3C-\x7E]*$/.test(v)) {
+		throw new TypeError(
+			`Invalid cookie ${kind}: value contains illegal characters ` +
+				`(";", whitespace, or control characters are not allowed).`,
+		);
+	}
 }

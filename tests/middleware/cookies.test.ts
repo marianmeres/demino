@@ -1,7 +1,31 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { parseCookies, serializeCookie } from "../../src/utils/cookies.ts";
 import { cookies, type CookiesLocals } from "../../src/middleware/cookies.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
+
+Deno.test("serializeCookie - rejects illegal path/domain (attribute / CRLF injection)", () => {
+	// CRLF would forge a second Set-Cookie header
+	assertThrows(
+		() => serializeCookie("s", "v", { path: "/x\r\nSet-Cookie: admin=1" }),
+		TypeError,
+		"path",
+	);
+	// ";" would inject extra cookie attributes
+	assertThrows(
+		() => serializeCookie("s", "v", { path: "/x; HttpOnly" }),
+		TypeError,
+	);
+	assertThrows(
+		() => serializeCookie("s", "v", { domain: "e.com\r\nX-Evil: y" }),
+		TypeError,
+		"domain",
+	);
+	// legitimate values are unaffected
+	assertEquals(
+		serializeCookie("s", "v", { path: "/", domain: "example.com" }),
+		"s=v; Path=/; Domain=example.com",
+	);
+});
 
 // Unit tests for utility functions
 Deno.test("parseCookies - empty/null input", () => {

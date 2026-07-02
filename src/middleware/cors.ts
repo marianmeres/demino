@@ -165,6 +165,15 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 		} else {
 			origin = allowOrigin;
 		}
+
+		// If the ACAO value depends on the request `Origin` (dynamic / array config),
+		// the response varies by Origin — advertise `Vary: Origin` even when THIS
+		// request's origin did not match. Otherwise a shared cache can store the
+		// no-`Access-Control-Allow-Origin` response for a non-matching origin and then
+		// serve it to a matching one (cache poisoning). Deduped so repeated runs (cors
+		// is duplicable) don't stack the token.
+		if (originVaries) _appendVaryOrigin(ctx.headers);
+
 		if (origin) {
 			// Spec-violating combination: `Access-Control-Allow-Origin: *` is
 			// incompatible with `Access-Control-Allow-Credentials: true`. The
@@ -184,9 +193,6 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 				ctx.headers.delete("Access-Control-Allow-Credentials");
 			} else {
 				ctx.headers.set("Access-Control-Allow-Origin", origin);
-				if (originVaries) {
-					ctx.headers.append("Vary", "Origin");
-				}
 			}
 		}
 
@@ -236,4 +242,17 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 	midware.__midwareDuplicable = true;
 
 	return midware;
+}
+
+/** Adds `Origin` to the `Vary` response header without duplicating it (and without
+ * clobbering other Vary tokens or an existing `*`). */
+function _appendVaryOrigin(headers: Headers): void {
+	const existing = headers.get("Vary");
+	if (!existing) {
+		headers.set("Vary", "Origin");
+		return;
+	}
+	const tokens = existing.split(",").map((t) => t.trim().toLowerCase());
+	if (tokens.includes("*") || tokens.includes("origin")) return;
+	headers.append("Vary", "Origin");
 }

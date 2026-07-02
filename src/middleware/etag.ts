@@ -59,13 +59,21 @@ export function withETag(
 		if (!["GET", "HEAD"].includes(req.method)) {
 			return handler(req, info, ctx);
 		}
+		const isHead = req.method === "HEAD";
 
 		// Execute the original handler
 		let result = await handler(req, info, ctx);
 
-		// Convert non-Response results to Response using Demino's helper
+		// Convert non-Response results to a Response. Use GET semantics even for a
+		// HEAD (a synthetic GET request) so the ETag is computed over the SAME bytes a
+		// GET would return — HEAD must share the GET validator, and `createResponseFrom`
+		// would otherwise empty the HEAD body and hash the empty string. The body is
+		// stripped again for HEAD at every return below.
 		if (!(result instanceof Response)) {
-			result = createResponseFrom(req, result, ctx.headers, ctx.status);
+			const convReq = isHead
+				? new Request(new URL(req.url), { method: "GET" })
+				: req;
+			result = createResponseFrom(convReq, result, ctx.headers, ctx.status);
 		}
 
 		// Only process successful responses (2xx)
@@ -88,14 +96,22 @@ export function withETag(
 
 		// Read response body (this consumes the stream)
 		const body = await result.arrayBuffer();
+
+		// Emit the terminal 200 response. HEAD carries no body but must report the
+		// Content-Length it WOULD have sent (parity with the GET it mirrors).
+		const build = (headers: Headers): Response => {
+			if (isHead) headers.set("content-length", String(body.byteLength));
+			return new Response(isHead ? null : body, {
+				status: result.status,
+				statusText: result.statusText,
+				headers,
+			});
+		};
+
 		if (body.byteLength > sizeCap) {
 			// Body is past the cap; we already consumed the stream so we have to
 			// rebuild the response from the buffered bytes, but we skip hashing.
-			return new Response(body, {
-				status: result.status,
-				statusText: result.statusText,
-				headers: result.headers,
-			});
+			return build(new Headers(result.headers));
 		}
 
 		// Generate ETag using SHA-1 hash
@@ -112,28 +128,31 @@ export function withETag(
 			// Support both single and multiple ETags in If-None-Match
 			const requestETags = ifNoneMatch.split(",").map((e) => e.trim());
 			if (requestETags.includes(etagValue) || requestETags.includes("*")) {
-				// Return 304 Not Modified
-				return new Response(null, {
-					status: 304,
-					headers: {
-						"etag": etagValue,
-						// Preserve cache-control if present
-						...(result.headers.get("cache-control")
-							? { "cache-control": result.headers.get("cache-control")! }
-							: {}),
-					},
-				});
+				// 304 Not Modified. Carry forward the caching-relevant headers a
+				// cache needs to keep a stored response valid (RFC 9110 §15.4.5),
+				// not just Cache-Control — dropping Vary in particular can cause a
+				// shared cache to serve the wrong negotiated variant.
+				const h304 = new Headers({ etag: etagValue });
+				for (
+					const name of [
+						"cache-control",
+						"vary",
+						"content-location",
+						"expires",
+						"date",
+						"content-language",
+					]
+				) {
+					const v = result.headers.get(name);
+					if (v) h304.set(name, v);
+				}
+				return new Response(null, { status: 304, headers: h304 });
 			}
 		}
 
 		// Return new response with ETag header
 		const headers = new Headers(result.headers);
 		headers.set("etag", etagValue);
-
-		return new Response(body, {
-			status: result.status,
-			statusText: result.statusText,
-			headers,
-		});
+		return build(headers);
 	};
 }
