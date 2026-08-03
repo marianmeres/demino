@@ -6,7 +6,7 @@
     "dev": "deno run --watch ./src/mod.ts",
     "test": "deno test -A",
     "test:watch": "deno test -A --watch",
-    "release": "deno run -A jsr:@marianmeres/deno-release",
+    "release": "deno run -A jsr:@marianmeres/release",
     "rp": "deno task release -y && deno publish",
     "rpm": "deno task release minor -y && deno publish"
   },
