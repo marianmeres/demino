@@ -1002,3 +1002,37 @@ Deno.serve(
 	deminoCompose([app, api, admin]),
 );
 ```
+
+### Structured (JSON) output
+
+In production the pretty output is just noise - containers ship stdout to a log collector
+that wants one JSON object per line. Pass `json` (and use `createLogListenInfo` to
+preconfigure the callback):
+
+```ts
+import { createLogListenInfo, deminoCompose } from "@marianmeres/demino";
+
+Deno.serve(
+	{
+		// `true` = always json, `"auto"` = json only when stdout is not a TTY
+		onListen: createLogListenInfo({
+			json: "auto",
+			fields: { service: "api", env: Deno.env.get("ENV") },
+		}),
+	},
+	deminoCompose([app, api, admin]),
+);
+```
+
+which emits a single line:
+
+```
+{"timestamp":"2026-09-13T10:11:12.000Z","level":"info","logger":"demino","message":"Demino listening: http://localhost:8000/","event":"server.listen","hostname":"0.0.0.0","port":8000,"url":"http://localhost:8000/","service":"api","env":"production"}
+```
+
+The field names match `@marianmeres/clog`'s `jsonOutput` defaults, so the line looks like
+the rest of your structured logs. `fields` is merged last, so it can also override any
+built-in field. Filter on `event == "server.listen"` instead of matching the message text.
+
+Unlike the human readable mode, JSON mode does not enumerate network interfaces -
+container local addresses are noise, and skipping it avoids the `--allow-sys` permission.

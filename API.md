@@ -46,6 +46,7 @@ Complete API documentation for `@marianmeres/demino`.
   - [routesCompare()](#routescompare)
 - [Utilities](#utilities)
   - [logListenInfo()](#loglisteninfo)
+  - [createLogListenInfo()](#createloglisteninfo)
   - [createDeminoClog()](#createdeminoclog)
   - [createDeminoClogFrom()](#createdeminoclogfrom)
   - [TokenBucket](#tokenbucket)
@@ -1154,11 +1155,30 @@ Sorts deeper routes first, then static before dynamic.
 ### logListenInfo()
 
 Console logging callback for `Deno.serve()`'s `onListen` option. Prints the server's
-listening URL(s) with color formatting. When bound to `0.0.0.0`, displays both `localhost`
-and all detected IPv4 network addresses.
+listening URL(s) with color formatting. When bound to `0.0.0.0` (or `::`), displays both
+`localhost` and all detected network addresses.
+
+With `{ json: true }` it instead emits a **single structured JSON line** on stdout, for
+containerized deployments where stdout is collected and shipped to a log aggregator.
 
 ```ts
-function logListenInfo(localAddr: Deno.NetAddr): void;
+function logListenInfo(
+	localAddr: Deno.NetAddr,
+	options?: LogListenInfoOptions,
+): void;
+
+interface LogListenInfoOptions {
+	/** Structured JSON line instead of the colored output.
+	 *  `"auto"` = JSON when stdout is not a TTY. Default `false`. */
+	json?: boolean | "auto";
+	/** Value of the JSON `logger` field. Default `"demino"`. */
+	namespace?: string;
+	/** Extra fields merged into the JSON object (merged last, so it can
+	 *  also override the built-ins). */
+	fields?: Record<string, unknown>;
+	/** Custom sink, called once per output line. Default `console.log`. */
+	write?: (line: string) => void;
+}
 ```
 
 **Example:**
@@ -1173,6 +1193,58 @@ Deno.serve(
 		onListen: logListenInfo,
 	},
 	deminoCompose([app]),
+);
+```
+
+**JSON output shape:**
+
+```json
+{
+	"timestamp": "2026-09-13T10:11:12.000Z",
+	"level": "info",
+	"logger": "demino",
+	"message": "Demino listening: http://localhost:8000/",
+	"event": "server.listen",
+	"hostname": "0.0.0.0",
+	"port": 8000,
+	"url": "http://localhost:8000/"
+}
+```
+
+Field names match `@marianmeres/clog`'s `jsonOutput` defaults, so the line blends in with
+the rest of the app's structured logs. Filter on `event == "server.listen"` rather than on
+the message text.
+
+Note that JSON mode does **not** enumerate network interfaces (container local addresses
+are noise, and it avoids needing the `--allow-sys` permission).
+
+---
+
+### createLogListenInfo()
+
+Creates a preconfigured [logListenInfo()](#loglisteninfo) callback, so options can be
+passed where `Deno.serve()` expects a bare `onListen` function.
+
+```ts
+function createLogListenInfo(
+	options?: LogListenInfoOptions,
+): (localAddr: Deno.NetAddr) => void;
+```
+
+**Example:**
+
+```ts
+import { createLogListenInfo } from "@marianmeres/demino";
+
+// human readable output locally, a single JSON line in docker
+Deno.serve(
+	{
+		onListen: createLogListenInfo({
+			json: "auto",
+			fields: { service: "api", env: Deno.env.get("ENV") },
+		}),
+	},
+	app,
 );
 ```
 

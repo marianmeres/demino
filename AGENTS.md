@@ -64,7 +64,7 @@ src/
 └── utils/
     ├── mod.ts                # Utils exports barrel
     ├── create-demino-clog.ts # DeminoLogger factory using @marianmeres/clog
-    ├── log-listen-info.ts    # logListenInfo() for Deno.serve onListen callback
+    ├── log-listen-info.ts    # logListenInfo()/createLogListenInfo() onListen callback
     ├── token-bucket.ts       # TokenBucket class
     ├── cookies.ts            # parseCookies, serializeCookie
     ├── sleep.ts              # Promise delay
@@ -475,6 +475,19 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 1.18.0 (additive, no breaking change)
+
+- **Structured `onListen` logging.** `logListenInfo()` takes an optional second
+  `LogListenInfoOptions` argument (`json`, `namespace`, `fields`, `write`) and the new
+  `createLogListenInfo(options)` returns a preconfigured `onListen` callback. With
+  `json: true` (or `"auto"` = JSON only when stdout is not a TTY) it emits a single JSON
+  line — `timestamp`/`level`/`logger`/`message` (clog `jsonOutput` default field names)
+  plus `event: "server.listen"`, `hostname`, `port`, `url`, and any `fields`. JSON mode
+  deliberately skips `Deno.networkInterfaces()` (container-local addresses are noise, and
+  it avoids `--allow-sys`). Human mode is unchanged and still the default; interface
+  enumeration there is now wrapped in try/catch so a missing `--allow-sys` no longer
+  throws out of `onListen`.
 
 ### 1.17.0 (additive, no breaking change)
 
