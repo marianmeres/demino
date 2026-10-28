@@ -36,18 +36,11 @@ let servePromise: Promise<ServeFn> | undefined;
  * Resolves the runtime adapter's `serve()` for the runtime the tests are
  * running on. Imported lazily so a test file never loads an adapter for a
  * runtime it is not on; resolved once per process.
- *
- * The Bun branch is added by the row that lands that adapter; until then it
- * fails loudly.
  */
 function pickServe(): Promise<ServeFn> {
 	servePromise ??= (async () => {
 		if (isDeno) return (await import("../src/adapters/deno.ts")).serve;
-		if (isBun) {
-			throw new Error(
-				"tests/_utils.ts: no runtime adapter for Bun yet - run the suite on Deno or Node",
-			);
-		}
+		if (isBun) return (await import("../src/adapters/bun.ts")).serve;
 		return (await import("../src/adapters/node.ts")).serve;
 	})();
 	return servePromise;
