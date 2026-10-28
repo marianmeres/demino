@@ -1,7 +1,8 @@
-import type { Demino } from "../demino.ts";
+import type { Demino, DeminoServeHandler, DeminoServeInfo } from "../demino.ts";
 
 /**
- * Composes multiple Demino applications into a single Deno.ServeHandler.
+ * Composes multiple Demino applications into a single serve handler
+ * (a {@linkcode DeminoServeHandler}).
  *
  * Allows organizing routes into logical groups (e.g., API, admin, public) where each
  * group has its own isolated middleware stack and mount path.
@@ -14,7 +15,7 @@ import type { Demino } from "../demino.ts";
  *
  * @param apps - Array of Demino applications to compose
  * @param notFoundHandler - Optional custom 404 handler
- * @returns Deno.ServeHandler ready to pass to Deno.serve()
+ * @returns A `DeminoServeHandler` ready to pass to `Deno.serve()` or to a runtime adapter's `serve()`
  *
  * @example Basic composition
  * ```ts
@@ -57,11 +58,8 @@ import type { Demino } from "../demino.ts";
  */
 export function deminoCompose(
 	apps: Demino[],
-	notFoundHandler?: (
-		req: Request,
-		info: Deno.ServeHandlerInfo,
-	) => Response | Promise<Response>,
-): Deno.ServeHandler {
+	notFoundHandler?: DeminoServeHandler,
+): DeminoServeHandler {
 	// in case of the same mountPaths, the later wins
 	const mounts = apps.reduce(
 		(m, a) => ({ ...m, [a.mountPath() || "/"]: a }),
@@ -71,8 +69,8 @@ export function deminoCompose(
 
 	notFoundHandler ??= () => new Response("Not Found", { status: 404 });
 
-	// return composed Deno.ServeHandler
-	return (req: Request, info: Deno.ServeHandlerInfo) => {
+	// return the composed handler
+	return (req: Request, info?: DeminoServeInfo) => {
 		const url = new URL(req.url);
 
 		// do we have a direct hit?

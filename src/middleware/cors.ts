@@ -1,5 +1,5 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoServeInfo } from "../demino.ts";
 
 /**
  * Configuration options for CORS middleware.
@@ -137,7 +137,7 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 
 	const midware: DeminoHandler = async (
 		req: Request,
-		_info: Deno.ServeHandlerInfo,
+		_info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => {
 		const requestOrigin = req.headers.get("origin") || "";

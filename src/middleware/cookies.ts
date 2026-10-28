@@ -1,4 +1,4 @@
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoServeInfo } from "../demino.ts";
 import { type CookieOptions, parseCookies, serializeCookie } from "../utils/cookies.ts";
 
 /**
@@ -60,7 +60,7 @@ export interface CookiesLocals {
 export function cookies(defaults?: CookieOptions): DeminoHandler {
 	const midware: DeminoHandler = (
 		req: Request,
-		_info: Deno.ServeHandlerInfo,
+		_info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => {
 		// Parse request cookies

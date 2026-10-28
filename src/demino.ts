@@ -96,10 +96,75 @@ export interface DeminoContext {
 }
 
 /**
- * Arguments tuple passed to every DeminoHandler (middleware and route handlers).
- * Matches Deno.ServeHandler signature with additional DeminoContext parameter.
+ * Socket peer of the current request, as the runtime adapter reports it.
+ *
+ * Deno's own `Deno.NetAddr` satisfies this shape, so a `Deno.ServeHandlerInfo`
+ * is a valid `DeminoServeInfo` with no mapping.
  */
-export type DeminoHandlerArgs = [Request, Deno.ServeHandlerInfo, DeminoContext];
+export interface DeminoRemoteAddr {
+	hostname: string;
+	port: number;
+	/** `"tcp"` on every runtime we ship an adapter for; present for Deno parity. */
+	transport?: string;
+}
+
+/** Options for {@linkcode DeminoUpgradeWebSocket}. */
+export interface DeminoUpgradeWebSocketOptions {
+	/** Subprotocol to echo in `Sec-WebSocket-Protocol` (empty/undefined = none). */
+	protocol?: string;
+	/** Idle timeout in seconds (runtime-dependent; ignored where unsupported). */
+	idleTimeout?: number;
+}
+
+/**
+ * Deno-shaped WebSocket upgrade capability, provided by a runtime adapter.
+ *
+ * Returns the server-side socket (still `CONNECTING` until the `response` has
+ * been returned from the handler) and the `101 Switching Protocols` response.
+ */
+export type DeminoUpgradeWebSocket = (
+	req: Request,
+	options?: DeminoUpgradeWebSocketOptions,
+) => { socket: WebSocket; response: Response };
+
+/**
+ * What a runtime adapter passes as the second handler argument.
+ *
+ * All fields are optional on purpose: a bare `Deno.serve(app)` provides only
+ * `remoteAddr`, and calling the app directly (e.g. in tests) may provide nothing
+ * at all. Demino normalises a missing `info` to a frozen empty object, so
+ * middleware can always write `info.remoteAddr?.hostname` without checking
+ * `info` itself.
+ */
+export interface DeminoServeInfo {
+	/** Socket peer address, if the runtime knows it. */
+	remoteAddr?: DeminoRemoteAddr;
+	/** WebSocket upgrade capability, if the runtime adapter provides one. */
+	upgradeWebSocket?: DeminoUpgradeWebSocket;
+	/**
+	 * The runtime's own per-request object (Deno `ServeHandlerInfo`, Bun `Server`,
+	 * node `IncomingMessage`). Untyped escape hatch.
+	 */
+	raw?: unknown;
+}
+
+/**
+ * The callable shape of a Demino app and of `deminoCompose()`'s result.
+ *
+ * Structurally compatible with `Deno.ServeHandler`, so it can be passed to
+ * `Deno.serve()` directly as well as to any runtime adapter's `serve()`.
+ */
+export type DeminoServeHandler = (
+	req: Request,
+	info?: DeminoServeInfo,
+) => Response | Promise<Response>;
+
+/**
+ * Arguments tuple passed to every DeminoHandler (middleware and route handlers).
+ * Matches the {@linkcode DeminoServeHandler} signature with an additional
+ * DeminoContext parameter.
+ */
+export type DeminoHandlerArgs = [Request, DeminoServeInfo, DeminoContext];
 
 /**
  * Function signature for route handlers and middlewares.
@@ -196,16 +261,20 @@ export type DeminoAppLocals = Record<string, unknown>;
 
 /**
  * The main Demino application interface.
- * Extends Deno.ServeHandler so it can be passed directly to Deno.serve().
+ *
+ * Callable as `(req, info?) => Promise<Response>` (see {@linkcode DeminoServeHandler}),
+ * so it can be passed directly to `Deno.serve()` or to a runtime adapter's `serve()`.
  *
  * @example
  * ```ts
  * const app = demino();
  * app.get("/", () => "Hello World");
- * Deno.serve(app); // Works because Demino extends Deno.ServeHandler
+ * Deno.serve(app); // Works: the call signature is compatible with Deno.ServeHandler
  * ```
  */
-export interface Demino extends Deno.ServeHandler {
+export interface Demino {
+	/** Handles one request. `info` is filled by the runtime adapter (or by `Deno.serve()`). */
+	(req: Request, info?: DeminoServeInfo): Promise<Response>;
 	/** Special case _every_ HTTP method route handler. */
 	all: DeminoRouteHandler;
 	/** HTTP CONNECT route handler */
@@ -499,6 +568,9 @@ export function createResponseFrom(
  * allocation; opaque and read-only). */
 const EMPTY_META: Readonly<Record<string, unknown>> = Object.freeze({});
 
+/** Shared stand-in for a missing second handler argument (see `DeminoServeInfo`). */
+const EMPTY_INFO: DeminoServeInfo = Object.freeze({});
+
 /**
  * Builds the effective request URL surfaced as `ctx.url`, honoring reverse-proxy
  * forwarding headers when (and only when) `trustProxy` opts in. Private on purpose
@@ -634,10 +706,10 @@ function resolveForwardedAuthority(
  */
 function resolveClientIp(
 	req: Request,
-	info: Deno.ServeHandlerInfo,
+	info: DeminoServeInfo,
 	trustProxy: DeminoOptions["trustProxy"],
 ): string {
-	const socketIp = (info?.remoteAddr as Deno.NetAddr)?.hostname ?? "";
+	const socketIp = info.remoteAddr?.hostname ?? "";
 	if (!trustProxy) return socketIp;
 	const fromHeaders = requestIp.getClientIp({
 		headers: Object.fromEntries(req.headers), // requestIp needs plain object
@@ -741,7 +813,8 @@ export interface DeminoOptions {
 /**
  * Creates a new Demino application instance.
  *
- * The Demino app is a valid Deno.ServeHandler that can be passed directly to Deno.serve().
+ * The Demino app is a plain `(req, info?) => Promise<Response>` handler that can be passed
+ * directly to Deno.serve() or to a runtime adapter's `serve()`.
  * It provides routing, middleware support, error handling, and logging capabilities.
  *
  * @param mountPath - Optional base path for all routes (default: ""). Must start with "/" if not empty.
@@ -876,7 +949,7 @@ export function demino(
 	//
 	const _createErrorResponse = async (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		context: DeminoContext,
 	): Promise<Response> => {
 		let handlerResult: unknown;
@@ -959,7 +1032,10 @@ export function demino(
 	};
 
 	//
-	const _app: Demino = async (req: Request, info: Deno.ServeHandlerInfo) => {
+	const _app: Demino = async (req: Request, rawInfo?: DeminoServeInfo) => {
+		// Normalise once: middleware and handlers always receive an object, so
+		// `info.remoteAddr?.hostname` needs no null check on `info` itself.
+		const info: DeminoServeInfo = rawInfo ?? EMPTY_INFO;
 		// make sure it's uppercase (internally we're keeping the uppercase version)
 		const method: "ALL" | DeminoMethod = req.method.toUpperCase() as
 			| "ALL"
@@ -1098,7 +1174,7 @@ export function demino(
 
 					// The core Demino business - execute all middlewares...
 					// The intended convenient practice is actually NOT to return the Response
-					// instance directly (unlike with Deno.ServeHandler)
+					// instance directly (unlike with a bare serve handler)
 					let result = await midware.execute([req, info, context]);
 
 					//

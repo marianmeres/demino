@@ -17,9 +17,7 @@ function captureLog(fn: () => void): string[] {
 }
 
 Deno.test("logListenInfo: IPv6 literal host is bracketed in the URL", () => {
-	const logs = captureLog(() =>
-		logListenInfo({ hostname: "::1", port: 8000, transport: "tcp" } as Deno.NetAddr)
-	);
+	const logs = captureLog(() => logListenInfo({ hostname: "::1", port: 8000 }));
 	assert(
 		logs.some((l) => l.includes("[::1]:8000")),
 		`expected a bracketed IPv6 URL, got:\n${logs.join("\n")}`,
@@ -32,9 +30,7 @@ Deno.test("logListenInfo: IPv6 literal host is bracketed in the URL", () => {
 });
 
 Deno.test("logListenInfo: '::' is treated as all-interfaces (lists localhost)", () => {
-	const logs = captureLog(() =>
-		logListenInfo({ hostname: "::", port: 9000, transport: "tcp" } as Deno.NetAddr)
-	);
+	const logs = captureLog(() => logListenInfo({ hostname: "::", port: 9000 }));
 	assert(
 		logs.some((l) => l.includes("localhost:9000")),
 		`expected localhost to be listed for '::', got:\n${logs.join("\n")}`,
@@ -43,7 +39,7 @@ Deno.test("logListenInfo: '::' is treated as all-interfaces (lists localhost)", 
 
 Deno.test("logListenInfo: json mode emits a single parsable JSON line", () => {
 	const lines: string[] = [];
-	logListenInfo({ hostname: "0.0.0.0", port: 8000, transport: "tcp" } as Deno.NetAddr, {
+	logListenInfo({ hostname: "0.0.0.0", port: 8000 }, {
 		json: true,
 		write: (l) => lines.push(l),
 	});
@@ -68,7 +64,7 @@ Deno.test("logListenInfo: json mode emits a single parsable JSON line", () => {
 
 Deno.test("logListenInfo: json mode brackets IPv6 and honors namespace + fields", () => {
 	const lines: string[] = [];
-	logListenInfo({ hostname: "::1", port: 9000, transport: "tcp" } as Deno.NetAddr, {
+	logListenInfo({ hostname: "::1", port: 9000 }, {
 		json: true,
 		namespace: "my-api",
 		fields: { service: "api", level: "debug" },
@@ -86,7 +82,7 @@ Deno.test("logListenInfo: json mode brackets IPv6 and honors namespace + fields"
 Deno.test("logListenInfo: default (no options) stays human readable", () => {
 	const logs = captureLog(() =>
 		logListenInfo(
-			{ hostname: "127.0.0.1", port: 8000, transport: "tcp" } as Deno.NetAddr,
+			{ hostname: "127.0.0.1", port: 8000 },
 		)
 	);
 	assert(
@@ -102,7 +98,7 @@ Deno.test("logListenInfo: default (no options) stays human readable", () => {
 Deno.test("logListenInfo: custom write sink gets plain (unstyled) human lines", () => {
 	const lines: string[] = [];
 	logListenInfo(
-		{ hostname: "127.0.0.1", port: 8000, transport: "tcp" } as Deno.NetAddr,
+		{ hostname: "127.0.0.1", port: 8000 },
 		{
 			write: (l) => lines.push(l),
 		},
@@ -120,6 +116,6 @@ Deno.test("logListenInfo: custom write sink gets plain (unstyled) human lines", 
 Deno.test("createLogListenInfo: returns a preconfigured onListen callback", () => {
 	const lines: string[] = [];
 	const onListen = createLogListenInfo({ json: true, write: (l) => lines.push(l) });
-	onListen({ hostname: "0.0.0.0", port: 3000, transport: "tcp" } as Deno.NetAddr);
+	onListen({ hostname: "0.0.0.0", port: 3000 });
 	assertEquals(JSON.parse(lines[0]).port, 3000);
 });

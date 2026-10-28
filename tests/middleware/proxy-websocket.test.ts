@@ -191,7 +191,7 @@ runTestServerTests([
 		fn: async ({ app, srv }) => {
 			// held-open TCP listener: accepts but never answers -> handshake timeout
 			const silent = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-			const silentPort = (silent.addr as Deno.NetAddr).port;
+			const silentPort = silent.addr.port;
 			const held: Deno.Conn[] = [];
 			const acceptLoop = (async () => {
 				try {

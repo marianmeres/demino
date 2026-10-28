@@ -5,6 +5,7 @@ import {
 	demino,
 	type DeminoAppLocals,
 	type DeminoOptions,
+	type DeminoServeHandler,
 } from "../src/demino.ts";
 import { createHttpApi } from "@marianmeres/http-utils";
 
@@ -13,13 +14,13 @@ const hostname = "127.0.0.1";
 // Helper to find available port
 function getAvailablePort(): number {
 	const listener = Deno.listen({ hostname, port: 0 });
-	const port = (listener.addr as Deno.NetAddr).port;
+	const port = listener.addr.port;
 	listener.close();
 	return port;
 }
 
 /** Start test server with custom return data suitable for testing */
-export async function startTestServer(handler: Deno.ServeHandler) {
+export async function startTestServer(handler: DeminoServeHandler) {
 	const port = getAvailablePort();
 	const ac = new AbortController();
 	// By default `Deno.serve` prints the message ... If you like to

@@ -1,5 +1,10 @@
 import { HTTP_ERROR } from "@marianmeres/http-utils";
-import type { DeminoContext, DeminoHandler, DeminoLogger } from "../demino.ts";
+import type {
+	DeminoContext,
+	DeminoHandler,
+	DeminoLogger,
+	DeminoServeInfo,
+} from "../demino.ts";
 import { TokenBucket } from "../mod.ts";
 
 /**
@@ -36,7 +41,7 @@ export interface RateLimitOptions {
 	 */
 	getConsumeSize: (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => number | Promise<number>;
 }
@@ -102,7 +107,7 @@ export interface RateLimitOptions {
 export function rateLimit(
 	getClientId: (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => unknown | Promise<unknown>,
 	options?: Partial<RateLimitOptions>,
@@ -139,7 +144,7 @@ export function rateLimit(
 
 	return async (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => {
 		const logger = ctx.getLogger();

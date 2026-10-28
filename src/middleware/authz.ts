@@ -4,6 +4,7 @@ import {
 	type DeminoContext,
 	type DeminoHandler,
 	type DeminoMethod,
+	type DeminoServeInfo,
 	withMeta,
 } from "../demino.ts";
 
@@ -75,7 +76,7 @@ export interface AuthzOptions {
 	 */
 	resolveSubject?: (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => unknown | Promise<unknown>;
 	/**
@@ -134,7 +135,7 @@ export function authz(options: AuthzOptions): DeminoHandler {
 
 	const gate: DeminoHandler = async (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => {
 		// CORS preflight — never gated. Scope strictly to a genuine preflight (it

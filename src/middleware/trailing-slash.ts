@@ -1,5 +1,5 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoServeInfo } from "../demino.ts";
 
 /**
  * Creates a middleware that enforces trailing slash policy with 301 redirects.
@@ -47,7 +47,7 @@ export function trailingSlash(
 ): DeminoHandler {
 	const midware: DeminoHandler = (
 		req: Request,
-		_i: Deno.ServeHandlerInfo,
+		_i: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => {
 		// Mutable copy of the effective request URL — never mutate the shared

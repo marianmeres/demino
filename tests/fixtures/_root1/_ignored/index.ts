@@ -1,8 +1,12 @@
-import type { DeminoContext, DeminoHandler } from "../../../../src/demino.ts";
+import type {
+	DeminoContext,
+	DeminoHandler,
+	DeminoServeInfo,
+} from "../../../../src/demino.ts";
 
 export function GET(
 	_req: Request,
-	_info: Deno.ServeHandlerInfo,
+	_info: DeminoServeInfo,
 	_ctx: DeminoContext,
 ) {
 	return "I will not be matched";

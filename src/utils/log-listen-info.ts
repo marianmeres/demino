@@ -1,4 +1,15 @@
 /**
+ * What a server's `onListen` callback receives: the bound address.
+ *
+ * Deno's own `Deno.NetAddr` satisfies it, so `logListenInfo` can still be passed
+ * straight to `Deno.serve({ onListen })`; runtime adapters pass exactly this shape.
+ */
+export interface DeminoListenAddr {
+	hostname: string;
+	port: number;
+}
+
+/**
  * Options for {@linkcode logListenInfo} and {@linkcode createLogListenInfo}.
  */
 export interface LogListenInfoOptions {
@@ -115,9 +126,9 @@ function useJson(json: LogListenInfoOptions["json"]): boolean {
  * ```
  */
 export function logListenInfo(
-	localAddr: Deno.NetAddr,
+	localAddr: DeminoListenAddr,
 	options?: LogListenInfoOptions,
-) {
+): void {
 	const { hostname, port } = localAddr;
 	const protocol = "http";
 
@@ -207,6 +218,6 @@ export function logListenInfo(
  */
 export function createLogListenInfo(
 	options?: LogListenInfoOptions,
-): (localAddr: Deno.NetAddr) => void {
-	return (localAddr: Deno.NetAddr) => logListenInfo(localAddr, options);
+): (localAddr: DeminoListenAddr) => void {
+	return (localAddr: DeminoListenAddr) => logListenInfo(localAddr, options);
 }

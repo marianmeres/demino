@@ -1,4 +1,4 @@
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoServeInfo } from "../demino.ts";
 
 /**
  * Creates a redirect middleware that redirects requests to a different URL.
@@ -39,7 +39,7 @@ export function redirect(
 	url: string | URL,
 	status: 301 | 302 | 303 | 307 | 308 = 302,
 ): DeminoHandler {
-	return (_req: Request, _info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
+	return (_req: Request, _info: DeminoServeInfo, ctx: DeminoContext) => {
 		// Resolve the target against the effective request URL — only to NORMALIZE
 		// (e.g. "foo" -> "/base/foo") and to classify same- vs cross-origin. We
 		// never emit the resolved scheme/host for a same-origin target.

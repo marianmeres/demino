@@ -1,5 +1,5 @@
 import { createHttpError, HTTP_ERROR } from "@marianmeres/http-utils";
-import type { DeminoContext, DeminoHandler } from "../demino.ts";
+import type { DeminoContext, DeminoHandler, DeminoServeInfo } from "../demino.ts";
 
 /**
  * Configuration options for the body limit middleware.
@@ -79,7 +79,7 @@ export function bodyLimit(options: BodyLimitOptions): DeminoHandler {
 
 	const midware: DeminoHandler = (
 		req: Request,
-		_info: Deno.ServeHandlerInfo,
+		_info: DeminoServeInfo,
 		_ctx: DeminoContext,
 	) => {
 		// No body (GET/HEAD/empty POST) → nothing to limit.
