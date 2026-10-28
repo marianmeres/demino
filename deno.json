@@ -23,8 +23,10 @@
     "npm:build": "deno run -A scripts/build-npm.ts",
     "npm:smoke": "deno task npm:build && node scripts/smoke-npm.mjs",
     "npm:publish": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public",
+    "npm:publish:next": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public --tag next",
     "release": "deno run -A jsr:@marianmeres/release",
     "publish": "deno publish && deno task npm:publish",
+    "publish:next": "deno publish && deno task npm:publish:next",
     "rp": "deno task release -y && deno task publish",
     "rpm": "deno task release minor -y && deno task publish"
   },

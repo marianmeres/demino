@@ -6,7 +6,7 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino) + npm (dual-published via `@marianmeres/npmbuild`)
-- **Version**: 2.0.0 (this branch; `deno.json` keeps the last 1.x number until the release task bumps it)
+- **Version**: 2.0.0
 - **Runtime**: web standards + the `node:*` subset — Deno and Node (≥ 22) through runtime adapters;
   Bun is not supported (plain HTTP works under `Bun.serve({ fetch: app })`, untested)
 - **Type**: Web server framework
@@ -403,6 +403,7 @@ deno task npm:build       # Build the npm package into .npm-dist/
 deno task npm:smoke       # Build + install into a temp project + import every subpath (Node)
 deno task release         # Bump version (release tooling)
 deno task publish         # deno publish + npm publish of .npm-dist/
+deno task publish:next    # same, npm under the `next` dist-tag (prereleases, e.g. 2.0.0-rc.1)
 ```
 
 ## Special Behaviors

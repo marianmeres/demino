@@ -16,7 +16,9 @@
  *  - the `deno.json` exports map is the documented one (`.`, the two adapters,
  *    the four barrels), every subpath a flat shim `src/<name>.ts` - the rule the
  *    npm build derives its entry points from - and each barrel shim re-exports
- *    exactly its directory barrel.
+ *    exactly its directory barrel;
+ *  - a prerelease goes to npm under the `next` dist-tag (`publish:next`), never
+ *    `latest` - the final `publish` keeps npm's default tag.
  *
  * Runs the same on Deno and Node (`node:test`).
  */
@@ -67,6 +69,7 @@ interface DenoJson {
 	exports?: string | Record<string, string>;
 	nodeModulesDir?: string;
 	imports?: Record<string, string>;
+	tasks?: Record<string, string>;
 }
 
 interface DenoImport {
@@ -218,4 +221,20 @@ test("manifest-sync: barrel shims re-export exactly their directory barrel", () 
 			`src/${name}.ts and src/${name}/mod.ts export different names`,
 		);
 	}
+});
+
+// ---------------------------------------------------------------------------
+// publish tasks
+// ---------------------------------------------------------------------------
+
+test("manifest-sync: publish:next sends npm the next dist-tag, publish does not", () => {
+	const tasks = deno.tasks ?? {};
+	assert.match(tasks["npm:publish:next"] ?? "", /npm publish .*--tag next\b/);
+	assert.match(
+		tasks["publish:next"] ?? "",
+		/^deno publish && deno task npm:publish:next$/,
+	);
+	assert.match(tasks["npm:publish"] ?? "", /npm publish /);
+	assert.doesNotMatch(tasks["npm:publish"] ?? "", /--tag\b/);
+	assert.match(tasks["publish"] ?? "", /^deno publish && deno task npm:publish$/);
 });
