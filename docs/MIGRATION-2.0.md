@@ -180,7 +180,8 @@ proxy path and the app logger warns once:
 ```
 
 Start the app through the adapter's `serve()` ([item 2](#2-demino-no-longer-extends-denoservehandler)).
-On Node also install `ws` ([item 8](#8-dependencies)).
+On Node also install `ws` ([item 8](#8-dependencies)); if the loaded `ws` is not the real
+package (a runtime substitute), upgrades are disabled with one warning.
 
 ## 7. Bun is not a supported runtime
 

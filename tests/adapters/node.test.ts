@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createConnection } from "node:net";
 import type { IncomingMessage } from "node:http";
+import { WebSocketServer } from "ws";
 import { demino, type DeminoServeInfo } from "../../src/demino.ts";
-import { serve } from "../../src/adapters/node.ts";
+import { serve, wsEngineUsable } from "../../src/adapters/node.ts";
 import { serve as serveViaShim } from "../../src/node.ts";
 import type { ServeHandle } from "../../src/adapters/types.ts";
 
@@ -721,6 +722,20 @@ test("node adapter: webSockets: false leaves the capability undefined", async ()
 	} finally {
 		await srv.shutdown();
 	}
+});
+
+test("node adapter: wsEngineUsable accepts only an engine whose sockets can be paused", () => {
+	// a substitute `ws` (seen: `options.WebSocket` is null) or anything not shaped like the package
+	assert.equal(wsEngineUsable({}), false);
+	assert.equal(wsEngineUsable({ options: {} }), false);
+	assert.equal(wsEngineUsable({ options: { WebSocket: null } }), false);
+	assert.equal(wsEngineUsable({ options: { WebSocket: class {} } }), false);
+	class Pausable {
+		pause() {}
+	}
+	assert.equal(wsEngineUsable({ options: { WebSocket: Pausable } }), true);
+	// the real package, constructed the way serve() does
+	assert.equal(wsEngineUsable(new WebSocketServer({ noServer: true })), true);
 });
 
 // ---------------------------------------------------------------------------

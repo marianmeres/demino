@@ -10,12 +10,13 @@
  * {@linkcode ServeHandle}.
  *
  * WebSocket upgrades ride on the optional `ws` package, imported lazily at
- * `serve()` time. When it is missing (or `webSockets: false` is passed) the
- * `info.upgradeWebSocket` capability is simply absent and consumers fall back
- * to plain HTTP (the proxy middleware warns once). Node emits `'upgrade'`
- * instead of `'request'` for upgrade requests, so the adapter runs the same
- * handler from both events; a non-101 answer to an upgrade request is
- * serialised onto the hijacked socket by hand.
+ * `serve()` time. When it is missing, when the module loaded under that name is
+ * not the real package (see {@linkcode wsEngineUsable}), or when
+ * `webSockets: false` is passed, the `info.upgradeWebSocket` capability is
+ * simply absent and consumers fall back to plain HTTP (the proxy middleware
+ * warns once). Node emits `'upgrade'` instead of `'request'` for upgrade
+ * requests, so the adapter runs the same handler from both events; a non-101
+ * answer to an upgrade request is serialised onto the hijacked socket by hand.
  *
  * Scheme is always `http:` - TLS termination is the reverse proxy's job.
  * HTTP/2 is out of scope.
@@ -78,6 +79,8 @@ interface WsSocket {
 
 interface WsServer {
 	readonly clients: Set<WsSocket>;
+	/** The constructor options as `ws` keeps them; `WebSocket` is the socket class it instantiates. */
+	readonly options?: { WebSocket?: { prototype?: { pause?: unknown } } | null };
 	/** Synchronous (no `verifyClient` is configured): the callback runs before this returns. */
 	handleUpgrade(
 		req: IncomingMessage,
@@ -96,6 +99,7 @@ interface WsModule {
 }
 
 let warnedNoWs = false;
+let warnedWsEngine = false;
 
 /**
  * Lazily imports the optional `ws` package. On failure warns once per process
@@ -116,6 +120,18 @@ async function loadWs(): Promise<WsModule | undefined> {
 		}
 		return undefined;
 	}
+}
+
+/**
+ * Is `wss` the `ws` package this adapter drives? A runtime may substitute its
+ * own module for `import("ws")`; the adapter holds frames until the handler has
+ * returned the 101, so its server sockets must support `pause()`. Real `ws`
+ * exposes that socket class as `options.WebSocket`.
+ *
+ * Adapter-internal (not exported from the package root).
+ */
+export function wsEngineUsable(wss: Pick<WsServer, "options">): boolean {
+	return typeof wss.options?.WebSocket?.prototype?.pause === "function";
 }
 
 /** `Sec-WebSocket-Key`: 16 random bytes, base64 (same check `ws` applies). */
@@ -361,7 +377,8 @@ function defaultOnError(error: unknown): Response {
  *
  * Defaults follow `Deno.serve`: `0.0.0.0:8000`, `onListen` prints the listen
  * info (see `logListenInfo`). `info.upgradeWebSocket` is provided through the
- * optional `ws` package unless `webSockets: false`.
+ * optional `ws` package unless `webSockets: false` (or the loaded `ws` is not
+ * usable, see {@linkcode wsEngineUsable}).
  *
  * @param handler - The app or composed handler
  * @param options - Listen options (see {@linkcode ServeOptions})
@@ -386,6 +403,19 @@ export const serve: ServeFn = async (
 				noServer: true,
 				handleProtocols: () => pendingProtocol ?? false,
 			});
+			// a substitute engine would fail only after its 101 is on the wire:
+			// refuse it up front, same outcome as `webSockets: false`
+			if (!wsEngineUsable(wss)) {
+				wss = undefined;
+				if (!warnedWsEngine) {
+					warnedWsEngine = true;
+					console.warn(
+						"@marianmeres/demino/node: WebSocket upgrades are disabled - the " +
+							'"ws" module loaded in this runtime is not the ws package ' +
+							"(its server sockets cannot be paused)",
+					);
+				}
+			}
 		}
 	}
 

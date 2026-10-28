@@ -571,7 +571,8 @@ Defaults mirror Deno's built-in server on every runtime (so a Node server also b
 `0.0.0.0:8000`, not Node's dual-stack `::`). `onError` is a last resort: a Demino app never throws (its error
 handler answers), so this only sees the adapter's own failures. On Node, when `ws` cannot be
 loaded the adapter warns once and serves HTTP only; `webSockets: false` skips the import and the
-warning.
+warning. If the loaded `ws` is not the real package (a runtime substitute), upgrades are disabled
+with one warning, as if `webSockets: false` had been passed.
 
 ---
 
