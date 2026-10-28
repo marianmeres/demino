@@ -991,6 +991,54 @@ Named events can be sent using the `event:` field:
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
 
+## Breaking changes (2.0.0)
+
+Demino 2.0 decouples the core from Deno: web standards plus `node:*` inside, runtime
+adapters (`@marianmeres/demino/deno`, `/node`, `/bun`) to start the server, published to JSR
+**and** npm. Routing, middlewares, context, error handling and composition are untouched. The
+complete list with before/after snippets is in
+[docs/MIGRATION-2.0.md](docs/MIGRATION-2.0.md); for a typical Deno app the migration is one
+`sed` and a look at your `app.static` options.
+
+### `Deno.ServeHandlerInfo` → `DeminoServeInfo`
+
+The handler's second argument is typed `DeminoServeInfo` (`remoteAddr?`,
+`upgradeWebSocket?`, `raw?`) - type-only, Deno's own info object satisfies it. Rename the
+annotations and add the import where a file now names the type (or drop the annotations,
+inline handlers are inferred):
+
+```sh
+# macOS (BSD sed); on Linux use `sed -i` without the ''
+grep -rl 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
+```
+
+### `Demino` no longer extends `Deno.ServeHandler`
+
+Structural compatibility is kept, so `Deno.serve(app)` compiles and runs; `info` then carries
+`remoteAddr` only. Prefer `serve()` from an adapter ([Runtimes](#runtimes)) for WebSocket
+tunneling through `proxy()` and for `ctx.ip` on Bun (a bare `Bun.serve({ fetch: app })`
+leaves it empty).
+
+### `app.static` options are `DeminoStaticOptions`
+
+Own `serveStatic()` on `node:fs` replaces `@std/http`'s `serveDir`. Kept: `showIndex`,
+`showDotfiles`; `headers` is now `HeadersInit` or a per-request function; `etagAlgorithm`
+became `etag: boolean`. Removed: `enableCors` (mount `cors()` on the route), `quiet`,
+`showDirListing`. `ETag` values change once; static 301s send a relative `Location`. See
+[Serving static files](#serving-static-files).
+
+### Smaller changes
+
+- `deminoFileBased` with a missing root throws a plain `Error` with `code: "ENOENT"` and
+  `name: "NotFound"` (was `Deno.errors.NotFound`) - match on `code`.
+- `logListenInfo(addr)` takes `{ hostname, port }` (`DeminoListenAddr`, was `Deno.NetAddr`);
+  Deno's `onListen` argument still satisfies it.
+- Dependencies: `@std/*` and `request-ip` removed, `mrmime` added, `ws` an optional peer for
+  WebSocket upgrades on Node. The client-IP header precedence behind `trustProxy` is unchanged
+  (the never-matching RFC 7239 `Forwarded` aside) and exported as `getClientIpFromHeaders()`.
+- Exports: `.`, `./deno`, `./node`, `./bun`, `./middleware`, `./misc`, `./router`, `./utils`;
+  the npm package needs Node 22+.
+
 ## Breaking changes (1.15.0)
 
 ### `ctx.ip` is now gated by `trustProxy`

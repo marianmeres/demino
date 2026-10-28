@@ -725,6 +725,7 @@ const app2 = demino("", [], {
 - **Runtime decoupling.** `src/` is web standards + `node:*` only; servers start through the
   runtime adapters (`@marianmeres/demino/deno`, `/node`, `/bun`). Published to JSR **and**
   npm (Node ≥ 22). Every forced consumer edit is sed-able (type renames).
+  Consumer guide: [docs/MIGRATION-2.0.md](./docs/MIGRATION-2.0.md).
 - **Handler info type:** `Deno.ServeHandlerInfo` → `DeminoServeInfo` (type-only;
   `remoteAddr?`, `upgradeWebSocket?`, `raw?`). `Demino` no longer extends
   `Deno.ServeHandler` but stays structurally compatible: `Deno.serve(app)` compiles and runs
@@ -802,6 +803,8 @@ For deeper context, consult:
 - [Conventions](./docs/conventions.md) — Code style, portability rule, testing
 - [Tasks](./docs/tasks.md) — Step-by-step procedures (running on each runtime, adding an
   adapter / dependency / middleware, verifying a change)
+- [Migrating to 2.0](./docs/MIGRATION-2.0.md) — consumer-facing: every observable 2.0.0 change
+  with before/after snippets and the `sed` recipe
 - [Reverse proxies and `X-Forwarded-*` spoofing](./docs/reverse-proxy-and-forwarded-headers.md)
   — threat model behind `trustProxy`, `ctx.url`, and `ctx.ip` gating
 
