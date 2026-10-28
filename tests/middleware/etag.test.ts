@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { withETag } from "../../src/middleware/etag.ts";
 import { runTestServerTests } from "../_utils.ts";
 
@@ -12,12 +12,12 @@ runTestServerTests([
 			const g = await fetch(`${base}/d`);
 			await g.text();
 			const gEtag = g.headers.get("etag");
-			assertEquals(typeof gEtag, "string");
+			assert.equal(typeof gEtag, "string");
 
 			const h = await fetch(`${base}/d`, { method: "HEAD" });
 			await h.text();
 			// HEAD must return the SAME ETag as GET (not the empty-body hash)
-			assertEquals(h.headers.get("etag"), gEtag);
+			assert.equal(h.headers.get("etag"), gEtag);
 
 			// a conditional HEAD carrying the GET validator must 304
 			const cond = await fetch(`${base}/d`, {
@@ -25,7 +25,7 @@ runTestServerTests([
 				headers: { "if-none-match": gEtag! },
 			});
 			await cond.text();
-			assertEquals(cond.status, 304);
+			assert.equal(cond.status, 304);
 		},
 	},
 	{
@@ -42,7 +42,7 @@ runTestServerTests([
 				headers: { "if-none-match": `W/${strong}` },
 			});
 			await r.text();
-			assertEquals(r.status, 304);
+			assert.equal(r.status, 304);
 		},
 	},
 	{
@@ -63,11 +63,11 @@ runTestServerTests([
 
 			const c = await fetch(`${base}/v`, { headers: { "if-none-match": etag } });
 			await c.text();
-			assertEquals(c.status, 304);
+			assert.equal(c.status, 304);
 			// Vary must survive onto the 304 (else a shared cache can serve the wrong
 			// negotiated variant); Cache-Control too.
-			assertEquals(c.headers.get("vary"), "Accept-Encoding");
-			assertEquals(c.headers.get("cache-control"), "max-age=60");
+			assert.equal(c.headers.get("vary"), "Accept-Encoding");
+			assert.equal(c.headers.get("cache-control"), "max-age=60");
 		},
 	},
 	{
@@ -80,22 +80,22 @@ runTestServerTests([
 
 			// First request - should get 200 with ETag
 			const res1 = await fetch(`${base}/data`);
-			assertEquals(res1.status, 200);
+			assert.equal(res1.status, 200);
 			const etag = res1.headers.get("etag");
-			assertEquals(typeof etag, "string");
-			assertEquals(etag?.startsWith('"'), true); // Strong ETag
-			assertEquals(etag?.endsWith('"'), true);
+			assert.equal(typeof etag, "string");
+			assert.equal(etag?.startsWith('"'), true); // Strong ETag
+			assert.equal(etag?.endsWith('"'), true);
 			const body1 = await res1.json();
-			assertEquals(body1, { message: "hello world" });
+			assert.deepEqual(body1, { message: "hello world" });
 
 			// Second request with If-None-Match - should get 304
 			const res2 = await fetch(`${base}/data`, {
 				headers: { "If-None-Match": etag! },
 			});
-			assertEquals(res2.status, 304);
-			assertEquals(res2.headers.get("etag"), etag);
+			assert.equal(res2.status, 304);
+			assert.equal(res2.headers.get("etag"), etag);
 			const body2 = await res2.text();
-			assertEquals(body2, ""); // Empty body for 304
+			assert.equal(body2, ""); // Empty body for 304
 		},
 	},
 	{
@@ -108,9 +108,9 @@ runTestServerTests([
 
 			const res = await fetch(`${base}/data`);
 			await res.text(); // Consume body
-			assertEquals(res.status, 200);
+			assert.equal(res.status, 200);
 			const etag = res.headers.get("etag");
-			assertEquals(etag?.startsWith('W/"'), true); // Weak ETag
+			assert.equal(etag?.startsWith('W/"'), true); // Weak ETag
 		},
 	},
 	{
@@ -125,8 +125,8 @@ runTestServerTests([
 				method: "POST",
 			});
 			await res.text(); // Consume body
-			assertEquals(res.status, 200);
-			assertEquals(res.headers.has("etag"), false); // No ETag for POST
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.has("etag"), false); // No ETag for POST
 		},
 	},
 	{
@@ -143,8 +143,8 @@ runTestServerTests([
 
 			const res = await fetch(`${base}/data`);
 			await res.text(); // Consume body
-			assertEquals(res.status, 200);
-			assertEquals(res.headers.get("etag"), '"custom-etag"'); // Preserves custom
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.get("etag"), '"custom-etag"'); // Preserves custom
 		},
 	},
 	{
@@ -155,9 +155,9 @@ runTestServerTests([
 
 			const res = await fetch(`${base}/big`);
 			const body = await res.text();
-			assertEquals(res.status, 200);
-			assertEquals(res.headers.has("etag"), false);
-			assertEquals(body, big);
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.has("etag"), false);
+			assert.equal(body, big);
 		},
 	},
 	{
@@ -177,8 +177,8 @@ runTestServerTests([
 
 			const res = await fetch(`${base}/big-cl`);
 			await res.text();
-			assertEquals(res.status, 200);
-			assertEquals(res.headers.has("etag"), false);
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.has("etag"), false);
 		},
 	},
 	{
@@ -201,7 +201,7 @@ runTestServerTests([
 				},
 			});
 			await res2.text(); // Consume body (will be empty for 304)
-			assertEquals(res2.status, 304); // Should match
+			assert.equal(res2.status, 304); // Should match
 		},
 	},
 ]);

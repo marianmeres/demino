@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -21,7 +21,7 @@ runTestServerTests([
 				headers: { "x-demino-proxy-hops": "32" },
 			});
 			await looped.text();
-			assertEquals(looped.status, 500);
+			assert.equal(looped.status, 500);
 		},
 	},
 	{
@@ -50,8 +50,11 @@ runTestServerTests([
 
 			const r = await fetch(`${base}/x-evil`);
 			const text = await r.text();
-			assertEquals(r.status, 500);
-			assert(!text.includes("SECRET"), "internal resource must not be reachable");
+			assert.equal(r.status, 500);
+			assert.ok(
+				!text.includes("SECRET"),
+				"internal resource must not be reachable",
+			);
 		},
 	},
 	{

@@ -1,5 +1,5 @@
 import { sleep } from "@marianmeres/midware";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -149,8 +149,8 @@ runTestServerTests([
 
 			const resp = await fetch(`${base}/with-headers`);
 			const data = await resp.json();
-			assertEquals(data.apiKey, "secret123");
-			assertEquals(data.custom, "value");
+			assert.equal(data.apiKey, "secret123");
+			assert.equal(data.custom, "value");
 		},
 	},
 	{
@@ -198,8 +198,8 @@ runTestServerTests([
 			);
 
 			const resp = await fetch(`${base}/transform-response-headers`);
-			assertEquals(resp.headers.get("x-transformed"), "yes");
-			assertEquals(resp.headers.get("x-original"), null);
+			assert.equal(resp.headers.get("x-transformed"), "yes");
+			assert.equal(resp.headers.get("x-original"), null);
 			await resp.text(); // Consume body to avoid leak
 		},
 	},
@@ -235,8 +235,8 @@ runTestServerTests([
 
 			const resp = await fetch(`${base}/transform-body`);
 			const data = await resp.json();
-			assertEquals(data.message, "hello");
-			assertEquals(data.transformed, true);
+			assert.equal(data.message, "hello");
+			assert.equal(data.transformed, true);
 		},
 	},
 	{
@@ -259,9 +259,9 @@ runTestServerTests([
 			);
 
 			const resp = await fetch(`${base}/custom-error`);
-			assertEquals(resp.status, 502);
+			assert.equal(resp.status, 502);
 			const data = await resp.json();
-			assertEquals(data.error.startsWith("Custom error:"), true);
+			assert.equal(data.error.startsWith("Custom error:"), true);
 		},
 		// only: true,
 	},
@@ -298,11 +298,11 @@ runTestServerTests([
 
 			const resp = await fetch(`${base}/check-forwarded`);
 			const data = await resp.json();
-			assertEquals(typeof data.host, "string");
-			assertEquals(typeof data.proto, "string");
-			assertEquals(typeof data.port, "string");
-			assertEquals(typeof data.for, "string");
-			assertEquals(typeof data.realIp, "string");
+			assert.equal(typeof data.host, "string");
+			assert.equal(typeof data.proto, "string");
+			assert.equal(typeof data.port, "string");
+			assert.equal(typeof data.for, "string");
+			assert.equal(typeof data.realIp, "string");
 		},
 	},
 	{
@@ -329,7 +329,7 @@ runTestServerTests([
 			const data = await resp.json();
 			// user-agent should be removed - the fetch API may add a default user-agent
 			// so we just verify it's not our custom one
-			assertEquals(data["user-agent"] !== "custom-agent", true);
+			assert.equal(data["user-agent"] !== "custom-agent", true);
 		},
 	},
 ]);

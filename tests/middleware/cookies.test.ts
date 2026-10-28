@@ -1,125 +1,124 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { parseCookies, serializeCookie } from "../../src/utils/cookies.ts";
 import { cookies, type CookiesLocals } from "../../src/middleware/cookies.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
-Deno.test("serializeCookie - rejects illegal path/domain (attribute / CRLF injection)", () => {
+test("serializeCookie - rejects illegal path/domain (attribute / CRLF injection)", () => {
 	// CRLF would forge a second Set-Cookie header
-	assertThrows(
+	assert.throws(
 		() => serializeCookie("s", "v", { path: "/x\r\nSet-Cookie: admin=1" }),
-		TypeError,
-		"path",
+		{ name: "TypeError", message: /path/ },
 	);
 	// ";" would inject extra cookie attributes
-	assertThrows(
+	assert.throws(
 		() => serializeCookie("s", "v", { path: "/x; HttpOnly" }),
 		TypeError,
 	);
-	assertThrows(
+	assert.throws(
 		() => serializeCookie("s", "v", { domain: "e.com\r\nX-Evil: y" }),
-		TypeError,
-		"domain",
+		{ name: "TypeError", message: /domain/ },
 	);
 	// legitimate values are unaffected
-	assertEquals(
+	assert.equal(
 		serializeCookie("s", "v", { path: "/", domain: "example.com" }),
 		"s=v; Path=/; Domain=example.com",
 	);
 });
 
 // Unit tests for utility functions
-Deno.test("parseCookies - empty/null input", () => {
-	assertEquals(parseCookies(null), {});
-	assertEquals(parseCookies(""), {});
+test("parseCookies - empty/null input", () => {
+	assert.deepEqual(parseCookies(null), {});
+	assert.deepEqual(parseCookies(""), {});
 });
 
-Deno.test("parseCookies - single cookie", () => {
-	assertEquals(parseCookies("foo=bar"), { foo: "bar" });
+test("parseCookies - single cookie", () => {
+	assert.deepEqual(parseCookies("foo=bar"), { foo: "bar" });
 });
 
-Deno.test("parseCookies - multiple cookies", () => {
-	assertEquals(parseCookies("foo=bar; baz=qux"), { foo: "bar", baz: "qux" });
+test("parseCookies - multiple cookies", () => {
+	assert.deepEqual(parseCookies("foo=bar; baz=qux"), { foo: "bar", baz: "qux" });
 });
 
-Deno.test("parseCookies - cookies with spaces", () => {
-	assertEquals(parseCookies("  foo=bar  ;  baz=qux  "), {
+test("parseCookies - cookies with spaces", () => {
+	assert.deepEqual(parseCookies("  foo=bar  ;  baz=qux  "), {
 		foo: "bar",
 		baz: "qux",
 	});
 });
 
-Deno.test("parseCookies - URL encoded values", () => {
-	assertEquals(parseCookies("name=hello%20world"), { name: "hello world" });
+test("parseCookies - URL encoded values", () => {
+	assert.deepEqual(parseCookies("name=hello%20world"), { name: "hello world" });
 });
 
-Deno.test("parseCookies - value with equals sign", () => {
-	assertEquals(parseCookies("data=a=b=c"), { data: "a=b=c" });
+test("parseCookies - value with equals sign", () => {
+	assert.deepEqual(parseCookies("data=a=b=c"), { data: "a=b=c" });
 });
 
-Deno.test("serializeCookie - basic", () => {
-	assertEquals(serializeCookie("foo", "bar"), "foo=bar");
+test("serializeCookie - basic", () => {
+	assert.equal(serializeCookie("foo", "bar"), "foo=bar");
 });
 
-Deno.test("serializeCookie - URL encodes name and value", () => {
-	assertEquals(serializeCookie("hello world", "a=b"), "hello%20world=a%3Db");
+test("serializeCookie - URL encodes name and value", () => {
+	assert.equal(serializeCookie("hello world", "a=b"), "hello%20world=a%3Db");
 });
 
-Deno.test("serializeCookie - with maxAge", () => {
-	assertEquals(
+test("serializeCookie - with maxAge", () => {
+	assert.equal(
 		serializeCookie("foo", "bar", { maxAge: 3600 }),
 		"foo=bar; Max-Age=3600",
 	);
 });
 
-Deno.test("serializeCookie - with path", () => {
-	assertEquals(serializeCookie("foo", "bar", { path: "/" }), "foo=bar; Path=/");
+test("serializeCookie - with path", () => {
+	assert.equal(serializeCookie("foo", "bar", { path: "/" }), "foo=bar; Path=/");
 });
 
-Deno.test("serializeCookie - with domain", () => {
-	assertEquals(
+test("serializeCookie - with domain", () => {
+	assert.equal(
 		serializeCookie("foo", "bar", { domain: "example.com" }),
 		"foo=bar; Domain=example.com",
 	);
 });
 
-Deno.test("serializeCookie - with secure", () => {
-	assertEquals(
+test("serializeCookie - with secure", () => {
+	assert.equal(
 		serializeCookie("foo", "bar", { secure: true }),
 		"foo=bar; Secure",
 	);
 });
 
-Deno.test("serializeCookie - with httpOnly", () => {
-	assertEquals(
+test("serializeCookie - with httpOnly", () => {
+	assert.equal(
 		serializeCookie("foo", "bar", { httpOnly: true }),
 		"foo=bar; HttpOnly",
 	);
 });
 
-Deno.test("serializeCookie - with sameSite", () => {
-	assertEquals(
+test("serializeCookie - with sameSite", () => {
+	assert.equal(
 		serializeCookie("foo", "bar", { sameSite: "Strict" }),
 		"foo=bar; SameSite=Strict",
 	);
-	assertEquals(
+	assert.equal(
 		serializeCookie("foo", "bar", { sameSite: "Lax" }),
 		"foo=bar; SameSite=Lax",
 	);
-	assertEquals(
+	assert.equal(
 		serializeCookie("foo", "bar", { sameSite: "None" }),
 		"foo=bar; SameSite=None",
 	);
 });
 
-Deno.test("serializeCookie - with expires", () => {
+test("serializeCookie - with expires", () => {
 	const date = new Date("2025-12-31T23:59:59Z");
-	assertEquals(
+	assert.equal(
 		serializeCookie("foo", "bar", { expires: date }),
 		"foo=bar; Expires=Wed, 31 Dec 2025 23:59:59 GMT",
 	);
 });
 
-Deno.test("serializeCookie - with all options", () => {
+test("serializeCookie - with all options", () => {
 	const date = new Date("2025-12-31T23:59:59Z");
 	const result = serializeCookie("session", "abc123", {
 		maxAge: 3600,
@@ -130,7 +129,7 @@ Deno.test("serializeCookie - with all options", () => {
 		httpOnly: true,
 		sameSite: "Lax",
 	});
-	assertEquals(
+	assert.equal(
 		result,
 		"session=abc123; Max-Age=3600; Expires=Wed, 31 Dec 2025 23:59:59 GMT; Path=/; Domain=example.com; Secure; HttpOnly; SameSite=Lax",
 	);
@@ -186,12 +185,12 @@ runTestServerTests([
 			});
 
 			const resp = await fetch(`${base}/`);
-			assertEquals(resp.status, 200);
+			assert.equal(resp.status, 200);
 			// Headers.getSetCookie() returns all Set-Cookie values
 			const setCookies = resp.headers.getSetCookie();
-			assertEquals(setCookies.length, 2);
-			assertEquals(setCookies[0], "a=1");
-			assertEquals(setCookies[1], "b=2");
+			assert.equal(setCookies.length, 2);
+			assert.equal(setCookies[0], "a=1");
+			assert.equal(setCookies[1], "b=2");
 			// Consume body to avoid leak
 			await resp.text();
 		},

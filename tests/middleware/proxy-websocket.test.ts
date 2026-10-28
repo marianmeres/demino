@@ -1,5 +1,11 @@
-import { assert, assertEquals, assertMatch } from "@std/assert";
-import { demino, type DeminoLogger } from "../../src/demino.ts";
+import assert from "node:assert/strict";
+import { type AddressInfo, createConnection, createServer, type Socket } from "node:net";
+import {
+	demino,
+	type DeminoLogger,
+	type DeminoServeInfo,
+	type DeminoUpgradeWebSocketOptions,
+} from "../../src/demino.ts";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests, startTestServer } from "../_utils.ts";
 
@@ -8,7 +14,8 @@ function createWsClient(
 	url: string,
 	options?: { protocols?: string[]; headers?: HeadersInit },
 ) {
-	// the options bag (protocols + headers) is a Deno extension
+	// the options bag (protocols + headers) is a non-standard constructor
+	// extension, supported by Deno, Bun and Node 26 (undici 8)
 	const ws = new WebSocket(url, options ?? {});
 	ws.binaryType = "arraybuffer";
 
@@ -37,9 +44,29 @@ function createWsClient(
 	return { ws, opened: opened.promise, closed: closed.promise, nextMessage };
 }
 
-/** Sends a raw (fake) upgrade request and returns the beginning of the raw response. */
-async function rawUpgradeRequest(port: number, path: string): Promise<string> {
-	const conn = await Deno.connect({ hostname: "127.0.0.1", port });
+/**
+ * Upgrades through the capability the runtime adapter provides on `info` (the
+ * test upstreams are Demino handlers started via `startTestServer`, so it is
+ * always present there).
+ */
+function upgradeWebSocket(
+	req: Request,
+	info: DeminoServeInfo | undefined,
+	options?: DeminoUpgradeWebSocketOptions,
+): { socket: WebSocket; response: Response } {
+	assert.ok(
+		info?.upgradeWebSocket,
+		"the harness adapter must provide info.upgradeWebSocket",
+	);
+	return info.upgradeWebSocket(req, options);
+}
+
+/**
+ * Sends a raw (fake) upgrade request over a plain TCP socket and resolves with
+ * the raw response head: everything up to and including the first blank line,
+ * or whatever arrived if the server closed the connection first.
+ */
+function rawUpgradeRequest(port: number, path: string): Promise<string> {
 	const head = [
 		`GET ${path} HTTP/1.1`,
 		`Host: 127.0.0.1:${port}`,
@@ -50,11 +77,29 @@ async function rawUpgradeRequest(port: number, path: string): Promise<string> {
 		``,
 		``,
 	].join("\r\n");
-	await conn.write(new TextEncoder().encode(head));
-	const buf = new Uint8Array(8192);
-	const n = (await conn.read(buf)) ?? 0;
-	conn.close();
-	return new TextDecoder().decode(buf.subarray(0, n));
+
+	return new Promise((resolve, reject) => {
+		const sock = createConnection({ host: "127.0.0.1", port }, () => {
+			sock.write(head);
+		});
+		let received = "";
+		let settled = false;
+		const settle = (err?: Error) => {
+			if (settled) return;
+			settled = true;
+			sock.destroy();
+			if (err) reject(err);
+			else resolve(received);
+		};
+		sock.setEncoding("utf8");
+		sock.on("data", (chunk: string) => {
+			received += chunk;
+			if (received.includes("\r\n\r\n")) settle();
+		});
+		// the server may close before (or without) a full head: return what arrived
+		sock.on("end", () => settle());
+		sock.on("error", (e) => settle(e));
+	});
 }
 
 runTestServerTests([
@@ -64,7 +109,7 @@ runTestServerTests([
 			const seen: { url?: string; headers?: Headers } = {};
 			const upstreamSocketClosed = Promise.withResolvers<void>();
 
-			const upstream = await startTestServer((req) => {
+			const upstream = await startTestServer((req, info) => {
 				seen.url = req.url;
 				// snapshot: the live req.headers becomes unreadable once the request closes
 				seen.headers = new Headers(req.headers);
@@ -72,7 +117,7 @@ runTestServerTests([
 				if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
 					return new Response("plain-http");
 				}
-				const { socket, response } = Deno.upgradeWebSocket(req, {
+				const { socket, response } = upgradeWebSocket(req, info, {
 					protocol: "chat.v2",
 				});
 				socket.binaryType = "arraybuffer";
@@ -97,34 +142,34 @@ runTestServerTests([
 					},
 				);
 
-				assert(await opened, "tunnel should open");
+				assert.ok(await opened, "tunnel should open");
 
 				// upstream-negotiated subprotocol is mirrored back to the client
-				assertEquals(ws.protocol, "chat.v2");
+				assert.equal(ws.protocol, "chat.v2");
 
 				// text roundtrip
 				ws.send("hello");
-				assertEquals(await nextMessage(), "echo:hello");
+				assert.equal(await nextMessage(), "echo:hello");
 
 				// binary roundtrip
 				ws.send(new Uint8Array([1, 2, 3]));
 				const bin = await nextMessage();
-				assert(bin instanceof ArrayBuffer);
-				assertEquals([...new Uint8Array(bin)], [1, 2, 3]);
+				assert.ok(bin instanceof ArrayBuffer);
+				assert.deepEqual([...new Uint8Array(bin)], [1, 2, 3]);
 
 				// path + query forwarded (wildcard target)
 				const upstreamUrl = new URL(seen.url!);
-				assertEquals(upstreamUrl.pathname, "/ws/room");
-				assertEquals(upstreamUrl.search, "?x=1");
+				assert.equal(upstreamUrl.pathname, "/ws/room");
+				assert.equal(upstreamUrl.search, "?x=1");
 
 				// headers forwarded: cookies, custom injected, loop guard, x-forwarded-*
-				assertEquals(seen.headers!.get("cookie"), "session=abc");
-				assertEquals(seen.headers!.get("x-injected"), "yes");
-				assertEquals(seen.headers!.get("x-demino-proxy-hops"), "1");
-				assertEquals(seen.headers!.get("x-forwarded-proto"), "http");
-				assertEquals(seen.headers!.get("x-forwarded-host"), new URL(base).host);
+				assert.equal(seen.headers!.get("cookie"), "session=abc");
+				assert.equal(seen.headers!.get("x-injected"), "yes");
+				assert.equal(seen.headers!.get("x-demino-proxy-hops"), "1");
+				assert.equal(seen.headers!.get("x-forwarded-proto"), "http");
+				assert.equal(seen.headers!.get("x-forwarded-host"), new URL(base).host);
 				// offered subprotocols reached the upstream via the dial, not raw header copy
-				assertMatch(seen.headers!.get("sec-websocket-protocol")!, /chat\.v2/);
+				assert.match(seen.headers!.get("sec-websocket-protocol")!, /chat\.v2/);
 
 				ws.close();
 				await closed;
@@ -145,12 +190,12 @@ runTestServerTests([
 				{ code: number; reason: string }
 			>[] = [];
 
-			const upstream = await startTestServer((req) => {
+			const upstream = await startTestServer((req, info) => {
 				const captured = Promise.withResolvers<
 					{ code: number; reason: string }
 				>();
 				upstreamCloses.push(captured);
-				const { socket, response } = Deno.upgradeWebSocket(req);
+				const { socket, response } = upgradeWebSocket(req, info);
 				socket.onmessage = (e) => {
 					if (e.data === "close-me") socket.close(4001, "bye-from-upstream");
 				};
@@ -165,21 +210,21 @@ runTestServerTests([
 
 				// upstream-initiated close -> client sees code + reason
 				const a = createWsClient(wsUrl);
-				assert(await a.opened, "tunnel should open");
+				assert.ok(await a.opened, "tunnel should open");
 				a.ws.send("close-me");
 				const aClose = await a.closed;
-				assertEquals(aClose.code, 4001);
-				assertEquals(aClose.reason, "bye-from-upstream");
+				assert.equal(aClose.code, 4001);
+				assert.equal(aClose.reason, "bye-from-upstream");
 				await upstreamCloses[0].promise;
 
 				// client-initiated close -> upstream sees code + reason
 				const b = createWsClient(wsUrl);
-				assert(await b.opened, "tunnel should open");
+				assert.ok(await b.opened, "tunnel should open");
 				b.ws.close(4002, "bye-from-client");
 				await b.closed;
 				const bClose = await upstreamCloses[1].promise;
-				assertEquals(bClose.code, 4002);
-				assertEquals(bClose.reason, "bye-from-client");
+				assert.equal(bClose.code, 4002);
+				assert.equal(bClose.reason, "bye-from-client");
 			} finally {
 				await upstream.close();
 			}
@@ -189,16 +234,16 @@ runTestServerTests([
 		name: "proxy websocket: policy failures surface as regular HTTP errors",
 		fn: async ({ app, srv }) => {
 			// held-open TCP listener: accepts but never answers -> handshake timeout
-			const silent = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-			const silentPort = silent.addr.port;
-			const held: Deno.Conn[] = [];
-			const acceptLoop = (async () => {
-				try {
-					for await (const conn of silent) held.push(conn);
-				} catch {
-					/* listener closed */
-				}
-			})();
+			const held: Socket[] = [];
+			const silent = createServer((sock) => {
+				held.push(sock);
+				// a peer reset once the proxy gives up is not a failure of this test
+				sock.on("error", () => {});
+			});
+			await new Promise<void>((resolve) => {
+				silent.listen(0, "127.0.0.1", resolve);
+			});
+			const silentPort = (silent.address() as AddressInfo).port;
 
 			try {
 				// host allowlist rejection (pre-dial) -> 500 policy error
@@ -228,33 +273,28 @@ runTestServerTests([
 					proxy(`http://127.0.0.1:${silentPort}/`, { timeout: 100 }),
 				);
 
-				assertMatch(
+				assert.match(
 					await rawUpgradeRequest(srv.port, "/ws-blocked"),
 					/^HTTP\/1\.1 500/,
 				);
-				assertMatch(
+				assert.match(
 					await rawUpgradeRequest(srv.port, "/ws-ssrf"),
 					/^HTTP\/1\.1 403/,
 				);
-				assertMatch(String(ssrfError), /SSRF/);
-				assertMatch(
+				assert.match(String(ssrfError), /SSRF/);
+				assert.match(
 					await rawUpgradeRequest(srv.port, "/ws-dead"),
 					/^HTTP\/1\.1 502/,
 				);
-				assertMatch(
+				assert.match(
 					await rawUpgradeRequest(srv.port, "/ws-slow"),
 					/^HTTP\/1\.1 504/,
 				);
 			} finally {
-				silent.close();
-				held.forEach((c) => {
-					try {
-						c.close();
-					} catch {
-						/* ignore */
-					}
+				held.forEach((s) => s.destroy());
+				await new Promise<void>((resolve) => {
+					silent.close(() => resolve());
 				});
-				await acceptLoop;
 			}
 		},
 	},
@@ -274,8 +314,8 @@ runTestServerTests([
 				);
 				const raw = await rawUpgradeRequest(srv.port, "/ws-off");
 				// proxied as a plain GET (upgrade header stripped), upstream status relayed
-				assertMatch(raw, /^HTTP\/1\.1 426/);
-				assertEquals(seen.upgrade, null);
+				assert.match(raw, /^HTTP\/1\.1 426/);
+				assert.equal(seen.upgrade, null);
 			} finally {
 				await upstream.close();
 			}
@@ -312,22 +352,22 @@ runTestServerTests([
 			try {
 				for (const path of ["/ws-a", "/ws-b", "/ws-a"]) {
 					// proxied as a plain GET, upstream status relayed (= `webSockets: false`)
-					assertMatch(
+					assert.match(
 						await rawUpgradeRequest(srv.port, path),
 						/^HTTP\/1\.1 426/,
 					);
 				}
 				// upgrade header stripped on every hop
-				assertEquals(upstreamSeen, [null, null, null]);
+				assert.deepEqual(upstreamSeen, [null, null, null]);
 
 				const tunnelWarns = warns.filter((w) => /WebSocket tunneling/.test(w));
-				assertEquals(
+				assert.equal(
 					tunnelWarns.length,
 					1,
 					`expected one warning, got: ${warns}`,
 				);
-				assertMatch(tunnelWarns[0], /upgradeWebSocket/);
-				assertMatch(tunnelWarns[0], /plain HTTP/);
+				assert.match(tunnelWarns[0], /upgradeWebSocket/);
+				assert.match(tunnelWarns[0], /plain HTTP/);
 			} finally {
 				await srv.close();
 				await upstream.close();
@@ -341,7 +381,7 @@ runTestServerTests([
 			// dial headers) must cut the recursion, surfacing as a gateway error
 			app.get("/ws-loop-a", proxy(`${base}/ws-loop-b`));
 			app.get("/ws-loop-b", proxy(`${base}/ws-loop-a`));
-			assertMatch(
+			assert.match(
 				await rawUpgradeRequest(srv.port, "/ws-loop-a"),
 				/^HTTP\/1\.1 502/,
 			);

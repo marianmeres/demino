@@ -1,17 +1,17 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
-import { assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { cors } from "../../src/mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
-Deno.test("cors() throws on wildcard origin + credentials true", () => {
-	assertThrows(
+test("cors() throws on wildcard origin + credentials true", () => {
+	assert.throws(
 		() => cors({ allowOrigin: "*", allowCredentials: true }),
-		TypeError,
-		"allowCredentials",
+		{ name: "TypeError", message: /allowCredentials/ },
 	);
 });
 
-Deno.test("cors() default config does NOT enable credentials", () => {
+test("cors() default config does NOT enable credentials", () => {
 	// We can only assert it doesn't throw — the runtime behavior is covered
 	// in the integration test below ("cors sanity check").
 	cors();

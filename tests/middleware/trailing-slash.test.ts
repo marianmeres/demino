@@ -1,5 +1,5 @@
 import { HTTP_STATUS } from "@marianmeres/http-utils";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { trailingSlash } from "../../src/middleware/trailing-slash.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -86,7 +86,7 @@ runTestServerTests([
 			await assertResp(fetch(`${base}/baz/bat`), 200, "baz"); // no-op
 
 			// the above 4 fetches must have triggered exactly 2 redirects (2 were no-ops)
-			assertEquals(_log.length, 2);
+			assert.equal(_log.length, 2);
 		},
 	},
 	{
@@ -105,21 +105,21 @@ runTestServerTests([
 
 			// normal get must work
 			await assertResp(fetch(`${base}/foo`), 200, "foo");
-			assertEquals(_log.length, 1);
+			assert.equal(_log.length, 1);
 
 			// any other than get must be a noop
 			for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
 				_log = [];
 				await assertResp(fetch(`${base}/foo`, { method }), 200, "foo");
-				assertEquals(_log.length, 0);
+				assert.equal(_log.length, 0);
 			}
 
 			// if it looks like a file, noop
 			await assertResp(fetch(`${base}/foo/bar.baz`), 200, "bar.baz");
-			assertEquals(_log.length, 0);
+			assert.equal(_log.length, 0);
 
 			await assertResp(fetch(`${base}/file.txt`), 200, "file.txt");
-			assertEquals(_log.length, 0);
+			assert.equal(_log.length, 0);
 		},
 		// only: true,
 	},
