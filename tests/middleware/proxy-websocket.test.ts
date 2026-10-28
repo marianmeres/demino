@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertMatch } from "@std/assert";
+import { demino, type DeminoLogger } from "../../src/demino.ts";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests, startTestServer } from "../_utils.ts";
 
@@ -276,6 +277,59 @@ runTestServerTests([
 				assertMatch(raw, /^HTTP\/1\.1 426/);
 				assertEquals(seen.upgrade, null);
 			} finally {
+				await upstream.close();
+			}
+		},
+	},
+	{
+		name:
+			"proxy websocket: no upgradeWebSocket capability -> HTTP fall-through, one warning",
+		raw: true,
+		fn: async () => {
+			const upstreamSeen: (string | null)[] = [];
+			const upstream = await startTestServer((req) => {
+				upstreamSeen.push(req.headers.get("upgrade"));
+				return new Response("no-ws-here", { status: 426 });
+			});
+
+			const warns: string[] = [];
+			const logger: DeminoLogger = {
+				debug() {},
+				log() {},
+				error() {},
+				warn: (...a: unknown[]) => warns.push(a.map(String).join(" ")),
+			};
+			const app = demino("", [], { logger });
+			// two proxy instances: the warning is per process, not per instance
+			app.get("/ws-a", proxy(`${upstream.base}/`));
+			app.get("/ws-b", proxy(`${upstream.base}/`));
+
+			// A harness that omits `upgradeWebSocket` - what the app sees when it is
+			// handed to the runtime's own server with no adapter in between.
+			const srv = await startTestServer((req, info) =>
+				app(req, { remoteAddr: info?.remoteAddr })
+			);
+			try {
+				for (const path of ["/ws-a", "/ws-b", "/ws-a"]) {
+					// proxied as a plain GET, upstream status relayed (= `webSockets: false`)
+					assertMatch(
+						await rawUpgradeRequest(srv.port, path),
+						/^HTTP\/1\.1 426/,
+					);
+				}
+				// upgrade header stripped on every hop
+				assertEquals(upstreamSeen, [null, null, null]);
+
+				const tunnelWarns = warns.filter((w) => /WebSocket tunneling/.test(w));
+				assertEquals(
+					tunnelWarns.length,
+					1,
+					`expected one warning, got: ${warns}`,
+				);
+				assertMatch(tunnelWarns[0], /upgradeWebSocket/);
+				assertMatch(tunnelWarns[0], /plain HTTP/);
+			} finally {
+				await srv.close();
 				await upstream.close();
 			}
 		},

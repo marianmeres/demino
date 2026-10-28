@@ -39,6 +39,14 @@ export interface ProxyOptions {
 	 * + version 13) is tunneled to the upstream instead of being forwarded as a
 	 * plain — and therefore never upgradable — GET. Set to `false` to restore
 	 * the pre-1.17.0 behavior (upgrade headers stripped, forwarded as HTTP).
+	 *
+	 * Tunneling needs the runtime adapter's upgrade capability
+	 * (`info.upgradeWebSocket`, provided when the app is started through
+	 * `@marianmeres/demino/deno`, `/node` or `/bun`). Without it — the app
+	 * handed straight to the runtime's own server with no adapter in between,
+	 * or the Node adapter with `webSockets: false` or `ws` missing — the upgrade
+	 * request is forwarded as plain HTTP exactly as with `webSockets: false`,
+	 * and one warning is logged per process.
 	 * See the `proxy()` docs for tunnel semantics and which options do not
 	 * apply to tunnels.
 	 */
@@ -76,6 +84,15 @@ export interface ProxyOptions {
 }
 
 /**
+ * Process-wide latch for the "no `upgradeWebSocket` capability" warning: the
+ * condition is a property of how the app was started, not of the request or of
+ * the proxy instance, so it is said once. Only set once a logger actually
+ * received it, so an app silenced via `.logger(null)` does not swallow the one
+ * chance to say it.
+ */
+let warnedNoUpgradeCapability = false;
+
+/**
  * Creates a proxy middleware that forwards requests to a different server.
  *
  * Automatically handles request forwarding, header management, and response streaming.
@@ -109,7 +126,10 @@ export interface ProxyOptions {
  * both directions. `timeout` bounds only the upstream handshake, never the
  * tunnel lifetime. Not applicable to tunnels: `maxRedirects` (upstream
  * WebSocket redirects are not followed), `cache`, `transformResponseHeaders`,
- * `transformResponseBody` (the 101 response is runtime-generated).
+ * `transformResponseBody` (the 101 response is runtime-generated). The client
+ * leg is upgraded through the runtime adapter's `info.upgradeWebSocket`; when
+ * the app runs without one (see `ProxyOptions.webSockets`) upgrade requests are
+ * forwarded as plain HTTP and a single warning is logged per process.
  *
  * @param target - Target URL (string or function). Strings ending with `/*` append the request pathname.
  * @param options - Optional configuration
@@ -320,7 +340,7 @@ export function proxy(
 		return proxyHeaders;
 	};
 
-	const _proxy: DeminoHandler = async (req, _i, ctx) => {
+	const _proxy: DeminoHandler = async (req, info, ctx) => {
 		try {
 			// WebSocket upgrade? Tunnel it on a dedicated path: the upstream is
 			// dialed FIRST (same target policy, same outgoing headers) and the
@@ -330,11 +350,33 @@ export function proxy(
 			// `timeout` must bound the handshake only, never the tunnel lifetime
 			// (a WebSocket legitimately outlives any request timeout).
 			if (webSockets && isWebSocketUpgradeRequest(req)) {
-				const url = new URL(req.url);
-				const targetUrl = await resolveTarget(req, ctx, url);
-				assertTargetAllowed(targetUrl, url);
-				const proxyHeaders = await buildProxyHeaders(req, ctx, targetUrl);
-				return await proxyWebSocket(req, targetUrl, proxyHeaders, { timeout });
+				// The client leg needs the runtime adapter's upgrade capability.
+				// Without it (no adapter between the runtime's server and the app,
+				// or the Node adapter with `webSockets: false` / no `ws`) there is
+				// no portable way to upgrade, so the request takes the plain HTTP
+				// path below — today's `webSockets: false` behavior — and the
+				// situation is logged once per process, not once per request.
+				const upgradeWebSocket = info.upgradeWebSocket;
+				if (upgradeWebSocket) {
+					const url = new URL(req.url);
+					const targetUrl = await resolveTarget(req, ctx, url);
+					assertTargetAllowed(targetUrl, url);
+					const proxyHeaders = await buildProxyHeaders(req, ctx, targetUrl);
+					return await proxyWebSocket(req, targetUrl, proxyHeaders, {
+						timeout,
+						upgradeWebSocket,
+					});
+				}
+				const logger = ctx.getLogger();
+				if (logger?.warn && !warnedNoUpgradeCapability) {
+					warnedNoUpgradeCapability = true;
+					logger.warn(
+						"[proxy] WebSocket tunneling needs a runtime adapter " +
+							"(`info.upgradeWebSocket` is missing) - forwarding the upgrade " +
+							"request as plain HTTP. Start the app through " +
+							"@marianmeres/demino/deno, /node or /bun to enable tunnels.",
+					);
+				}
 			}
 
 			const doProxy = async (signal?: AbortSignal) => {

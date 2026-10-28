@@ -1,11 +1,16 @@
 /**
  * WebSocket tunneling support for the proxy middleware. Internal module —
  * consumed by `proxy()` (see `ProxyOptions.webSockets`), not exported publicly.
+ *
+ * The client leg is upgraded through the runtime adapter's `upgradeWebSocket`
+ * capability (`info.upgradeWebSocket`, see `DeminoServeInfo`); the upstream leg
+ * is dialed with the global `WebSocket`. Nothing here is runtime-specific.
  * @module
  */
 
 import { TimeoutError } from "@marianmeres/midware";
 import { HTTP_ERROR } from "@marianmeres/http-utils";
+import type { DeminoUpgradeWebSocket } from "../../demino.ts";
 
 /**
  * Headers that must never be forwarded on the upstream WebSocket dial: the
@@ -24,10 +29,11 @@ const WS_INTERNAL_HEADERS = [
 ] as const;
 
 /**
- * Is this request a well-formed WebSocket upgrade — strict enough that
- * `Deno.upgradeWebSocket` is guaranteed to accept it? A malformed upgrade
- * (missing key, wrong version, non-GET) intentionally returns `false` and
- * falls through to the regular HTTP proxy path (the pre-WebSocket behavior).
+ * Is this request a well-formed WebSocket upgrade — strict enough that the
+ * adapter's `upgradeWebSocket` capability is guaranteed to accept it? A
+ * malformed upgrade (missing key, wrong version, non-GET) intentionally returns
+ * `false` and falls through to the regular HTTP proxy path (the pre-WebSocket
+ * behavior).
  */
 export function isWebSocketUpgradeRequest(req: Request): boolean {
 	if (req.method !== "GET") return false;
@@ -47,6 +53,12 @@ export function isWebSocketUpgradeRequest(req: Request): boolean {
 export interface ProxyWebSocketOptions {
 	/** Upstream HANDSHAKE timeout in ms (`0` disables). Never bounds the tunnel lifetime. */
 	timeout: number;
+	/**
+	 * The runtime adapter's upgrade capability (`info.upgradeWebSocket`) used for
+	 * the client leg. The caller guarantees it is present — a runtime without it
+	 * never reaches this module (the proxy falls through to plain HTTP instead).
+	 */
+	upgradeWebSocket: DeminoUpgradeWebSocket;
 }
 
 /**
@@ -97,7 +109,7 @@ export async function proxyWebSocket(
 	let client: WebSocket;
 	let response: Response;
 	try {
-		({ socket: client, response } = Deno.upgradeWebSocket(req, {
+		({ socket: client, response } = options.upgradeWebSocket(req, {
 			// mirror the upstream-negotiated subprotocol (empty string = none)
 			protocol: upstream.protocol || undefined,
 		}));
@@ -124,9 +136,12 @@ function dialUpstream(
 	timeout: number,
 ): Promise<WebSocket> {
 	return new Promise<WebSocket>((resolve, reject) => {
-		// The `{ protocols, headers }` options bag is a (stable) Deno extension
-		// to the WebSocket constructor — it is what makes cookie/authorization
-		// forwarding and the hop-counter loop guard possible on this leg.
+		// The `{ protocols, headers }` options bag is not in the WHATWG WebSocket
+		// standard, but every runtime we ship an adapter for accepts it — Deno,
+		// Node (undici) and Bun were all probed sending custom headers and
+		// negotiating a subprotocol through it. De-facto, not spec: it is what
+		// makes cookie/authorization forwarding and the hop-counter loop guard
+		// possible on this leg, so there is no per-runtime client here.
 		const ws = new WebSocket(url, {
 			protocols: protocols.length ? protocols : undefined,
 			headers,
