@@ -48,6 +48,9 @@ export class TokenBucket {
 	/** How much capacity will be refilled per second */
 	#refillSizePerSec: number;
 
+	/** Optional logger for debugging token bucket operations */
+	protected _logger?: DeminoLogger | null;
+
 	/**
 	 * Creates a new TokenBucket instance.
 	 *
@@ -68,8 +71,11 @@ export class TokenBucket {
 	constructor(
 		maxSize: number,
 		refillPerSecond: number,
-		protected _logger?: DeminoLogger | null,
+		_logger?: DeminoLogger | null,
 	) {
+		// a plain assignment, not a parameter property: Node and Bun strip types
+		// and never lower non-erasable syntax
+		this._logger = _logger;
 		[maxSize, refillPerSecond].forEach((v) => {
 			if (v <= 0) {
 				throw new TypeError(`Expecting positive non-zero value, got '${v}'`);

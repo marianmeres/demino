@@ -4,3 +4,5 @@ coverage/
 .idea/
 *.swp
 tmp/*
+node_modules/
+.npm-dist/

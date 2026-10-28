@@ -142,7 +142,14 @@ function dialUpstream(
 		// negotiating a subprotocol through it. De-facto, not spec: it is what
 		// makes cookie/authorization forwarding and the hop-counter loop guard
 		// possible on this leg, so there is no per-runtime client here.
-		const ws = new WebSocket(url, {
+		//
+		// Typed locally: `lib.dom` only knows `string | string[]` as the second
+		// argument; Deno's and undici's ambient types know the options bag.
+		const WebSocketWithOptions = WebSocket as unknown as new (
+			url: string | URL,
+			options?: { protocols?: string[]; headers?: HeadersInit },
+		) => WebSocket;
+		const ws = new WebSocketWithOptions(url, {
 			protocols: protocols.length ? protocols : undefined,
 			headers,
 		});
