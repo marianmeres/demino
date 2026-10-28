@@ -1,5 +1,4 @@
 import { sleep } from "@marianmeres/midware";
-import { serveFile } from "@std/http/file-server";
 import { assertEquals } from "@std/assert";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
@@ -12,14 +11,14 @@ runTestServerTests([
 			app.get("/b", (r) => new URL(r.url).search);
 			app.get("/c", proxy("/d"));
 			app.get("/d", () => "d");
-			app.get("/file", (req) => serveFile(req, "./tests/static/foo.txt"));
+			app.static("/files", "./tests/static");
 
 			app.get("/to-self", proxy("/to-self")); // will throw
 
 			app.get("/xa", proxy("/a"));
 			app.get("/xb", proxy("/b"));
 			app.get("/xc", proxy("/c"));
-			app.get("/xfile", proxy("/file"));
+			app.get("/xfile", proxy("/files/foo.txt"));
 
 			await assertResp(fetch(`${base}/xa`), 200, "a");
 			await assertResp(fetch(`${base}/xb?foo=bar`), 200, "?foo=bar");

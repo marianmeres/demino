@@ -1,8 +1,8 @@
 import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
-import { serveDir, type ServeDirOptions } from "@std/http/file-server";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
+import { type DeminoStaticOptions, serveStatic } from "./static/serve-static.ts";
 import { isHostAllowed } from "./middleware/proxy/utils.ts";
 import { green, red } from "./utils/ansi.ts";
 import { getClientIpFromHeaders } from "./utils/client-ip.ts";
@@ -318,12 +318,12 @@ export interface Demino {
 	use: (...args: (string | DeminoHandler | DeminoHandler[])[]) => Demino;
 	/** Returns which path is the current app mounted on. */
 	mountPath: () => string;
-	/** Will serve static files via `@std/http/serveDir` from the given `fsRoot` directory.  */
-	static: (
-		route: string,
-		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
-	) => Demino;
+	/**
+	 * Serves static files from the `fsRoot` directory under `route` — `GET`/`HEAD`,
+	 * `index.html`, dotfile hiding, `ETag`/304, `Range`/206, content types. See
+	 * {@linkcode serveStatic} for the exact behaviour and {@linkcode DeminoStaticOptions}.
+	 */
+	static: (route: string, fsRoot: string, options?: DeminoStaticOptions) => Demino;
 	/** Will re/un/set application logger */
 	logger: (logger: DeminoLogger | null) => Demino;
 	/** Will return debug info about registered routes and associated middlewares.
@@ -1350,11 +1350,7 @@ export function demino(
 	_app.mountPath = () => mountPath;
 
 	// experimental and ugly
-	_app.static = (
-		route: string,
-		fsRoot: string,
-		options?: Omit<ServeDirOptions, "fsRoot" | "urlRoot">,
-	) => {
+	_app.static = (route: string, fsRoot: string, options?: DeminoStaticOptions) => {
 		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
 		if (/[\[\]:\*]/.test(route)) {
 			throw new TypeError(
@@ -1374,17 +1370,9 @@ export function demino(
 		urlRoot = urlRoot.slice(1); // strip leading slash
 		// console.log(123, route, urlRoot);
 
-		_app.all(route, (req) => {
-			// `serveDir` (@std/http >= 1.0) handles HEAD natively — it sets
-			// the correct headers (Content-Length, ETag, Last-Modified, …)
-			// with a null body and short-circuits the file read.
-			return serveDir(req, {
-				quiet: true,
-				...options,
-				fsRoot,
-				urlRoot,
-			});
-		});
+		// `serveStatic` handles HEAD natively (same headers as GET, null body, no
+		// file read), so no GET-rewrite is needed here.
+		_app.all(route, (req) => serveStatic(req, { ...options, fsRoot, urlRoot }));
 
 		return _app;
 	};
