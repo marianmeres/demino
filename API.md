@@ -9,6 +9,8 @@ Complete API documentation for `@marianmeres/demino`.
   - [Demino Interface](#demino-interface)
   - [DeminoContext](#deminocontext)
   - [DeminoHandler](#deminohandler)
+  - [DeminoServeInfo](#deminoserveinfo)
+  - [DeminoServeHandler](#deminoservehandler)
   - [DeminoRouteInfo](#deminorouteinfo)
   - [DeminoOptions](#deminooptions)
   - [DeminoLogger](#deminologger)
@@ -16,6 +18,17 @@ Complete API documentation for `@marianmeres/demino`.
   - [withMeta()](#withmeta)
   - [supportedMethods](#supportedmethods)
   - [CONTENT_TYPE](#content_type)
+- [Runtime Adapters](#runtime-adapters)
+  - [serve()](#serve)
+  - [ServeOptions](#serveoptions)
+  - [ServeHandle](#servehandle)
+  - [ServeFn](#servefn)
+- [Static Files](#static-files)
+  - [app.static()](#appstatic)
+  - [serveStatic()](#servestatic)
+  - [DeminoStaticOptions](#deminostaticoptions)
+  - [ServeStaticOptions](#servestaticoptions)
+  - [DeminoStaticHeaders](#deminostaticheaders)
 - [Routers](#routers)
   - [DeminoRouter (Abstract)](#deminorouter-abstract)
   - [DeminoSimpleRouter](#deminosimplerouter)
@@ -47,6 +60,8 @@ Complete API documentation for `@marianmeres/demino`.
 - [Utilities](#utilities)
   - [logListenInfo()](#loglisteninfo)
   - [createLogListenInfo()](#createloglisteninfo)
+  - [DeminoListenAddr](#deminolistenaddr)
+  - [getClientIpFromHeaders()](#getclientipfromheaders)
   - [createDeminoClog()](#createdeminoclog)
   - [createDeminoClogFrom()](#createdeminoclogfrom)
   - [TokenBucket](#tokenbucket)
@@ -85,14 +100,19 @@ function demino(
 - `options` - Application configuration
 - `appLocals` - Application-wide data accessible via `ctx.appLocals`
 
-**Returns:** Demino application instance (also a valid `Deno.ServeHandler`)
+**Returns:** Demino application instance — itself a [`DeminoServeHandler`](#deminoservehandler),
+i.e. a `(req, info?) => Promise<Response>` function that a runtime adapter's
+[`serve()`](#serve) (or a runtime's own web-standard server) takes as is.
 
 **Example:**
 
 ```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+
 const app = demino();
 app.get("/", () => "Hello World");
-Deno.serve(app);
+await serve(app);
 
 // With mount path and middleware
 const api = demino("/api", [authMiddleware]);
@@ -103,7 +123,11 @@ api.get("/users", getUsers);
 
 ### Demino Interface
 
-The main application interface. Extends `Deno.ServeHandler`.
+The main application interface. The app is callable —
+`(req: Request, info?: DeminoServeInfo) => Promise<Response>`, a
+[`DeminoServeHandler`](#deminoservehandler) — which is what a runtime adapter's
+[`serve()`](#serve) takes; on Deno it is also a drop-in handler for the built-in server (no
+adapter needed — see [serve()](#serve)).
 
 **Route Methods:**
 
@@ -126,7 +150,7 @@ app.all(route, ...handlers): Demino  // Matches all methods
 | --------------------------------- | --------------------------------------------- |
 | `use(...args)`                    | Register global or route-specific middlewares |
 | `error(handler)`                  | Set custom error handler                      |
-| `static(route, fsRoot, options?)` | Serve static files                            |
+| `static(route, fsRoot, options?)` | Serve static files (see [Static Files](#static-files)) |
 | `logger(logger)`                  | Set/unset application logger                  |
 | `mountPath()`                     | Get the mount path                            |
 | `info()`                          | Get debug info about routes                   |
@@ -209,10 +233,12 @@ Function signature for route handlers and middlewares.
 ```ts
 type DeminoHandler = (
 	req: Request,
-	info: Deno.ServeHandlerInfo,
+	info: DeminoServeInfo,
 	ctx: DeminoContext,
 ) => any | Promise<any>;
 ```
+
+`info` is what the runtime adapter passed to the app — see [`DeminoServeInfo`](#deminoserveinfo).
 
 **Return Value Handling:**
 
@@ -229,6 +255,66 @@ type DeminoHandler = (
   runs. Merge onto it with [`withMeta()`](#withmeta).
 - `handler.__midwarePreExecuteSortOrder?: number` — middleware execution order
   (ascending; lower runs first). See [`DEMINO_SORT`](#demino_sort).
+
+---
+
+### DeminoServeInfo
+
+What a runtime adapter passes as the second argument of the app (and so of every handler): the
+portable counterpart of a runtime's own "serve handler info".
+
+```ts
+interface DeminoServeInfo {
+	remoteAddr?: DeminoRemoteAddr; // socket peer, if the runtime knows it
+	upgradeWebSocket?: DeminoUpgradeWebSocket; // WebSocket upgrade capability, if provided
+	raw?: unknown; // the runtime's own per-request object (untyped escape hatch)
+}
+
+interface DeminoRemoteAddr {
+	hostname: string;
+	port: number;
+	transport?: string; // "tcp" on every shipped adapter
+}
+
+type DeminoUpgradeWebSocket = (
+	req: Request,
+	options?: DeminoUpgradeWebSocketOptions, // { protocol?: string; idleTimeout?: number }
+) => { socket: WebSocket; response: Response };
+```
+
+All fields are optional on purpose: the app can be called directly (e.g. in tests) with no
+`info` at all — Demino normalises a missing `info` to a frozen empty object — and a runtime's
+own server passes whatever it has (Deno: `remoteAddr`; Bun: nothing usable). The three adapters
+fill all of them. `ctx.ip` reads `remoteAddr` (unless `trustProxy` is on).
+
+`upgradeWebSocket` has the same shape on every runtime: call it, keep the `socket`, return the
+`response`. The socket is CONNECTING until the handler has returned that response, then fires
+`open` (frames that arrived earlier are held, not lost). Throws a `TypeError` on a request that
+is not a WebSocket handshake.
+
+```ts
+app.get("/ws", (req, info) => {
+	if (!info.upgradeWebSocket) throw createHttpError(501, "WebSockets unavailable");
+	const { socket, response } = info.upgradeWebSocket(req);
+	socket.onopen = () => socket.send("hello");
+	socket.onmessage = (e) => socket.send(`echo: ${e.data}`);
+	return response;
+});
+```
+
+---
+
+### DeminoServeHandler
+
+The signature a runtime adapter's [`serve()`](#serve) takes — a Demino app, a
+[`deminoCompose()`](#deminocompose) result, or any function of this shape.
+
+```ts
+type DeminoServeHandler = (
+	req: Request,
+	info?: DeminoServeInfo,
+) => Response | Promise<Response>;
+```
 
 ---
 
@@ -279,9 +365,10 @@ origin is locked to the trusted proxy, so this is opt-in.
 
 Only the left-most (immediate-hop) token of each header is read, so the single trusted
 proxy in front must be configured to overwrite (not append) these headers (nginx's
-default). The internal origin port never leaks into an absolute self-URL. Note:
-[`ctx.ip`](#deminocontext) trusts `X-Forwarded-For` **ungated** and is intentionally
-not routed through this flag.
+default). The internal origin port never leaks into an absolute self-URL. The same flag gates
+[`ctx.ip`](#deminocontext): off → the direct socket peer (`info.remoteAddr`), forwarding
+headers ignored; on → resolved from them via
+[`getClientIpFromHeaders()`](#getclientipfromheaders).
 
 ```ts
 const app = demino("", [], {
@@ -401,6 +488,233 @@ const CONTENT_TYPE = {
 	HTML: "text/html; charset=utf-8",
 };
 ```
+
+---
+
+## Runtime Adapters
+
+Starting a server is the only runtime-specific step. Each adapter is a subpath export with one
+`serve()` of the shared [`ServeFn`](#servefn) signature; the core never imports any of them, and
+`ServeOptions` / `ServeHandle` / `ServeFn` are exported from the root and from every adapter
+subpath.
+
+| Subpath                    | Runtime | Server underneath                      | `info.upgradeWebSocket`                                                 |
+| -------------------------- | ------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| `@marianmeres/demino/deno` | Deno    | the built-in HTTP server               | `Deno.upgradeWebSocket`                                                 |
+| `@marianmeres/demino/node` | Node    | own bridge over `node:http` (HTTP/1.1) | via the optional `ws` package (absent if missing or `webSockets: false`) |
+| `@marianmeres/demino/bun`  | Bun     | the built-in HTTP server               | per-socket facade over Bun's server-level WebSocket handlers            |
+
+### serve()
+
+Starts a Demino app (or any [`DeminoServeHandler`](#deminoservehandler)) and resolves with the
+running server's [`ServeHandle`](#servehandle).
+
+```ts
+function serve(handler: DeminoServeHandler, options?: ServeOptions): Promise<ServeHandle>;
+```
+
+**Parameters:**
+
+- `handler` (`DeminoServeHandler`) — the app, a `deminoCompose()` result, or any
+  `(req, info?) => Response` function.
+- `options` ([`ServeOptions`](#serveoptions), optional) — listen options.
+
+**Returns:** `Promise<ServeHandle>` — a promise on every runtime, even where the server starts
+synchronously. Rejects when the port cannot be bound (`code: "EADDRINUSE"` on all three
+runtimes) or when the adapter's runtime global is missing (e.g. `/deno` imported on Node).
+
+Per request the adapter builds the `Request`, fills [`DeminoServeInfo`](#deminoserveinfo)
+(`remoteAddr`, `upgradeWebSocket`, `raw`) and writes the returned `Response` back. The Node
+adapter is a bridge of its own: headers come from `rawHeaders` (duplicates survive), bodies
+stream both ways with backpressure, multiple `Set-Cookie` headers are preserved, a client that
+goes away aborts `req.signal`, and an upgrade request the handler did not upgrade gets its
+response serialised onto the raw socket. Scheme is always `http:` — TLS termination is the
+reverse proxy's job.
+
+**Example:**
+
+```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/node"; // or "/deno", "/bun"
+
+const app = demino();
+app.get("/", () => "Hello");
+
+const server = await serve(app, { port: 0 });
+console.log(server.url); // http://localhost:<port>/
+await server.shutdown();
+```
+
+**Without an adapter:** on Deno, `Deno.serve(app)` keeps working (the app is structurally a
+Deno serve handler); `info` then has `remoteAddr` only, so [`proxy()`](#proxy) WebSocket
+tunneling falls back to plain HTTP with one warning. On Bun, `Bun.serve({ fetch: app })` serves
+the app, but `ctx.ip` is empty and there is no upgrade capability. Node has no web-standard
+server, so the adapter is required there.
+
+---
+
+### ServeOptions
+
+```ts
+interface ServeOptions {
+	port?: number; // default 8000; 0 picks a free port (read ServeHandle.port)
+	hostname?: string; // default "0.0.0.0"
+	signal?: AbortSignal; // abort = close the server and ALL connections at once (forceful)
+	onListen?: (addr: DeminoListenAddr) => void; // default logListenInfo; () => {} to silence
+	onError?: (error: unknown) => Response | Promise<Response>; // adapter failures only; default plain-text 500
+	webSockets?: boolean; // Node only: provide info.upgradeWebSocket via a lazily imported `ws`. Default true
+}
+```
+
+Defaults mirror Deno's built-in server on every runtime (so a Node server also binds
+`0.0.0.0:8000`, not Node's dual-stack `::`). `onError` is a last resort: a Demino app never throws (its error
+handler answers), so this only sees the adapter's own failures. On Node, when `ws` cannot be
+loaded the adapter warns once and serves HTTP only; `webSockets: false` skips the import and the
+warning.
+
+---
+
+### ServeHandle
+
+```ts
+interface ServeHandle {
+	readonly hostname: string; // bound hostname
+	readonly port: number; // bound port (the real one for port: 0)
+	readonly url: string; // "http://<host>:<port>/" — IPv6 bracketed, 0.0.0.0 / :: shown as localhost
+	readonly finished: Promise<void>; // resolves once the listener is closed (after shutdown() or the signal)
+	shutdown(): Promise<void>; // graceful: stop accepting, let in-flight requests finish
+	ref(): void; // keep the process alive while the server runs (the default)
+	unref(): void; // let the process exit while the server runs
+}
+```
+
+`shutdown()` is idempotent. On Node and Bun it closes open WebSockets with `1001` instead of
+waiting for them, and force-closes whatever is still open after 5 s.
+
+---
+
+### ServeFn
+
+The shared signature every adapter's `serve` is typed as — handy for picking an adapter at
+runtime.
+
+```ts
+type ServeFn = (handler: DeminoServeHandler, options?: ServeOptions) => Promise<ServeHandle>;
+```
+
+---
+
+## Static Files
+
+### app.static()
+
+```ts
+app.static(route: string, fsRoot: string, options?: DeminoStaticOptions): Demino;
+```
+
+Registers a catch-all `route/*` handler (every method; anything but `GET`/`HEAD` gets a 405)
+that calls [`serveStatic()`](#servestatic) with `fsRoot` and a `urlRoot` derived from the mount
+path and `route`. `route` must not contain dynamic segments (`[x]`, `:x`, an inner `*`).
+
+**Example:**
+
+```ts
+app.static("/files", "./public");
+app.static("/assets", "./public/assets", {
+	headers: { "cache-control": "public, max-age=31536000, immutable" },
+});
+```
+
+---
+
+### serveStatic()
+
+Serves a file (or a directory's `index.html`) from `fsRoot` for a `GET`/`HEAD` request —
+`Request` in, `Response` out, no server or Demino context involved. Built on `node:fs`, the
+same on every runtime. This is what `app.static()` calls; it is exported for wrappers that need
+the behaviour under their own route.
+
+```ts
+function serveStatic(req: Request, opts: ServeStaticOptions): Promise<Response>;
+```
+
+**Behaviour:**
+
+- a method other than `GET`/`HEAD` → 405 with `Allow: GET, HEAD`
+- malformed percent-encoding → 400
+- a path that normalises differently (`/a//b`, `/a/./b`) → 301 to the normalised path; a file
+  requested with a trailing slash → 301 without it; a directory without one → 301 with it (so
+  relative links in `index.html` resolve). The `Location` is relative
+- a path outside `urlRoot`, a dot-segment (unless `showDotfiles`), anything that would resolve
+  outside `fsRoot`, and a missing file → 404
+- a file → 200 with `Content-Type` (via `mrmime`, `application/octet-stream` fallback,
+  `; charset=utf-8` for text-like types), `Content-Length`, `Accept-Ranges: bytes`, a weak
+  `ETag` (`W/"<size>-<mtime>"`, hex) and `Last-Modified`; `If-None-Match` /
+  `If-Modified-Since` → 304 without a body; a single `Range` → 206 with `Content-Range`
+  (unparsable → the whole file with 200, unsatisfiable → 416, ignored on an empty file);
+  `HEAD` → the same headers, no body
+- a directory → its `index.html` when `showIndex` (default), else 404
+
+Filesystem errors other than "not found" (e.g. `EACCES`) are thrown, so a Demino app routes
+them through its error handler like any other handler error.
+
+**Example:**
+
+```ts
+import { serveStatic } from "@marianmeres/demino";
+
+app.get("/public/*", (req) =>
+	serveStatic(req, {
+		fsRoot: "./public",
+		urlRoot: "public",
+		headers: (req) => ({
+			"cache-control": new URL(req.url).pathname.startsWith("/public/assets/")
+				? "public, max-age=31536000, immutable"
+				: "no-cache",
+		}),
+	}));
+```
+
+---
+
+### DeminoStaticOptions
+
+Options shared by `app.static()` and [`serveStatic()`](#servestatic).
+
+```ts
+interface DeminoStaticOptions {
+	showIndex?: boolean; // serve index.html for a directory request. Default true
+	showDotfiles?: boolean; // serve paths with a dot-segment (/.env, /.well-known/x). Default false (404)
+	etag?: boolean; // ETag + Last-Modified, 304 on If-None-Match / If-Modified-Since. Default true
+	headers?: DeminoStaticHeaders; // extra headers on 200/206/304 only — never on redirects or errors
+}
+```
+
+---
+
+### ServeStaticOptions
+
+```ts
+interface ServeStaticOptions extends DeminoStaticOptions {
+	fsRoot: string; // directory to serve from (resolved against the current working directory)
+	urlRoot?: string; // URL prefix without the leading slash ("files", "api/files") stripped before
+	// mapping onto fsRoot; a request outside of it is a 404. Default: none (whole pathname maps)
+}
+```
+
+---
+
+### DeminoStaticHeaders
+
+```ts
+type DeminoStaticHeaders =
+	| HeadersInit
+	| ((req: Request, filePath: string) => HeadersInit | undefined | null);
+```
+
+Applied with `set`, so a custom header overrides a computed one of the same name. The function
+form receives the resolved file path (e.g. a `Cache-Control` policy by path). Return
+`undefined`/`null` to add nothing.
 
 ---
 
@@ -788,7 +1102,7 @@ interface AuthzOptions {
 	// Resolve + store the subject when ctx.locals[subjectKey] is empty.
 	resolveSubject?: (
 		req: Request,
-		info: Deno.ServeHandlerInfo,
+		info: DeminoServeInfo,
 		ctx: DeminoContext,
 	) => unknown | Promise<unknown>;
 	// Fallback declaration for routes with no static meta. See createRouteResolver().
@@ -1044,18 +1358,24 @@ Composes multiple Demino apps into a single handler.
 ```ts
 function deminoCompose(
 	apps: Demino[],
-	notFoundHandler?: (req, info) => Response,
-): Deno.ServeHandler;
+	notFoundHandler?: DeminoServeHandler,
+): DeminoServeHandler;
 ```
+
+The result is a [`DeminoServeHandler`](#deminoservehandler) like the apps themselves: pass it
+to a runtime adapter's [`serve()`](#serve).
 
 **Example:**
 
 ```ts
+import { demino, deminoCompose } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+
 const app = demino();
 const api = demino("/api");
 const admin = demino("/admin");
 
-Deno.serve(deminoCompose([app, api, admin]));
+await serve(deminoCompose([app, api, admin]));
 ```
 
 ---
@@ -1110,18 +1430,21 @@ routes/
 **Example:**
 
 ```ts
+import { demino, deminoFileBased } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+
 const app = demino();
 await deminoFileBased(app, "./routes");
-Deno.serve(app);
+await serve(app);
 ```
 
 **Missing root directory:**
 
-By default a missing root directory is a hard error — it throws a `Deno.errors.NotFound`
-(carrying `code: "ENOENT"`). At boot time an absent routes directory almost always means a
-typo or a wrong working directory, and silently producing a zero-route app is a worse
-failure to debug. Match on `e instanceof Deno.errors.NotFound` or `e.code === "ENOENT"`
-(not the error `name`) when catching it.
+By default a missing root directory is a hard error — it throws a plain `Error` with
+`code: "ENOENT"` and `name: "NotFound"`. At boot time an absent routes directory almost always
+means a typo or a wrong working directory, and silently producing a zero-route app is a worse
+failure to debug. Match on `e.code === "ENOENT"` when catching it (like a filesystem error of
+the runtime itself).
 
 Set `ignoreMissingRootDir: true` for the legitimate "optional dir" case (e.g. a core
 dir plus a conditionally-present plugins/overrides dir) — missing roots are then
@@ -1154,16 +1477,17 @@ Sorts deeper routes first, then static before dynamic.
 
 ### logListenInfo()
 
-Console logging callback for `Deno.serve()`'s `onListen` option. Prints the server's
-listening URL(s) with color formatting. When bound to `0.0.0.0` (or `::`), displays both
-`localhost` and all detected network addresses.
+Console logging callback for a runtime adapter's `onListen` option — it is every adapter's
+default; pass it explicitly to add options, or hand it to a runtime's own server API. Prints
+the server's listening URL(s) with color formatting. When bound to `0.0.0.0` (or `::`),
+displays both `localhost` and all detected network addresses.
 
 With `{ json: true }` it instead emits a **single structured JSON line** on stdout, for
 containerized deployments where stdout is collected and shipped to a log aggregator.
 
 ```ts
 function logListenInfo(
-	localAddr: Deno.NetAddr,
+	localAddr: DeminoListenAddr, // { hostname, port } — a runtime's own address object fits too
 	options?: LogListenInfoOptions,
 ): void;
 
@@ -1185,15 +1509,13 @@ interface LogListenInfoOptions {
 
 ```ts
 import { deminoCompose, logListenInfo } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
-Deno.serve(
-	{
-		port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
-		hostname: Deno.env.get("SERVER_HOST") || undefined,
-		onListen: logListenInfo,
-	},
-	deminoCompose([app]),
-);
+await serve(deminoCompose([app]), {
+	port: parseInt(process.env.SERVER_PORT || "") || undefined,
+	hostname: process.env.SERVER_HOST || undefined,
+	onListen: logListenInfo,
+});
 ```
 
 **JSON output shape:**
@@ -1216,36 +1538,83 @@ the rest of the app's structured logs. Filter on `event == "server.listen"` rath
 the message text.
 
 Note that JSON mode does **not** enumerate network interfaces (container local addresses
-are noise, and it avoids needing the `--allow-sys` permission).
+are noise, and it avoids the system-info permission some runtimes gate the lookup behind, e.g.
+Deno's `--allow-sys`).
 
 ---
 
 ### createLogListenInfo()
 
 Creates a preconfigured [logListenInfo()](#loglisteninfo) callback, so options can be
-passed where `Deno.serve()` expects a bare `onListen` function.
+passed where an adapter's `serve()` (or a runtime's own server API) expects a bare `onListen`
+function.
 
 ```ts
 function createLogListenInfo(
 	options?: LogListenInfoOptions,
-): (localAddr: Deno.NetAddr) => void;
+): (localAddr: DeminoListenAddr) => void;
 ```
 
 **Example:**
 
 ```ts
 import { createLogListenInfo } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
 // human readable output locally, a single JSON line in docker
-Deno.serve(
-	{
-		onListen: createLogListenInfo({
-			json: "auto",
-			fields: { service: "api", env: Deno.env.get("ENV") },
-		}),
-	},
-	app,
-);
+await serve(app, {
+	onListen: createLogListenInfo({
+		json: "auto",
+		fields: { service: "api", env: process.env.ENV },
+	}),
+});
+```
+
+---
+
+### DeminoListenAddr
+
+What an `onListen` callback receives: the bound address. A runtime's own address object
+(hostname and port plus extras such as the transport) satisfies it too, so
+[`logListenInfo()`](#loglisteninfo) can be handed straight to a native server API's `onListen`.
+
+```ts
+interface DeminoListenAddr {
+	hostname: string;
+	port: number;
+}
+```
+
+---
+
+### getClientIpFromHeaders()
+
+Picks the client IP from proxy-forwarding headers, or `null` when none carries a valid IP
+literal. This is what [`ctx.ip`](#deminocontext) uses when
+[`trustProxy`](#deminooptions) is on; exported so an app can apply the same precedence
+elsewhere.
+
+```ts
+function getClientIpFromHeaders(headers: Headers): string | null;
+```
+
+Precedence: `X-Client-IP`, `X-Forwarded-For` (first **valid** token, left to right),
+`CF-Connecting-IP`, `Fastly-Client-IP`, `True-Client-IP`, `X-Real-IP`, `X-Cluster-Client-IP`,
+`X-Forwarded`, `Forwarded-For`, `X-Appengine-User-IP`, `Cf-Pseudo-IPv4`. A `1.2.3.4:5678`
+value is reduced to its host part; validation is `isIP` from `node:net`, so IPv6 literals are
+accepted and `unknown`, hostnames and garbage are skipped. `Forwarded` (RFC 7239) is not
+consulted.
+
+**Security:** every one of these headers is client-settable unless a trusted proxy in front
+overwrites it. Call this only for requests that arrived through such a proxy (what `trustProxy`
+asserts) — see
+[docs/reverse-proxy-and-forwarded-headers.md](docs/reverse-proxy-and-forwarded-headers.md).
+
+**Example:**
+
+```ts
+getClientIpFromHeaders(new Headers({ "x-forwarded-for": "unknown, 9.9.9.9, 10.0.0.1" }));
+// "9.9.9.9"
 ```
 
 ---

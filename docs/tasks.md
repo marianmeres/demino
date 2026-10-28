@@ -1,5 +1,50 @@
 # Common Tasks
 
+## Running on Each Runtime
+
+### Steps
+
+1. Import `serve` from the adapter subpath of the runtime you are on
+2. Pass the app (or a `deminoCompose()` result); `await` the `ServeHandle`
+
+### Template
+
+```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // Deno
+// import { serve } from "@marianmeres/demino/node"; // Node  (npm i ws for WebSockets)
+// import { serve } from "@marianmeres/demino/bun";  // Bun
+
+const app = demino();
+app.get("/", () => "Hello");
+
+const server = await serve(app, { port: 8000 }); // defaults: 0.0.0.0:8000, logListenInfo
+// server.url, server.port, await server.shutdown()
+```
+
+### Checklist
+
+- [ ] Same code on every runtime except the adapter import line
+- [ ] Node: `ws` installed if `info.upgradeWebSocket` (WebSocket tunneling) is needed
+- [ ] No `Deno.*`/`Bun.*` in app code that must run elsewhere — read `info` instead
+
+---
+
+## Verifying a Change
+
+Run, in this order, before committing (CI runs the same):
+
+```bash
+deno task test           # Deno
+npm test                 # Node (needs `npm install` once)
+npm run typecheck        # tsc --noEmit over src/ + tests/
+bun test                 # Bun
+deno publish --dry-run   # JSR package shape (slow types, exports map)
+deno task npm:build      # npm package into .npm-dist/ (deno task npm:smoke also imports it)
+```
+
+---
+
 ## Adding a New Middleware
 
 ### Steps
@@ -33,7 +78,8 @@ export function myMiddleware(options: MyMiddlewareOptions = {}): DeminoHandler {
 - [ ] Factory function exported (not direct handler)
 - [ ] Options interface exported
 - [ ] Added to `src/middleware/mod.ts`
-- [ ] Tests pass: `deno task test`
+- [ ] Portable: no runtime global, no `@std/` import (`tests/portability.test.ts` fails otherwise)
+- [ ] Tests pass on all three runtimes: `deno task test`, `npm test`, `bun test`
 
 ---
 
@@ -105,6 +151,95 @@ export function myUtil(input: string): string {
 
 ---
 
+## Adding a Runtime Adapter
+
+### Steps
+
+1. Create `src/adapters/[name].ts` exporting `serve: ServeFn` (from `./types.ts`). Type the
+   slice of the runtime global you use locally (see `deno.ts`/`bun.ts`) so `tsc` checks the
+   file without ambient runtime types
+2. Per request fill a `DeminoServeInfo`: `remoteAddr` (read at request start — peers vanish
+   once the connection closes), `upgradeWebSocket` (Deno-shaped: `{ socket, response }`,
+   socket CONNECTING until the handler returned the 101, then `open`), `raw`
+3. Honour the contract: defaults `0.0.0.0:8000`, `onListen` defaults to `logListenInfo`,
+   `signal` abort = forceful close of listener + every connection, `shutdown()` graceful with a
+   5 s force, `ServeHandle.url` via `toUrl()`, `port: 0` reports the real port, port-in-use
+   rejects with `code: "EADDRINUSE"`
+4. Add the flat shim `src/[name].ts` (re-export `serve` + the three types, like `src/deno.ts`)
+5. Add `"./[name]": "./src/[name].ts"` to `deno.json` `exports` **and** to `EXPORTS` in
+   `tests/manifest-sync.test.ts` (`scripts/build-npm.ts` derives npm entry points from the map)
+6. If the adapter names a new runtime global, add it to `RUNTIME_OWNER` in
+   `tests/portability.test.ts`
+7. Teach `pickServe()` in `tests/_utils.ts` to select it, add `tests/adapters/[name].test.ts`,
+   add the runtime to `.github/workflows/ci.yml`
+
+### Checklist
+
+- [ ] Only this file says the runtime's name (portability guard b)
+- [ ] `tests/adapters/[name].test.ts` covers: defaults, `port: 0`, `url`, `remoteAddr` →
+      `ctx.ip`, a WebSocket echo, `signal` vs `shutdown()`, port in use
+- [ ] Full suite green on that runtime through the harness
+
+---
+
+## Adding a Dependency
+
+### Steps
+
+1. Add it to `deno.json` `imports` (`npm:`/`jsr:` specifier) **and** `package.json`
+   `dependencies` with the same `^x.y.z` range — `tests/manifest-sync.test.ts` fails otherwise
+2. Add it to the `dependencies` list in `scripts/build-npm.ts` (published `package.json`)
+3. Import it by its bare name from `src/`; confirm it runs on Deno, Node and Bun
+4. `npm install` to refresh `package-lock.json`
+
+### Checklist
+
+- [ ] No `@std/*` (Deno-only resolution) — use a `node:*` built-in or inline the helper
+- [ ] Zero runtime-specific code inside the dependency
+- [ ] `deno task npm:build` still succeeds
+
+---
+
+## Serving Static Files
+
+### Steps
+
+1. `app.static(route, fsRoot, options?)` for the common case
+2. `serveStatic(req, { fsRoot, urlRoot, ...options })` directly when you need your own route
+   or per-request headers
+
+### Template
+
+```ts
+import { demino, serveStatic } from "@marianmeres/demino";
+
+const app = demino();
+
+// mounted on GET/HEAD /files/*
+app.static("/files", "./public", {
+	showIndex: true, // index.html for a directory (default)
+	showDotfiles: false, // /.env → 404 (default)
+	etag: true, // ETag/Last-Modified + 304 (default)
+	headers: (req, filePath) => ({ "cache-control": "no-cache" }),
+});
+
+// or under your own route
+app.get("/assets/*", (req) =>
+	serveStatic(req, {
+		fsRoot: "./public/assets",
+		urlRoot: "assets",
+		headers: { "cache-control": "public, max-age=31536000, immutable" },
+	}));
+```
+
+### Checklist
+
+- [ ] `route` has no dynamic segments (`[x]`, `:x`)
+- [ ] CORS, if needed, via `app.use(route, cors())` — not a static option
+- [ ] Non-"not found" fs errors reach the app's error handler (they are thrown)
+
+---
+
 ## Creating File-Based Routes
 
 ### Steps
@@ -160,10 +295,11 @@ export default [authMiddleware];
 
 ```ts
 import { demino, deminoFileBased } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
 const app = demino();
 await deminoFileBased(app, "./routes");
-Deno.serve(app);
+await serve(app);
 ```
 
 ### Checklist
@@ -172,8 +308,9 @@ Deno.serve(app);
 - [ ] `_middleware.ts` default exports array of middlewares
 - [ ] No directories starting with `_` or `.` (except `_middleware.ts`)
 - [ ] Using default router (file-based routing requires DeminoSimpleRouter)
-- [ ] Root dir exists — a missing root throws `Deno.errors.NotFound` (`code: "ENOENT"`)
-      by default; pass `ignoreMissingRootDir: true` only for genuinely optional dirs
+- [ ] Root dir exists — a missing root throws a plain `Error` with `code: "ENOENT"` and
+      `name: "NotFound"` by default (match on `code`); pass `ignoreMissingRootDir: true` only
+      for genuinely optional dirs
 
 ---
 
@@ -188,6 +325,7 @@ Deno.serve(app);
 
 ```ts
 import { demino, deminoCompose } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
 const app = demino(); // Root routes
 const api = demino("/api"); // API routes
@@ -197,8 +335,8 @@ const admin = demino("/admin"); // Admin routes
 api.use(authMiddleware);
 admin.use(adminOnlyMiddleware);
 
-// Compose and serve
-Deno.serve(deminoCompose([app, api, admin]));
+// Compose and serve (the result is a DeminoServeHandler like the apps themselves)
+await serve(deminoCompose([app, api, admin]));
 ```
 
 ### Checklist

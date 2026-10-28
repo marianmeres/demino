@@ -5,28 +5,36 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 ## Package Identity
 
 - **Name**: @marianmeres/demino
-- **Registry**: JSR (jsr.io/@marianmeres/demino)
-- **Version**: 1.11.0
-- **Runtime**: Deno
+- **Registry**: JSR (jsr.io/@marianmeres/demino) + npm (dual-published via `@marianmeres/npmbuild`)
+- **Version**: 2.0.0 (this branch; `deno.json` keeps the last 1.x number until the release task bumps it)
+- **Runtime**: web standards + the `node:*` subset — Deno, Node (≥ 22) and Bun through runtime adapters
 - **Type**: Web server framework
-- **Entry Point**: src/mod.ts
+- **Entry Points**: `src/mod.ts` (core, `.`); adapters `src/deno.ts` (`./deno`), `src/node.ts`
+  (`./node`), `src/bun.ts` (`./bun`); barrels `./middleware`, `./misc`, `./router`, `./utils`
 
 ## Core Concept
 
-Demino is a minimal web framework built on Deno's native HTTP server. It provides a thin
-layer over `Deno.serve()` with routing, middleware, error handling, and logging.
+Demino is a minimal web framework on web standards: an app is a
+`(req: Request, info?: DeminoServeInfo) => Promise<Response>` function with routing, middleware,
+error handling, static files and logging layered on top. The core touches no runtime global; a
+small **runtime adapter** per runtime owns the HTTP server (`serve(app)`) and fills in `info`.
 
 **Key Philosophy**: "Batteries NOT included" - provides building blocks, not a
-full-featured server.
+full-featured server. "One signature everywhere" - the app code is identical on every runtime,
+only the adapter import differs.
 
 ## Architecture Overview
 
 ```
-demino()           -> Demino app (implements Deno.ServeHandler)
+serve(app)         <- @marianmeres/demino/deno | /node | /bun  (ServeFn: owns the server,
+  |                   fills DeminoServeInfo {remoteAddr, upgradeWebSocket, raw}, returns ServeHandle)
+  v
+demino()           -> Demino app (a DeminoServeHandler; also a drop-in Deno serve handler)
   |
   ├── Router       -> Route matching (DeminoSimpleRouter default)
   ├── Middleware   -> Chain of DeminoHandler functions
   ├── Context      -> Request-scoped DeminoContext
+  ├── Static       -> serveStatic() on node:fs (app.static)
   └── Response     -> Auto-generated from handler returns
 ```
 
@@ -34,8 +42,24 @@ demino()           -> Demino app (implements Deno.ServeHandler)
 
 ```
 src/
-├── mod.ts                    # Main exports barrel
-├── demino.ts                 # Core: demino(), Demino, DeminoContext, types
+├── mod.ts                    # Main exports barrel (core + adapter types + middleware/misc/router/static/utils)
+├── demino.ts                 # Core: demino(), Demino, DeminoContext, DeminoServeInfo, types
+├── deno.ts                   # Flat shim -> adapters/deno.ts   (exports["./deno"])
+├── node.ts                   # Flat shim -> adapters/node.ts   (exports["./node"])
+├── bun.ts                    # Flat shim -> adapters/bun.ts    (exports["./bun"])
+├── middleware.ts             # Flat shim -> middleware/mod.ts  (exports["./middleware"])
+├── misc.ts                   # Flat shim -> misc/mod.ts        (exports["./misc"])
+├── router.ts                 # Flat shim -> router/mod.ts      (exports["./router"])
+├── utils.ts                  # Flat shim -> utils/mod.ts       (exports["./utils"])
+├── adapters/
+│   ├── types.ts              # ServeOptions, ServeHandle, ServeFn (+ internal toUrl); no runtime code
+│   ├── deno.ts               # serve() over Deno's built-in server (the only file that may say `Deno`)
+│   ├── node.ts               # serve() over node:http - own bridge; optional `ws` for upgrades
+│   └── bun.ts                # serve() over Bun.serve; per-socket WebSocket facade (only file saying `Bun`)
+├── static/
+│   ├── mod.ts                # Static exports barrel
+│   ├── serve-static.ts       # serveStatic(), DeminoStaticOptions, ServeStaticOptions, DeminoStaticHeaders
+│   └── mime.ts               # contentTypeFor() via mrmime (internal)
 ├── router/
 │   ├── mod.ts                # Router exports barrel
 │   ├── abstract.ts           # DeminoRouter base class
@@ -56,15 +80,18 @@ src/
 │   ├── trailing-slash.ts     # Slash normalization
 │   └── proxy/
 │       ├── proxy.ts          # Request proxying
-│       └── utils.ts          # Proxy utility functions
+│       ├── utils.ts          # Proxy utility functions
+│       └── websocket.ts      # WebSocket tunnel (internal, not exported)
 ├── misc/
 │   ├── mod.ts                # Misc exports barrel
 │   ├── compose.ts            # deminoCompose() multi-app
-│   └── file-based.ts         # Directory-based routing
+│   └── file-based.ts         # Directory-based routing (node:fs)
 └── utils/
     ├── mod.ts                # Utils exports barrel
+    ├── ansi.ts               # green()/red() ANSI helpers, NO_COLOR aware (no dependency)
+    ├── client-ip.ts          # getClientIpFromHeaders() - forwarding-header precedence
     ├── create-demino-clog.ts # DeminoLogger factory using @marianmeres/clog
-    ├── log-listen-info.ts    # logListenInfo()/createLogListenInfo() onListen callback
+    ├── log-listen-info.ts    # logListenInfo()/createLogListenInfo(), DeminoListenAddr (node:os)
     ├── token-bucket.ts       # TokenBucket class
     ├── cookies.ts            # parseCookies, serializeCookie
     ├── sleep.ts              # Promise delay
@@ -73,14 +100,23 @@ src/
     ├── is-plain-object.ts    # Plain object type guard
     └── is-valid-date.ts      # Date type guard
 
-tests/                        # Test suite
+tests/                        # node:test suite - runs under deno test, node --test and bun test
+├── _utils.ts                 # Harness: startTestServer()/runTestServerTests() via the current runtime's adapter; isDeno/isBun/isNode
 ├── demino.test.ts            # Core framework tests
-├── _utils.ts                 # Test utilities
+├── portability.test.ts       # Guard: no runtime globals / @std / non-erasable TS in src/
+├── manifest-sync.test.ts     # Guard: deno.json <-> package.json <-> exports map
+├── adapters/                 # One test file per adapter (deno/node/bun)
 ├── middleware/               # Middleware tests
 ├── router/                   # Router tests
-├── misc/                     # Feature tests
+├── misc/                     # compose, file-based, static
+├── types/                    # deno-serve-compat: the app stays a drop-in Deno serve handler
+├── utils/                    # ansi, client-ip, log-listen-info, token-bucket, with-timeout
 ├── fixtures/                 # File-based routing fixtures
 └── static/                   # Static file serving test files
+
+scripts/
+├── build-npm.ts              # npm package into .npm-dist/ (entry points derived from deno.json exports)
+└── smoke-npm.mjs             # Installs .npm-dist into a temp project and imports every subpath (Node)
 ```
 
 ## Critical Types
@@ -90,9 +126,45 @@ tests/                        # Test suite
 ```ts
 type DeminoHandler = (
 	req: Request,
-	info: Deno.ServeHandlerInfo,
+	info: DeminoServeInfo,
 	ctx: DeminoContext,
 ) => any | Promise<any>;
+```
+
+### DeminoServeInfo (what the adapter passes as `info`)
+
+```ts
+interface DeminoServeInfo {
+	remoteAddr?: DeminoRemoteAddr; // { hostname, port, transport? } - socket peer; feeds ctx.ip
+	upgradeWebSocket?: DeminoUpgradeWebSocket; // (req, { protocol? }) => { socket, response }
+	raw?: unknown; // runtime's own per-request object (Deno info / IncomingMessage / Bun Server)
+}
+type DeminoServeHandler = (req: Request, info?: DeminoServeInfo) => Response | Promise<Response>;
+```
+
+Every field optional: a missing `info` is normalised to a frozen `{}`, so always write
+`info.remoteAddr?.hostname`. Capabilities are feature-detected through `info` (never by
+sniffing the runtime). `upgradeWebSocket` is CONNECTING until the handler returned the 101,
+then `open` — the same contract on all three runtimes (Node/Bun hold early frames).
+
+### Adapter contract (`src/adapters/types.ts`)
+
+```ts
+type ServeFn = (handler: DeminoServeHandler, options?: ServeOptions) => Promise<ServeHandle>;
+interface ServeOptions {
+	port?: number; // 8000; 0 = free port
+	hostname?: string; // "0.0.0.0"
+	signal?: AbortSignal; // abort = forceful close (listener + every connection)
+	onListen?: (addr: DeminoListenAddr) => void; // default logListenInfo
+	onError?: (error: unknown) => Response | Promise<Response>; // adapter failures only
+	webSockets?: boolean; // Node only: lazily import `ws`; default true
+}
+interface ServeHandle {
+	readonly hostname: string; readonly port: number; readonly url: string;
+	readonly finished: Promise<void>;
+	shutdown(): Promise<void>; // graceful; Node/Bun force after 5 s
+	ref(): void; unref(): void;
+}
 ```
 
 ### DeminoContext
@@ -106,7 +178,7 @@ interface DeminoContext {
 	headers: Headers; // Response headers
 	status: number; // Response status
 	route: string; // Matched route pattern
-	ip: string; // Client IP
+	ip: string; // Client IP (info.remoteAddr, or forwarding headers when trustProxy is on)
 	error: any; // Error ref (error handlers)
 	appLocals: any; // App-wide persistent data
 	getLogger(): DeminoLogger | null;
@@ -124,11 +196,12 @@ dispatch always uses `url.pathname`, which `trustProxy` never rewrites.
 ### Demino Interface
 
 ```ts
-interface Demino extends Deno.ServeHandler {
+interface Demino {
+  (req: Request, info?: DeminoServeInfo): Promise<Response>; // the app IS the serve handler
   get/post/put/patch/delete/head/options/connect/trace/all: DeminoRouteHandler;
   use(...args): Demino;              // Register middleware
   error(handler): Demino;            // Set error handler
-  static(route, fsRoot, options?): Demino;
+  static(route, fsRoot, options?: DeminoStaticOptions): Demino;
   logger(logger): Demino;
   mountPath(): string;
   info(): { routes, globalAppMiddlewaresCount };
@@ -137,6 +210,9 @@ interface Demino extends Deno.ServeHandler {
   locals: DeminoAppLocals;           // App-wide persistent data (ctx.appLocals)
 }
 ```
+
+`Demino` does not extend any runtime type; it is structurally a Deno serve handler, so passing
+it to the runtime directly still compiles (tested in `tests/types/deno-serve-compat.test.ts`).
 
 `routes()` returns `{ method, route, meta }[]` mirroring the dispatcher match-set (ALL
 router, catch-alls, auto-HEAD). It is the read-side companion to `routeMeta` — intended
@@ -213,24 +289,40 @@ middleware), `HANDLER` (Infinity, final handler). Tag a middleware
 
 ## Dependencies
 
-### JSR
+### Runtime (same name + range in `deno.json` `imports` and `package.json`; `tests/manifest-sync.test.ts` enforces it)
 
 - @marianmeres/http-utils - HTTP errors/status codes
 - @marianmeres/midware - Middleware chaining
 - @marianmeres/simple-router - Default router implementation
-- @std/assert - Test assertions
-- @std/fs - File system utilities (walkSync)
-- @std/http - HTTP utilities (serveDir)
-- @std/path - Path utilities
+- @marianmeres/clog - `createDeminoClog()` logger
+- mrmime - content types for static files
+
+### Optional peer (npm; `devDependencies` in the repo)
+
+- ws - WebSocket upgrades in the Node adapter (lazily imported; missing = HTTP only, one warning)
+
+### Built-ins
+
+`node:fs`, `node:path`, `node:url`, `node:os`, `node:net`, `node:stream`, `node:http`. **No
+`@std/*` in `src/`** (the portability guard fails the suite otherwise); the client-IP header
+precedence is inlined in `getClientIpFromHeaders()`.
+
+### Dev / tooling
+
+- typescript (`npm run typecheck`, `tsc --noEmit`), @types/node, @types/ws
+- @marianmeres/npmbuild (`scripts/build-npm.ts`), @marianmeres/mcp-server/types (`mcp.ts`)
 
 ## Common Patterns
 
 ### Basic App
 
 ```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+
 const app = demino();
 app.get("/", () => "Hello");
-Deno.serve(app);
+await serve(app);
 ```
 
 ### With Mount Path
@@ -261,7 +353,7 @@ app.error((req, info, ctx) => {
 ```ts
 const app = demino();
 const api = demino("/api");
-Deno.serve(deminoCompose([app, api]));
+await serve(deminoCompose([app, api])); // deminoCompose() returns a DeminoServeHandler
 ```
 
 ### File-Based Routing
@@ -271,23 +363,49 @@ const app = demino();
 await deminoFileBased(app, "./routes");
 ```
 
-## Testing
+### WebSocket endpoint (through the adapter's capability)
 
-```bash
-deno test -A              # Run all tests
-deno task test            # Run all tests (shorthand)
-deno task test:watch      # Run tests in watch mode
+```ts
+app.get("/ws", (req, info) => {
+	if (!info.upgradeWebSocket) throw createHttpError(501);
+	const { socket, response } = info.upgradeWebSocket(req);
+	socket.onmessage = (e) => socket.send(e.data);
+	return response;
+});
 ```
 
-Test files located in: `tests/`
+## Testing
 
-## Deno Tasks
+One `node:test` + `node:assert/strict` suite, three runners:
+
+```bash
+deno task test            # Deno
+npm test                  # Node (run `npm install` once on a fresh checkout)
+bun test                  # Bun (5 s default per-test timeout; pass { timeout } to slow tests)
+npm run typecheck         # tsc --noEmit over src/ + tests/ (the only type gate)
+deno task test:watch      # Deno watch mode
+```
+
+Test files located in: `tests/`. Server tests go through `startTestServer()` /
+`runTestServerTests()` in `tests/_utils.ts`, which picks the adapter of the current runtime.
+Runtime-only cases use `{ skip: !isDeno }` / `{ skip: isBun }` with a comment stating why.
+Guards: `tests/portability.test.ts`, `tests/manifest-sync.test.ts`,
+`tests/types/deno-serve-compat.test.ts`. CI (`.github/workflows/ci.yml`) runs Deno (pinned),
+Node 24 + 26 and Bun.
+
+## Tasks and Scripts
 
 ```bash
 deno task dev             # Run main module with watch
-deno task test            # Run all tests
-deno task test:watch      # Run tests in watch mode
-deno task release         # Publish to JSR
+deno task test            # Run all tests on Deno
+npm test                  # Run all tests on Node
+bun test                  # Run all tests on Bun
+npm run typecheck         # tsc --noEmit
+deno publish --dry-run    # JSR package check
+deno task npm:build       # Build the npm package into .npm-dist/
+deno task npm:smoke       # Build + install into a temp project + import every subpath (Node)
+deno task release         # Bump version (release tooling)
+deno task publish         # deno publish + npm publish of .npm-dist/
 ```
 
 ## Special Behaviors
@@ -307,10 +425,21 @@ deno task release         # Publish to JSR
 6. **Per-(method, route) middleware caching** (since 1.7.0): The assembled `Midware` for
    each route is built once on the first matching request and reused. The cache is
    invalidated when `app.use(...)` runs or when a route is (re-)registered.
-7. **File-based missing root dir**: `deminoFileBased()` throws `Deno.errors.NotFound`
-   (`code: "ENOENT"`) when a root directory is absent — fail-loud at boot, not a
-   silently-empty app. Pass `ignoreMissingRootDir: true` to skip absent roots with a
-   `logger.warn`. A root that exists but is not a directory always throws `TypeError`.
+7. **File-based missing root dir**: `deminoFileBased()` throws a plain `Error` with
+   `name: "NotFound"` and `code: "ENOENT"` when a root directory is absent — fail-loud at
+   boot, not a silently-empty app. Match on `code`. Pass `ignoreMissingRootDir: true` to skip
+   absent roots with a `logger.warn`. A root that exists but is not a directory always throws
+   `TypeError`.
+8. **WebSocket tunneling needs an adapter**: `proxy()` upgrades the client leg through
+   `info.upgradeWebSocket`. Without it (app handed to the runtime's own server, or the Node
+   adapter with `webSockets: false` / no `ws`) upgrade requests are forwarded as plain HTTP
+   and one warning is logged per process.
+9. **`ctx.ip` without an adapter**: Deno's own server passes `remoteAddr`, so `ctx.ip` works;
+   Bun's `Bun.serve({ fetch: app })` passes its `Server` as `info`, so `ctx.ip` is `""` — use
+   the Bun adapter.
+10. **Adapter defaults mirror Deno**: `0.0.0.0:8000`, `onListen` prints the listen info,
+    `signal` abort is forceful, `shutdown()` graceful (Node/Bun force after 5 s), port in use
+    rejects with `code: "EADDRINUSE"`.
 
 ## Common Modifications
 
@@ -319,6 +448,7 @@ deno task release         # Publish to JSR
 1. Create file in `src/middleware/`
 2. Export factory function returning `DeminoHandler`
 3. Add export to `src/middleware/mod.ts`
+4. Stay portable: no runtime global, no `@std/` import
 
 ### Add New Router
 
@@ -330,6 +460,12 @@ deno task release         # Publish to JSR
 
 1. Create file in `src/utils/`
 2. Add export to `src/utils/mod.ts`
+
+### Add a Runtime Adapter / a Dependency
+
+See [docs/tasks.md](./docs/tasks.md#adding-a-runtime-adapter) — exports map, `EXPORTS` in
+`tests/manifest-sync.test.ts`, `RUNTIME_OWNER` in `tests/portability.test.ts`, harness
+`pickServe()`, CI matrix; dependencies go in both manifests plus `scripts/build-npm.ts`.
 
 ## Error Handling
 
@@ -349,9 +485,19 @@ app.error((req, info, ctx) => {
 ## Static Files
 
 ```ts
-app.static("/files", "/path/to/dir", options?);
-// Uses @std/http/serveDir internally
+app.static("/files", "/path/to/dir", options?); // mounts ALL /files/* -> serveStatic()
+// options: DeminoStaticOptions { showIndex=true, showDotfiles=false, etag=true, headers?: HeadersInit | (req, filePath) => HeadersInit }
+
+import { serveStatic } from "@marianmeres/demino"; // standalone, under your own route
+app.get("/public/*", (req) => serveStatic(req, { fsRoot: "./public", urlRoot: "public" }));
 ```
+
+`serveStatic()` (`src/static/serve-static.ts`, `node:fs`): GET/HEAD only (405 otherwise), 400
+on bad percent-encoding, 301 (relative `Location`) to the normalised path / trailing-slash
+form, 404 outside root / dot-segments / missing, weak `ETag` `W/"<size>-<mtime>"` +
+`Last-Modified` + 304, single `Range` → 206/416, content types via `mrmime`
+(`application/octet-stream` fallback, `; charset=utf-8` on text-like). Non-ENOENT fs errors
+are thrown (reach the error handler). CORS is not a static option — `app.use(route, cors())`.
 
 ## Rate Limiting
 
@@ -387,8 +533,7 @@ app.get(
 - Bracketed IPv6 hostnames (`[::1]`)
 
 **Caveat:** string-only check, no DNS resolution. DNS rebinding bypasses this guard. For
-DNS-rebinding-resistant SSRF protection, resolve via `Deno.resolveDns` and re-check each
-result.
+DNS-rebinding-resistant SSRF protection, resolve via `node:dns` and re-check each result.
 
 **WebSocket proxying** (since 1.17.0): well-formed upgrade requests are tunneled to the
 upstream by default (`webSockets: false` disables; malformed upgrades fall through to the
@@ -396,8 +541,10 @@ HTTP path). Upstream is dialed FIRST (full target policy + forwarded headers inc
 cookies/auth/`X-Forwarded-*`/hop-counter; subprotocols negotiated end-to-end), client is
 upgraded only after the upstream handshake succeeds → dial failures stay regular HTTP
 errors (502/504/`onError`). Close code + reason propagate both ways. `timeout` bounds the
-handshake only. N/A for tunnels: `maxRedirects`, `cache`, response transforms. Impl:
-`src/middleware/proxy/websocket.ts` (internal, not exported).
+handshake only. N/A for tunnels: `maxRedirects`, `cache`, response transforms. The client leg
+needs `info.upgradeWebSocket` (an adapter's `serve()`), see Special Behaviors #8. Upstream dial
+uses the global `WebSocket` with `{ protocols, headers }` (works on Deno, Bun and Node ≥ 22).
+Impl: `src/middleware/proxy/websocket.ts` (internal, not exported).
 
 ## trustProxy / proxy-aware ctx.url (since 1.15.0)
 
@@ -434,11 +581,12 @@ port never leaks into an absolute self-URL. `resolveRequestUrl` is private (not
 exported). Routing is unaffected (always `url.pathname`).
 
 **`trustProxy` also gates `ctx.ip`** (behavior change in 1.15.0 — see below). With it
-OFF, `ctx.ip` is the **direct socket peer** and `X-Forwarded-For`/`X-Real-IP`/
-`CF-Connecting-IP` are ignored (a forged `X-Forwarded-For` has zero effect, and
+OFF, `ctx.ip` is the **direct socket peer** (`info.remoteAddr`) and `X-Forwarded-For`/
+`X-Real-IP`/`CF-Connecting-IP` are ignored (a forged `X-Forwarded-For` has zero effect, and
 `rateLimit()` keyed on `ctx.ip` can't be spoofed). With it ON, `ctx.ip` is resolved
-from those forwarding headers (`X-Client-IP`, left-most `X-Forwarded-For`, …), falling
-back to the socket. Previously `ctx.ip` trusted `X-Forwarded-For` **ungated**.
+from those forwarding headers via the exported `getClientIpFromHeaders()` (`X-Client-IP`,
+left-most valid `X-Forwarded-For`, …), falling back to the socket. Previously `ctx.ip` trusted
+`X-Forwarded-For` **ungated**.
 
 ## Context Logger Access
 
@@ -471,6 +619,23 @@ const app2 = demino("", [], {
 
 ## Recent Additions
 
+### 2.0.0
+
+- **Runtime adapters** `@marianmeres/demino/deno`, `/node`, `/bun`: one `serve(handler,
+  options?) => Promise<ServeHandle>` (`ServeOptions`, `ServeHandle`, `ServeFn` exported from
+  the root too). Node adapter = own `node:http` bridge (streams, backpressure, multi-`Set-Cookie`,
+  `req.signal` on client abort, optional `ws` upgrades); Bun adapter = `Bun.serve` + per-socket
+  WebSocket facade.
+- **`DeminoServeInfo`** (`remoteAddr?`, `upgradeWebSocket?`, `raw?`) + `DeminoServeHandler`,
+  `DeminoRemoteAddr`, `DeminoUpgradeWebSocket(Options)`.
+- **`serveStatic()`** + `DeminoStaticOptions` / `ServeStaticOptions` / `DeminoStaticHeaders`
+  (own static module on `node:fs`, content types via `mrmime`).
+- **`DeminoListenAddr`** (what `onListen` receives); `getClientIpFromHeaders()` documented.
+- **npm package** (dual-published; `engines.node >= 22`), subpath exports `./middleware`,
+  `./misc`, `./router`, `./utils` now real.
+- **Test suite on `node:test`**, green on Deno, Node and Bun; portability + manifest-sync
+  guards; GitHub Actions matrix.
+
 ### 1.18.0 (additive, no breaking change)
 
 - **Structured `onListen` logging.** `logListenInfo()` takes an optional second
@@ -479,10 +644,10 @@ const app2 = demino("", [], {
   `json: true` (or `"auto"` = JSON only when stdout is not a TTY) it emits a single JSON
   line — `timestamp`/`level`/`logger`/`message` (clog `jsonOutput` default field names)
   plus `event: "server.listen"`, `hostname`, `port`, `url`, and any `fields`. JSON mode
-  deliberately skips `Deno.networkInterfaces()` (container-local addresses are noise, and
-  it avoids `--allow-sys`). Human mode is unchanged and still the default; interface
-  enumeration there is now wrapped in try/catch so a missing `--allow-sys` no longer
-  throws out of `onListen`.
+  deliberately skips the network-interface enumeration (container-local addresses are noise,
+  and it avoids the system-info permission some runtimes require). Human mode is unchanged and
+  still the default; interface enumeration there is wrapped in try/catch so a missing
+  permission no longer throws out of `onListen`.
 
 ### 1.17.0 (additive, no breaking change)
 
@@ -555,6 +720,37 @@ const app2 = demino("", [], {
 
 ## Recent Breaking Changes
 
+### 2.0.0
+
+- **Runtime decoupling.** `src/` is web standards + `node:*` only; servers start through the
+  runtime adapters (`@marianmeres/demino/deno`, `/node`, `/bun`). Published to JSR **and**
+  npm (Node ≥ 22). Every forced consumer edit is sed-able (type renames).
+- **Handler info type:** `Deno.ServeHandlerInfo` → `DeminoServeInfo` (type-only;
+  `remoteAddr?`, `upgradeWebSocket?`, `raw?`). `Demino` no longer extends
+  `Deno.ServeHandler` but stays structurally compatible: `Deno.serve(app)` compiles and runs
+  (`info` then carries `remoteAddr` only).
+- **`app.static` options:** own `serveStatic()` on `node:fs` replaces `@std/http/serveDir`.
+  `DeminoStaticOptions` = `showIndex`, `showDotfiles`, `etag`, `headers`
+  (`HeadersInit | (req, filePath) => HeadersInit`). Removed: `enableCors` (use `cors()` on
+  the mount), `quiet`, `showDirListing`, `etagAlgorithm`, `headers: string[]`. ETag values
+  change once (weak `W/"<size>-<mtime>"`); static 301s emit a relative `Location`; bad
+  percent-encoding is a 400.
+- **`deminoFileBased` missing root:** throws a plain `Error` with `code: "ENOENT"`,
+  `name: "NotFound"` (was `Deno.errors.NotFound`); `instanceof` checks → `code` checks.
+- **`logListenInfo(addr)`** takes a `DeminoListenAddr` (`{ hostname, port }`); Deno's
+  `onListen` argument still satisfies it (type-only).
+- **Proxy WebSocket tunneling needs `info.upgradeWebSocket`** → an adapter's `serve()`. Under
+  a bare `Deno.serve(app)` upgrade requests fall through to the HTTP path with one warning.
+- **`ctx.ip` under a bare `Bun.serve({ fetch: app })`** is `""` — use the Bun adapter.
+- **Dependencies:** removed `@std/*` and `request-ip` (inlined as `getClientIpFromHeaders()`,
+  header precedence preserved, `Forwarded` dropped); added `mrmime`; optional `ws` peer for
+  Node WebSocket upgrades.
+- **Package exports:** `.`, `./deno`, `./node`, `./bun`, `./middleware`, `./misc`,
+  `./router`, `./utils` (the barrel subpaths `AGENTS.md`/`mcp.ts` claimed before now
+  resolve); npm `engines.node >= 22`.
+- **Tests:** `node:test` + `node:assert/strict` (was `Deno.test` + `@std/assert`); the
+  harness starts servers through the current runtime's adapter.
+
 ### 1.15.0
 
 - **`ctx.ip` is now gated by `trustProxy`.** Previously `ctx.ip` trusted
@@ -602,9 +798,10 @@ const app2 = demino("", [], {
 
 For deeper context, consult:
 
-- [Architecture](./docs/architecture.md) — System design, components, request lifecycle
-- [Conventions](./docs/conventions.md) — Code style, patterns, error handling
-- [Tasks](./docs/tasks.md) — Step-by-step common procedures
+- [Architecture](./docs/architecture.md) — System design, runtime adapters, request lifecycle
+- [Conventions](./docs/conventions.md) — Code style, portability rule, testing
+- [Tasks](./docs/tasks.md) — Step-by-step procedures (running on each runtime, adding an
+  adapter / dependency / middleware, verifying a change)
 - [Reverse proxies and `X-Forwarded-*` spoofing](./docs/reverse-proxy-and-forwarded-headers.md)
   — threat model behind `trustProxy`, `ctx.url`, and `ctx.ip` gating
 

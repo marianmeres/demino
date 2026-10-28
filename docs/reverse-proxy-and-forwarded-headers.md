@@ -21,7 +21,7 @@ plaintext hop:
 
 ```
 client ──HTTPS:443──▶ proxy (terminates TLS) ──HTTP──▶ origin (127.0.0.1:8888)
-        example.com                                     Deno.serve(app)
+        example.com                                     serve(app)
 ```
 
 At the origin, the native request has *lost* the client-facing context:

@@ -1,9 +1,11 @@
 # @marianmeres/demino
 
+[![NPM](https://img.shields.io/npm/v/@marianmeres/demino)](https://www.npmjs.com/package/@marianmeres/demino)
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
+[![License](https://img.shields.io/npm/l/@marianmeres/demino)](LICENSE)
 
-"Demino" (Deno minimal) - minimalistic web server framework built on top of the Deno's
-built-in HTTP server, providing:
+"Demino" (Deno minimal) - minimalistic web server framework built on web standards
+(`Request` in, `Response` out), running on **Deno, Node and Bun**, providing:
 
 - **routing**,
 - **middlewares support**,
@@ -14,15 +16,21 @@ built-in HTTP server, providing:
 ## Batteries are NOT included
 
 The design goal of this project is to provide a thin and
-[sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) extensible layer on top of the
-`Deno.serve` handler. Nothing more, nothing less. In other words, this is a building
-blocks framework, not a full featured web server.
+[sweet](https://en.wikipedia.org/wiki/Syntactic_sugar) extensible layer on top of a plain
+`(request, info) => Response` handler. Nothing more, nothing less. In other words, this is a
+building blocks framework, not a full featured web server.
 
 ## Installation
 
 ```sh
 deno add jsr:@marianmeres/demino
+# or
+npm install @marianmeres/demino
 ```
+
+The npm package needs Node 22 or newer (Bun uses it too). WebSocket upgrades on Node need the
+optional [`ws`](https://www.npmjs.com/package/ws) package (`npm install ws`); without it the
+Node adapter serves plain HTTP and warns once.
 
 ## API Documentation
 
@@ -32,6 +40,7 @@ For complete API reference, see [API.md](API.md).
 
 ```ts
 import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
 // create the Demino app instance
 const app = demino();
@@ -39,9 +48,67 @@ const app = demino();
 // register method and route handlers...
 app.get("/", () => "Hello, World!");
 
-// serve (Demino app is a `Deno.serve` handler)
-Deno.serve(app);
+// serve through the runtime adapter (the same call on every runtime)
+await serve(app);
 ```
+
+On Deno the adapter is optional: a Demino app is a plain `(req, info) => Response` function, so
+`Deno.serve(app)` keeps working as it always did (see [Runtimes](#runtimes) for what the adapter
+adds).
+
+## Runtimes
+
+The core of Demino is runtime-agnostic (web standards plus the `node:*` subset). Starting a
+server is the only runtime-specific step, and it is one import away:
+
+| Runtime | Import                     | Server underneath                      |
+| ------- | -------------------------- | -------------------------------------- |
+| Deno    | `@marianmeres/demino/deno` | the built-in HTTP server               |
+| Node    | `@marianmeres/demino/node` | own bridge over `node:http` (HTTP/1.1) |
+| Bun     | `@marianmeres/demino/bun`  | the built-in HTTP server               |
+
+Every adapter exports the same `serve(handler, options?)`, resolves with the same `ServeHandle`,
+and defaults to `0.0.0.0:8000` with the listen info printed (pass `onListen: () => {}` to
+silence it):
+
+```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/node";
+
+const app = demino();
+app.get("/", () => "Hello");
+
+const server = await serve(app, {
+	port: 3000, // 0 picks a free port
+	hostname: "127.0.0.1",
+	onListen: ({ hostname, port }) => console.log(`listening on ${hostname}:${port}`),
+});
+
+server.url; // "http://127.0.0.1:3000/"
+await server.shutdown(); // graceful; Node and Bun force-close after 5 s
+```
+
+`ServeOptions`: `port`, `hostname`, `signal` (aborting closes the server and every connection
+at once), `onListen`, `onError` (for the adapter's own failures - a Demino app never throws) and,
+on Node only, `webSockets` (default `true`; lazily imports `ws`). `ServeHandle`: `hostname`,
+`port`, `url`, `finished`, `shutdown()`, `ref()`, `unref()`. See
+[API.md](API.md#runtime-adapters).
+
+What the adapter puts on the handler's `info` argument (a `DeminoServeInfo`):
+
+- `remoteAddr` - the socket peer (`{ hostname, port, transport }`); what `ctx.ip` reports when
+  `trustProxy` is off,
+- `upgradeWebSocket(req, { protocol? })` - the WebSocket upgrade capability, with the same
+  `{ socket, response }` shape on every runtime (Node: through the optional `ws`; Bun: a
+  per-socket facade over Bun's server-level handlers). The [proxy](#proxy) middleware needs it
+  for WebSocket tunneling,
+- `raw` - the runtime's own per-request object, untyped.
+
+**Without an adapter.** On Deno, `Deno.serve(app)` works unchanged: `info` then carries
+`remoteAddr` only, so everything except WebSocket tunneling behaves the same. On Bun,
+`Bun.serve({ fetch: app })` serves the app, but Bun passes its `Server` as `info`, so `ctx.ip`
+is empty and there is no upgrade capability - use the adapter. On Node there is no web-standard
+server to hand the app to, so the adapter is the way.
 
 ## Mount path
 
@@ -106,7 +173,7 @@ html string or json objects).
 As soon as any middleware decides to _return_ a thing, the middlewares execution chain is
 terminated and a `Response` is sent immediately.
 
-Unlike in `Deno.serve` handlers, the Demino route handlers are not required to return a
+Unlike a bare server handler, the Demino route handlers are not required to return a
 `Response` instance, it will be created automatically based on what they return:
 
 - if the final returned value is `undefined` (no middleware returned a defined value),
@@ -137,13 +204,18 @@ app.get('/templated', (r, i, c) => new MyRenderer(c.locals))
 app.get('/manual', () => new Response('This will be sent as is.'))
 ```
 
-The middleware and/or route handler has the following signature (note that the arguments
-are a subset of the normal `Deno.ServeHandler`, meaning that any valid `Deno.ServeHandler`
-is a valid Demino app handler):
+The middleware and/or route handler has the following signature (the first two arguments are
+exactly what the runtime adapter passes to the app itself, so any `(req, info) => Response`
+server handler is also a valid Demino handler):
 
 ```typescript
-function handler(req: Request, info: Deno.ServeHandlerInfo, context: DeminoContext): any;
+function handler(req: Request, info: DeminoServeInfo, context: DeminoContext): any;
 ```
+
+`DeminoServeInfo` is the portable version of a runtime's own "serve handler info":
+`remoteAddr`, the optional `upgradeWebSocket` capability and the untyped `raw` runtime object -
+see [Runtimes](#runtimes). All of its fields are optional (the app can also be called directly,
+e.g. in tests, with no `info` at all).
 
 Middlewares can be registered as:
 
@@ -181,7 +253,7 @@ It consists of:
 const app = demino("/articles");
 
 // example middleware loading article (from DB, let's say)...
-app.use(async (req: Request, info: Deno.ServeHandlerInfo, ctx: DeminoContext) => {
+app.use(async (req: Request, info: DeminoServeInfo, ctx: DeminoContext) => {
 	// eg any route which will have an `/[articleId]/` segment, we automatically read
 	// article data (which also means, it will auto validate the parameter)
 	if (ctx.params.articleId) {
@@ -380,14 +452,45 @@ app.use((r, i, ctx) => {
 
 ## Serving static files
 
-Static files can be served through `.static(...)` method, internally implemented with
-[`@std/http/serveDir`](https://jsr.io/@std/http/doc/~/serveDir) where you can optionally
-pass other [`ServeDirOptions`](https://jsr.io/@std/http/doc/~/ServeDirOptions) (except for
-`fsRoot` and `urlRoot`).
+Static files are served through the `.static(route, fsRoot, options?)` method. Under the hood it
+is the exported `serveStatic(req, options)` - a plain `Request` → `Response` function on
+`node:fs`, the same on every runtime - mounted on `route/*`:
 
 ```typescript
-app.static('/files', '/path/to/my/files/dir', options?);
+app.static("/files", "/path/to/my/files/dir");
+
+// with options (DeminoStaticOptions)
+app.static("/assets", "./public", {
+	showIndex: true, // serve index.html for a directory request (default true)
+	showDotfiles: false, // /.env, /.well-known/x → 404 (default false)
+	etag: true, // ETag + Last-Modified, 304 on If-None-Match / If-Modified-Since (default true)
+	// extra headers (HeadersInit, or a per-request function) set on 200/206/304 only
+	headers: (req, filePath) => ({
+		"cache-control": filePath.includes("/immutable/")
+			? "public, max-age=31536000, immutable"
+			: "no-cache",
+	}),
+});
 ```
+
+What you get: `GET`/`HEAD` only (anything else is a 405 with `Allow`), content types via
+[`mrmime`](https://www.npmjs.com/package/mrmime) (`; charset=utf-8` on text-like types),
+`Content-Length`, `Accept-Ranges` and single-range `Range` requests (206/416), a weak `ETag`,
+301 redirects to the normalised path (`/a//b` → `/a/b`, a directory without a trailing slash →
+with it, a file with one → without), and 404 for anything outside the root, dot-segments (unless
+`showDotfiles`) and missing files. Filesystem errors other than "not found" are thrown, so they
+reach your error handler. The route must not contain dynamic segments; for CORS put `cors()` on
+the mount (`app.use("/files", cors())`).
+
+`serveStatic` is also usable on its own, under any route of yours:
+
+```typescript
+import { serveStatic } from "@marianmeres/demino";
+
+app.get("/public/*", (req) => serveStatic(req, { fsRoot: "./public", urlRoot: "public" }));
+```
+
+See [API.md](API.md#static-files) for the exact behaviour and all options.
 
 ## Extras
 
@@ -503,7 +606,7 @@ declaration (`permission` | `public` | `MISSING`) and `source` (`static` | `reso
 ```typescript
 import { assertCovered, permissionMatrix } from "@marianmeres/demino";
 
-Deno.test("no unguarded routes", () => assertCovered(app, { resolve }));
+test("no unguarded routes", () => assertCovered(app, { resolve })); // node:test, any runner
 // or inspect/print the full matrix:
 console.table(permissionMatrix(app, { resolve }));
 ```
@@ -616,7 +719,7 @@ Advanced features include:
 > **SSRF caveat:** `preventSSRF` is a string-only check on the target hostname. It does
 > NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to a
 > private IP. If you need protection against DNS rebinding attacks, resolve the hostname
-> yourself (e.g. via `Deno.resolveDns`) and re-check each resulting address.
+> yourself (e.g. via `node:dns`) and re-check each resulting address.
 
 See [proxy.ts](src/middleware/proxy/proxy.ts) for full API documentation and examples.
 
@@ -671,9 +774,10 @@ Behavior:
 
 - `Content-Length` present and `> maxSize` → `413 Payload Too Large` (rejected before any
   byte is buffered).
-- `Content-Length` present and within `maxSize` → allowed. `Deno.serve` uses the declared
-  length as the read ceiling, so a handler can never receive more than the advertised
-  bytes — an under-declared `Content-Length` cannot smuggle extra bytes past the limit.
+- `Content-Length` present and within `maxSize` → allowed. The HTTP server (on every supported
+  runtime) uses the declared length as the read ceiling, so a handler can never receive more
+  than the advertised bytes — an under-declared `Content-Length` cannot smuggle extra bytes past
+  the limit.
 - Body present but **no** `Content-Length` (e.g. `Transfer-Encoding: chunked`) →
   `411 Length Required`, unless `allowUnknownLength: true` is set (in which case you must
   bound the stream yourself while reading it).
@@ -799,10 +903,11 @@ await deminoFileBased(app, "./routes");
 
 Note that this feature is designed to work **with the default router only**.
 
-A missing root directory is a hard error by default (it throws a `Deno.errors.NotFound`),
-since at boot time it usually signals a typo or a wrong working directory. For the
-legitimate "optional dir" case, pass `ignoreMissingRootDir: true` to skip absent roots
-with a warning instead. See [API.md](API.md#deminofilebased) for all options.
+A missing root directory is a hard error by default (it throws a plain `Error` with
+`code: "ENOENT"` and `name: "NotFound"` - match on `code`, like a filesystem error), since at
+boot time it usually signals a typo or a wrong working directory. For the legitimate "optional
+dir" case, pass `ignoreMissingRootDir: true` to skip absent roots with a warning instead. See
+[API.md](API.md#deminofilebased) for all options.
 
 ## Extra: Apps composition (Route groups)
 
@@ -812,6 +917,7 @@ routes) where each group has its own isolated middleware stack.
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
 // Main app for public routes
 const app = demino();
@@ -834,7 +940,7 @@ admin.get("/users", getAllUsersWithDetails); // GET /admin/users
 admin.delete("/users/[id]", permanentlyDeleteUser); // DELETE /admin/users/123
 
 // Compose all apps together and serve as a single handler
-Deno.serve(deminoCompose([app, api, admin]));
+await serve(deminoCompose([app, api, admin]));
 ```
 
 Each group has its own isolated middleware stack, making it easy to apply authentication,
@@ -986,21 +1092,20 @@ happening.
 
 ## Extra: Listen info logging
 
-A convenience `onListen` callback for `Deno.serve()` that prints the server's listening
-URL(s) to the console. When bound to `0.0.0.0`, it displays both `localhost` and all
-detected network addresses.
+`logListenInfo` is every runtime adapter's default `onListen` callback: it prints the server's
+listening URL(s) to the console, and when bound to `0.0.0.0` (or `::`) it displays both
+`localhost` and all detected network addresses. Pass it explicitly to add options, or hand it to
+a runtime's own server API (its `onListen` argument satisfies the `{ hostname, port }` shape).
 
 ```ts
 import { deminoCompose, logListenInfo } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
-Deno.serve(
-	{
-		port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
-		hostname: Deno.env.get("SERVER_HOST") || undefined,
-		onListen: logListenInfo,
-	},
-	deminoCompose([app, api, admin]),
-);
+await serve(deminoCompose([app, api, admin]), {
+	port: parseInt(process.env.SERVER_PORT || "") || undefined,
+	hostname: process.env.SERVER_HOST || undefined,
+	onListen: logListenInfo,
+});
 ```
 
 ### Structured (JSON) output
@@ -1011,17 +1116,15 @@ preconfigure the callback):
 
 ```ts
 import { createLogListenInfo, deminoCompose } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
 
-Deno.serve(
-	{
-		// `true` = always json, `"auto"` = json only when stdout is not a TTY
-		onListen: createLogListenInfo({
-			json: "auto",
-			fields: { service: "api", env: Deno.env.get("ENV") },
-		}),
-	},
-	deminoCompose([app, api, admin]),
-);
+await serve(deminoCompose([app, api, admin]), {
+	// `true` = always json, `"auto"` = json only when stdout is not a TTY
+	onListen: createLogListenInfo({
+		json: "auto",
+		fields: { service: "api", env: process.env.ENV },
+	}),
+});
 ```
 
 which emits a single line:
@@ -1035,4 +1138,5 @@ the rest of your structured logs. `fields` is merged last, so it can also overri
 built-in field. Filter on `event == "server.listen"` instead of matching the message text.
 
 Unlike the human readable mode, JSON mode does not enumerate network interfaces -
-container local addresses are noise, and skipping it avoids the `--allow-sys` permission.
+container local addresses are noise, and skipping it avoids the system-info permission some
+runtimes gate it behind (Deno's `--allow-sys`).

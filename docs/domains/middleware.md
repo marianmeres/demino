@@ -134,7 +134,7 @@ exceeding it errors). A 307/308 whose one-shot body cannot be replayed is return
 client unfollowed.
 
 **Caveat:** string-only check, no DNS lookup. DNS-rebinding bypasses this guard. For
-DNS-rebinding-resistant SSRF, resolve via `Deno.resolveDns` and re-check each result.
+DNS-rebinding-resistant SSRF, resolve via `node:dns` and re-check each result.
 
 **WebSocket proxying** (since 1.17.0, on by default — `webSockets: false` to disable): a
 well-formed WebSocket upgrade request (GET + `Upgrade: websocket` + `Sec-WebSocket-Key` +
@@ -150,6 +150,13 @@ tunnel lifetime. Not applicable to tunnels: `maxRedirects` (upstream WebSocket r
 are not followed), `cache`, `transformResponseHeaders`, `transformResponseBody` (the 101
 response is runtime-generated). A malformed upgrade request falls through to the regular
 HTTP proxy path.
+
+**Needs the adapter's upgrade capability:** the client leg is upgraded through
+`info.upgradeWebSocket`, which only a runtime adapter's `serve()` (`/deno`, `/node`, `/bun`)
+provides. Without it — the app handed straight to the runtime's own server, or the Node adapter
+with `webSockets: false` / no `ws` installed — upgrade requests are forwarded as plain HTTP
+exactly as with `webSockets: false`, and one warning is logged per process. Impl:
+`src/middleware/proxy/websocket.ts` (internal, not exported).
 
 ---
 
@@ -203,9 +210,9 @@ Options: `maxSize` (bytes, required); `allowUnknownLength` (default `false`).
 Behavior:
 
 - `Content-Length` > `maxSize` → `413 Payload Too Large` (no bytes buffered).
-- `Content-Length` ≤ `maxSize` → allowed; `Deno.serve` caps the read at the declared
-  length, so a handler can never receive more than advertised (under-declaring cannot
-  bypass the limit).
+- `Content-Length` ≤ `maxSize` → allowed; the HTTP server (Deno, Node and Bun alike) caps
+  the read at the declared length, so a handler can never receive more than advertised
+  (under-declaring cannot bypass the limit).
 - Body present but no `Content-Length` (chunked) → `411 Length Required`, unless
   `allowUnknownLength: true` (then you must bound the stream yourself).
 - No body → passes through.

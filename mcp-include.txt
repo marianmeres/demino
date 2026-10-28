@@ -1,3 +1,4 @@
-Minimal web framework for Deno built on Deno.serve() with routing, middleware chaining, 
-error handling, static file serving, and request proxying. Provides building blocks 
-(not batteries) for HTTP servers with multiple router implementations and composable middleware.
+Minimal web framework on web standards (Request in, Response out) with routing, middleware
+chaining, error handling, static file serving (app.static / serveStatic) and HTTP + WebSocket
+proxying. Runs on Deno, Node and Bun through one shared serve() per runtime adapter
+(@marianmeres/demino/deno, /node, /bun); building blocks, not batteries.
