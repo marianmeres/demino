@@ -86,10 +86,51 @@ runTestServerTests([
 					deminoFileBased(app, "./__demino_does_not_exist__", {
 						verbose: false,
 					}),
-				Deno.errors.NotFound,
+				Error,
 			);
-			assertMatch(err.message, /does not exist/i);
+			// the portable contract: a *plain* Error (no runtime-specific class) that
+			// carries `name: "NotFound"` and the fs-style `code: "ENOENT"`
+			assert(
+				Object.getPrototypeOf(err) === Error.prototype,
+				`expected a plain Error, got ${err.constructor.name}`,
+			);
+			assertEquals(err.name, "NotFound");
 			assertEquals((err as { code?: string }).code, "ENOENT");
+			assertMatch(err.message, /does not exist/i);
+			assertMatch(err.message, /__demino_does_not_exist__/);
+		},
+	},
+	{
+		name: "verbose walk lists route files in deterministic (sorted) path order",
+		raw: true,
+		fn: async () => {
+			const app = demino();
+			app.logger(null);
+			const debug: string[] = [];
+			// deno-lint-ignore no-explicit-any
+			const logger: any = {
+				debug: (...a: unknown[]) => debug.push(a.join(" ")),
+				log() {},
+				warn() {},
+				error() {},
+			};
+			await deminoFileBased(app, root2, { verbose: true, logger });
+
+			// the file lines are the ones carrying a fixture path (strip ANSI first)
+			// deno-lint-ignore no-control-regex
+			const files = debug.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "")).filter((l) =>
+				l.includes("_root2/")
+			);
+			const expected = [
+				"tests/fixtures/_root2/_middleware.ts",
+				"tests/fixtures/_root2/c/_middleware.ts",
+				"tests/fixtures/_root2/c/d/_middleware.ts",
+				"tests/fixtures/_root2/c/d/index.ts",
+				"tests/fixtures/_root2/index.ts",
+			];
+			assertEquals(files, expected);
+			// ...and the dotfile in that dir (.DS_Store) never shows up
+			assert(!debug.some((l) => l.includes(".DS_Store")));
 		},
 	},
 	{

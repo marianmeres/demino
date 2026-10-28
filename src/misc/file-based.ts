@@ -1,6 +1,7 @@
-import { green } from "@std/fmt/colors";
-import { walkSync } from "@std/fs";
-import { dirname, normalize, resolve, toFileUrl } from "@std/path";
+import { readdirSync, type Stats, statSync } from "node:fs";
+import { dirname, join, normalize, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { green } from "../utils/ansi.ts";
 import {
 	type Demino,
 	type DeminoHandler,
@@ -25,10 +26,11 @@ export interface DeminoFileBasedOptions {
 	 */
 	doImport?: (modulePath: string) => Promise<Record<string, unknown>>;
 	/**
-	 * By default a missing root directory is a hard error (a `Deno.errors.NotFound`
-	 * with `code: "ENOENT"`), because at boot time it almost always signals a typo
-	 * or a wrong working directory, and silently producing a zero-route app is a far
-	 * worse failure mode to debug.
+	 * By default a missing root directory is a hard error (a plain `Error` with
+	 * `name: "NotFound"` and `code: "ENOENT"` — match on `code`, like you would for
+	 * the runtime's own fs errors), because at boot time it almost always signals a
+	 * typo or a wrong working directory, and silently producing a zero-route app is
+	 * a far worse failure mode to debug.
 	 *
 	 * Set this to `true` for the legitimate "optional dir" case (e.g. a core dir plus
 	 * a conditionally-present plugins/overrides dir): a missing root is then skipped
@@ -62,10 +64,11 @@ export interface DeminoFileBasedOptions {
  * @example Basic usage
  * ```ts
  * import { demino, deminoFileBased } from "@marianmeres/demino";
+ * import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
  *
  * const app = demino();
  * await deminoFileBased(app, "./routes");
- * Deno.serve(app);
+ * await serve(app);
  * ```
  *
  * @example Directory structure
@@ -123,23 +126,22 @@ export async function deminoFileBased(
 	const middlewares: Record<string, DeminoHandler[]> = {};
 
 	const _defaultImporter = (modulePath: string) =>
-		import(toFileUrl(resolve(modulePath)).href);
+		import(pathToFileURL(resolve(modulePath)).href);
 
 	const doImport = options?.doImport ?? _defaultImporter;
 
 	for (const rootDir of rootDirs) {
-		// Verify the root dir exists and is a directory *before* walking it.
-		// `walkSync` is lazy and would otherwise throw a raw Deno ENOENT from
-		// `readdir` mid-iteration, leaking the implementation and an unresolved
-		// (relative) path. We surface a clear, actionable error instead.
-		let stat: Deno.FileInfo | null = null;
+		// Verify the root dir exists and is a directory *before* walking it, so a
+		// missing root surfaces as a clear, actionable error (with the resolved path)
+		// instead of the runtime's raw fs ENOENT carrying an unresolved relative path.
+		let stat: Stats | null = null;
 		try {
-			stat = Deno.statSync(rootDir);
+			stat = statSync(rootDir);
 		} catch (e) {
-			if (!(e instanceof Deno.errors.NotFound)) throw e;
+			if ((e as { code?: string }).code !== "ENOENT") throw e;
 		}
 
-		if (!stat?.isDirectory) {
+		if (!stat?.isDirectory()) {
 			const resolved = resolve(rootDir);
 			// exists but is a file/other → always an error (not the "optional dir"
 			// scenario `ignoreMissingRootDir` is meant for).
@@ -157,27 +159,35 @@ export async function deminoFileBased(
 				);
 				continue;
 			}
-			const err = new Deno.errors.NotFound(
+			// The documented contract: a plain `Error` with `name: "NotFound"` and the
+			// same `code` the runtime's own fs error carries, so a consumer's `code`
+			// check matches either.
+			const err = new Error(
 				`deminoFileBased: root directory "${rootDir}" does not exist ` +
 					`(resolved to ${resolved}). Check the path and the process working directory.`,
 			);
-			// preserve the ENOENT contract (manually-constructed Deno errors lack `code`)
+			err.name = "NotFound";
 			(err as { code?: string }).code = "ENOENT";
 			throw err;
 		}
 
-		for (
-			const dirEntry of walkSync(rootDir, {
-				includeDirs: false,
-				// we are cosuming only ts/js here
-				exts: ["js", "ts"],
-			})
-		) {
-			// ignore dotfiles quickly
-			if (dirEntry.name.startsWith(".")) continue;
-			const filepath = dirEntry.path;
-			const name = dirEntry.name;
+		// Walk eagerly: files only (symlinks included, as before), `.js`/`.ts` only,
+		// dotfiles skipped. Sorted by path so registration order — and with it the
+		// verbose output — is deterministic; recursive `readdirSync` order is not.
+		const files = readdirSync(rootDir, { recursive: true, withFileTypes: true })
+			.filter(
+				(entry) =>
+					(entry.isFile() || entry.isSymbolicLink()) &&
+					/\.(js|ts)$/.test(entry.name) &&
+					!entry.name.startsWith("."),
+			)
+			.map((entry) => ({
+				filepath: join(entry.parentPath, entry.name),
+				name: entry.name,
+			}))
+			.toSorted(_byFilepath);
 
+		for (const { filepath, name } of files) {
 			// route is the "relative" dirname portion (also, try to windows normalize)
 			const route = dirname(filepath.slice(rootDir.length)).replaceAll("\\", "/");
 			let type: "routeHandler" | "middleware";
@@ -326,6 +336,11 @@ export function routesCompare(a: string, b: string): number {
 	// either are fully static or fully dynamic - sort alphabetically (for the dynamic case
 	// it won't have any effect)
 	return aSegments.join().localeCompare(bSegments.join());
+}
+
+/** Code-point order (locale-independent), so the walk is identical on every runtime. */
+function _byFilepath(a: { filepath: string }, b: { filepath: string }): number {
+	return a.filepath < b.filepath ? -1 : a.filepath > b.filepath ? 1 : 0;
 }
 
 /** Route dir name validator - none of the route segments may start with dot or underscore */
