@@ -1,4 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
+import { networkInterfaces } from "node:os";
 import { createLogListenInfo, logListenInfo } from "../../src/utils/log-listen-info.ts";
 
 /** Capture console.log output produced while running `fn`. */
@@ -35,6 +36,71 @@ Deno.test("logListenInfo: '::' is treated as all-interfaces (lists localhost)", 
 		logs.some((l) => l.includes("localhost:9000")),
 		`expected localhost to be listed for '::', got:\n${logs.join("\n")}`,
 	);
+});
+
+Deno.test("logListenInfo: all-interfaces output lists node:os addresses, no loopback/link-local", () => {
+	const lines: string[] = [];
+	logListenInfo({ hostname: "0.0.0.0", port: 8000 }, { write: (l) => lines.push(l) });
+
+	// what the function must advertise, derived from the same `node:os` data
+	const expected: string[] = [];
+	for (const list of Object.values(networkInterfaces())) {
+		for (const iface of list ?? []) {
+			// the shape the filter relies on: string family, boolean `internal`
+			assert(
+				iface.family === "IPv4" || iface.family === "IPv6",
+				`unexpected family: ${JSON.stringify(iface.family)}`,
+			);
+			assertEquals(typeof iface.internal, "boolean");
+			if (iface.internal || iface.address.toLowerCase().startsWith("fe80:")) {
+				continue;
+			}
+			expected.push(iface.family === "IPv6" ? `[${iface.address}]` : iface.address);
+		}
+	}
+
+	const network = lines.filter((l) => l.includes("Network:"));
+	assertEquals(
+		network.length,
+		expected.length,
+		`expected ${expected.length} network line(s), got:\n${lines.join("\n")}`,
+	);
+	for (const addr of expected) {
+		assert(
+			network.some((l) => l.includes(`http://${addr}:8000/`)),
+			`missing ${addr} in:\n${network.join("\n")}`,
+		);
+	}
+	// loopback and link-local never show up, whatever the machine has
+	assert(
+		!lines.some((l) =>
+			l.includes("://127.") || l.includes("[::1]") ||
+			l.toLowerCase().includes("fe80:")
+		),
+		`loopback/link-local leaked:\n${lines.join("\n")}`,
+	);
+});
+
+Deno.test("logListenInfo: json 'auto' follows process.stdout.isTTY", () => {
+	const lines: string[] = [];
+	logListenInfo({ hostname: "127.0.0.1", port: 8000 }, {
+		json: "auto",
+		write: (l) => lines.push(l),
+	});
+	if (process.stdout.isTTY) {
+		assert(
+			lines.some((l) => l.includes("Demino listening")) &&
+				!lines.some((l) => l.trim().startsWith("{")),
+			`stdout is a tty, expected human output, got:\n${lines.join("\n")}`,
+		);
+	} else {
+		assertEquals(
+			lines.length,
+			1,
+			`expected one json line, got:\n${lines.join("\n")}`,
+		);
+		assertEquals(JSON.parse(lines[0]).event, "server.listen");
+	}
 });
 
 Deno.test("logListenInfo: json mode emits a single parsable JSON line", () => {

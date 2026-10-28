@@ -1,8 +1,11 @@
+import { networkInterfaces } from "node:os";
+
 /**
  * What a server's `onListen` callback receives: the bound address.
  *
- * Deno's own `Deno.NetAddr` satisfies it, so `logListenInfo` can still be passed
- * straight to `Deno.serve({ onListen })`; runtime adapters pass exactly this shape.
+ * Runtime adapters pass exactly this shape. A runtime's own address object (hostname
+ * and port plus extras such as the transport) satisfies it too, so `logListenInfo`
+ * can also be handed straight to a native server API's `onListen` option.
  */
 export interface DeminoListenAddr {
 	hostname: string;
@@ -63,7 +66,9 @@ const isUnspecified = (h: string) => h === "0.0.0.0" || h === "::";
 function useJson(json: LogListenInfoOptions["json"]): boolean {
 	if (json === "auto") {
 		try {
-			return !Deno.stdout.isTerminal();
+			// `true` on a terminal; `false` or `undefined` (runtime dependent) when
+			// piped or redirected - both of the latter mean "not a tty"
+			return !process.stdout.isTTY;
 		} catch {
 			// stdout not inspectable (closed/redirected oddly) - assume "not a tty"
 			return true;
@@ -73,7 +78,9 @@ function useJson(json: LogListenInfoOptions["json"]): boolean {
 }
 
 /**
- * Console logging callback for `Deno.serve()`'s `onListen` option.
+ * Console logging callback for a runtime adapter's `onListen` option (it is
+ * every adapter's default; pass it explicitly to add options, or to a runtime's
+ * native server API).
  *
  * Prints the server's listening URL(s) to the console with color formatting.
  * When the hostname is `0.0.0.0` (or `::`, all interfaces), it displays both the
@@ -90,39 +97,40 @@ function useJson(json: LogListenInfoOptions["json"]): boolean {
  * ```
  *
  * Note that JSON mode does **not** enumerate network interfaces (container local
- * addresses are noise, and it avoids the `--allow-sys` permission).
+ * addresses are noise, and it avoids the system-info permission some runtimes
+ * require for the lookup).
  *
  * @param localAddr - The address the server is listening on
  * @param options - Optional output options
  *
- * @example Basic usage with `Deno.serve()`
+ * @example Explicit `onListen` with an adapter's `serve()`
  * ```ts
  * import { logListenInfo } from "@marianmeres/demino";
+ * import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
  *
- * Deno.serve({ onListen: logListenInfo }, handler);
+ * await serve(app, { onListen: logListenInfo });
  * ```
  *
  * @example With `deminoCompose()` and environment-based config
  * ```ts
  * import { deminoCompose, logListenInfo } from "@marianmeres/demino";
+ * import { serve } from "@marianmeres/demino/deno";
  *
- * Deno.serve(
- *   {
- *     port: parseInt(Deno.env.get("SERVER_PORT") || "") || undefined,
- *     hostname: Deno.env.get("SERVER_HOST") || undefined,
- *     onListen: logListenInfo,
- *   },
- *   deminoCompose([app1, app2]),
- * );
+ * await serve(deminoCompose([app1, app2]), {
+ *   port: parseInt(process.env.SERVER_PORT || "") || undefined,
+ *   hostname: process.env.SERVER_HOST || undefined,
+ *   onListen: logListenInfo,
+ * });
  * ```
  *
  * @example Structured JSON output (docker/production)
  * ```ts
  * import { createLogListenInfo } from "@marianmeres/demino";
+ * import { serve } from "@marianmeres/demino/deno";
  *
- * Deno.serve({
+ * await serve(app, {
  *   onListen: createLogListenInfo({ json: "auto", fields: { service: "api" } }),
- * }, handler);
+ * });
  * ```
  */
 export function logListenInfo(
@@ -165,25 +173,30 @@ export function logListenInfo(
 			"color:cyan;",
 		);
 
-		let interfaces: Deno.NetworkInterfaceInfo[] = [];
+		let interfaces: ReturnType<typeof networkInterfaces> = {};
 		try {
-			interfaces = Deno.networkInterfaces();
+			interfaces = networkInterfaces();
 		} catch {
-			// needs `--allow-sys=networkInterfaces` - without it, silently skip the
-			// network addresses (the local URL above is still printed)
+			// the lookup is cosmetic: a runtime that gates system info behind a
+			// permission throws here, and the local URL above is still printed
 		}
-		for (const iface of interfaces) {
-			const isV4 = iface.family === "IPv4" && !iface.address.startsWith("127.");
-			// Skip IPv6 loopback (`::1`) and link-local (`fe80::…`, needs a zone id
-			// to be usable) — only advertise routable IPv6 addresses.
-			const isV6 = iface.family === "IPv6" &&
-				iface.address !== "::1" &&
-				!iface.address.toLowerCase().startsWith("fe80:");
-			if (isV4 || isV6) {
-				out(
-					`    ➜  Network: %c${protocol}://${fmtHost(iface.address)}:${port}/`,
-					"color:cyan;",
-				);
+		for (const list of Object.values(interfaces)) {
+			for (const iface of list ?? []) {
+				// `internal` covers loopback (`127.x`, `::1`)
+				if (iface.internal) continue;
+				const isV4 = iface.family === "IPv4";
+				// Skip IPv6 link-local (`fe80::…`, needs a zone id to be usable) —
+				// only advertise routable IPv6 addresses.
+				const isV6 = iface.family === "IPv6" &&
+					!iface.address.toLowerCase().startsWith("fe80:");
+				if (isV4 || isV6) {
+					out(
+						`    ➜  Network: %c${protocol}://${
+							fmtHost(iface.address)
+						}:${port}/`,
+						"color:cyan;",
+					);
+				}
 			}
 		}
 	} else {
@@ -198,7 +211,8 @@ export function logListenInfo(
 
 /**
  * Creates a preconfigured {@linkcode logListenInfo} callback, so options can be
- * passed where `Deno.serve()` expects a bare `onListen` function.
+ * passed where an adapter's `serve()` (or a native server API) expects a bare
+ * `onListen` function.
  *
  * @param options - Output options (see {@linkcode LogListenInfoOptions})
  * @returns An `onListen` compatible callback
@@ -206,14 +220,15 @@ export function logListenInfo(
  * @example
  * ```ts
  * import { createLogListenInfo } from "@marianmeres/demino";
+ * import { serve } from "@marianmeres/demino/deno";
  *
  * // human output locally, single JSON line when running in docker
- * Deno.serve({
+ * await serve(app, {
  *   onListen: createLogListenInfo({
  *     json: "auto",
- *     fields: { service: "api", env: Deno.env.get("ENV") },
+ *     fields: { service: "api", env: process.env.ENV },
  *   }),
- * }, app);
+ * });
  * ```
  */
 export function createLogListenInfo(
