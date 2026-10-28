@@ -40,7 +40,7 @@ const DENO_ONLY: RegExp[] = [
  * dev manifest lists them in `devDependencies` (e.g. `ws` for the Node
  * adapter's WebSocket upgrades).
  */
-const OPTIONAL_PEERS = new Set<string>([]);
+const OPTIONAL_PEERS = new Set<string>(["ws"]);
 
 interface PackageJson {
 	name: string;

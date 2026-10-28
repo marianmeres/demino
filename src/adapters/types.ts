@@ -33,7 +33,10 @@ export interface ServeOptions {
 	 * @default "0.0.0.0" (Deno.serve parity; Node's own default would be dual-stack "::")
 	 */
 	hostname?: string;
-	/** Aborting the signal triggers {@linkcode ServeHandle.shutdown}. */
+	/**
+	 * Aborting the signal closes the server and all of its connections at once
+	 * (`Deno.serve` parity). For a graceful stop call {@linkcode ServeHandle.shutdown}.
+	 */
 	signal?: AbortSignal;
 	/**
 	 * Called once the server is listening. Pass `() => {}` to silence (same idiom

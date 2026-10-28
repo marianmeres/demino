@@ -37,16 +37,18 @@ let servePromise: Promise<ServeFn> | undefined;
  * running on. Imported lazily so a test file never loads an adapter for a
  * runtime it is not on; resolved once per process.
  *
- * Only the Deno adapter exists so far: the Node and Bun branches are added by
- * the rows that land those adapters, until then they fail loudly.
+ * The Bun branch is added by the row that lands that adapter; until then it
+ * fails loudly.
  */
 function pickServe(): Promise<ServeFn> {
 	servePromise ??= (async () => {
 		if (isDeno) return (await import("../src/adapters/deno.ts")).serve;
-		const runtime = isBun ? "Bun" : "Node";
-		throw new Error(
-			`tests/_utils.ts: no runtime adapter for ${runtime} yet - run the suite on Deno`,
-		);
+		if (isBun) {
+			throw new Error(
+				"tests/_utils.ts: no runtime adapter for Bun yet - run the suite on Deno or Node",
+			);
+		}
+		return (await import("../src/adapters/node.ts")).serve;
 	})();
 	return servePromise;
 }

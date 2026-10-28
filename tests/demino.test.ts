@@ -110,8 +110,10 @@ test("mounted hello world", async () => {
 
 		const names = ["post", "patch", "put", "delete"];
 		for (const method of names) {
+			// upper-cased on the wire: fetch normalises only the six spec'd methods,
+			// a lowercase "patch" goes out verbatim and Node's parser rejects it
 			await assertResp(
-				fetch(`${srv.base}${mount}/${method}`, { method }),
+				fetch(`${srv.base}${mount}/${method}`, { method: method.toUpperCase() }),
 				200,
 				method,
 			);
@@ -520,7 +522,12 @@ test("same route different method", async () => {
 		srv = await startTestServer(app);
 
 		for (const method of methods) {
-			await assertResp(fetch(`${srv.base}`, { method }), 200, method);
+			// upper-cased on the wire (see "mounted hello world")
+			await assertResp(
+				fetch(`${srv.base}`, { method: method.toUpperCase() }),
+				200,
+				method,
+			);
 		}
 	} catch (e) {
 		throw e;
