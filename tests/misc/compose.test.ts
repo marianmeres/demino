@@ -76,8 +76,6 @@ Deno.test("composition", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });

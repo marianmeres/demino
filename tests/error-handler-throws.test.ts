@@ -31,7 +31,6 @@ Deno.test("a throwing custom error handler does not escape (falls back + still a
 		// the guard the throw escapes before the access-log call)
 		assertEquals(accessStatuses.at(-1), 500);
 	} finally {
-		srv.ac.abort();
-		await srv.server.finished;
+		await srv.close();
 	}
 });

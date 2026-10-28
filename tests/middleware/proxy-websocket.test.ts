@@ -132,8 +132,7 @@ runTestServerTests([
 				// the same route still serves plain HTTP requests
 				await assertResp(fetch(`${base}/ws/plain`), 200, "plain-http");
 			} finally {
-				upstream.ac.abort();
-				await upstream.server.finished;
+				await upstream.close();
 			}
 		},
 	},
@@ -181,8 +180,7 @@ runTestServerTests([
 				assertEquals(bClose.code, 4002);
 				assertEquals(bClose.reason, "bye-from-client");
 			} finally {
-				upstream.ac.abort();
-				await upstream.server.finished;
+				await upstream.close();
 			}
 		},
 	},
@@ -278,8 +276,7 @@ runTestServerTests([
 				assertMatch(raw, /^HTTP\/1\.1 426/);
 				assertEquals(seen.upgrade, null);
 			} finally {
-				upstream.ac.abort();
-				await upstream.server.finished;
+				await upstream.close();
 			}
 		},
 	},

@@ -7,8 +7,9 @@
  * {@linkcode ServeHandle}. All adapters share this one signature, so an app's
  * `server.ts` differs between runtimes only in the adapter import path.
  *
- * This module holds types only (no runtime code), so it is safe to import from
- * core without pulling in any runtime adapter. Core never imports from
+ * This module holds the contract types plus one tiny shared helper
+ * ({@linkcode toUrl}) and no runtime-specific code, so it is safe to import
+ * from core without pulling in any runtime adapter. Core never imports from
  * `adapters/` other than this file.
  *
  * @module
@@ -94,3 +95,20 @@ export type ServeFn = (
 	handler: DeminoServeHandler,
 	options?: ServeOptions,
 ) => Promise<ServeHandle>;
+
+/**
+ * Renders a bound address as the `http://<host>:<port>/` URL a browser can open:
+ * IPv6 literals are bracketed and the unspecified addresses (`0.0.0.0`, `::`)
+ * become `localhost`. Shared by every adapter for {@linkcode ServeHandle.url}.
+ *
+ * Adapter-internal (not exported from the package root).
+ */
+export function toUrl(addr: DeminoListenAddr): string {
+	const { hostname, port } = addr;
+	const host = hostname === "0.0.0.0" || hostname === "::"
+		? "localhost"
+		: hostname.includes(":")
+		? `[${hostname}]`
+		: hostname;
+	return `http://${host}:${port}/`;
+}

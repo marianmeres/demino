@@ -50,10 +50,8 @@ Deno.test("no route is not found", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("hello world", async () => {
@@ -81,10 +79,8 @@ Deno.test("hello world", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("mounted hello world", async () => {
@@ -147,10 +143,8 @@ Deno.test("mounted hello world", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("middlewares and various return types", async () => {
@@ -255,10 +249,8 @@ Deno.test("middlewares and various return types", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("middlewares sort order", async () => {
@@ -290,10 +282,8 @@ Deno.test("middlewares sort order", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("constructor middleware array is defensively copied", () => {
@@ -353,10 +343,8 @@ Deno.test("global route middlewares", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("error handler", async () => {
@@ -376,10 +364,8 @@ Deno.test("error handler", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("custom error handler", async () => {
@@ -437,10 +423,8 @@ Deno.test("custom error handler", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("custom error handler via options", async () => {
@@ -456,10 +440,8 @@ Deno.test("custom error handler via options", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("catch all fallback route", async () => {
@@ -482,10 +464,8 @@ Deno.test("catch all fallback route", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("method catch-all resolves globally last", async () => {
@@ -522,10 +502,8 @@ Deno.test("method catch-all resolves globally last", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("same route different method", async () => {
@@ -546,10 +524,8 @@ Deno.test("same route different method", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("default router vs trailing slashes", async () => {
@@ -570,10 +546,8 @@ Deno.test("default router vs trailing slashes", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("first route match wins", async () => {
@@ -595,10 +569,8 @@ Deno.test("first route match wins", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 Deno.test("access log", async () => {
@@ -647,10 +619,8 @@ Deno.test("access log", async () => {
 	} catch (e) {
 		throw e;
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-
-	return srv?.server?.finished;
 });
 
 // Captures the `error` and `access` log channels into arrays (mirrors the
@@ -697,9 +667,8 @@ Deno.test("thrown 404 from a catch-all is not error-logged", async () => {
 		assertEquals(access.length, 1);
 		assertEquals(new URL(access[0].req.url).pathname, "/wp-login.php");
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-	return srv?.server?.finished;
 });
 
 // A 5xx is error-logged exactly ONCE (regression test for the old double-log),
@@ -726,9 +695,8 @@ Deno.test("thrown 5xx is error-logged once, with request context", async () => {
 		assertEquals(typeof e.error, "string");
 		assertEquals(e.error.includes("kaboom"), true); // original preserved via cause
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-	return srv?.server?.finished;
 });
 
 // A thrown 4xx (403) is a client fault — not error-logged (read it from the
@@ -747,9 +715,8 @@ Deno.test("thrown 4xx (403) is not error-logged", async () => {
 		await res.text();
 		assertEquals(errors.length, 0);
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-	return srv?.server?.finished;
 });
 
 // A 5xx originating in dispatch (501 for an unknown method) never enters the
@@ -770,9 +737,8 @@ Deno.test("5xx from dispatch (501) is error-logged with context", async () => {
 		assertEquals(e.method, "PROPFIND");
 		assertEquals(new URL(e.url).pathname, "/");
 	} finally {
-		srv?.ac?.abort();
+		await srv?.close();
 	}
-	return srv?.server?.finished;
 });
 
 runTestServerTests([

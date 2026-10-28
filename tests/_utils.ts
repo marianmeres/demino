@@ -8,29 +8,53 @@ import {
 	type DeminoServeHandler,
 } from "../src/demino.ts";
 import { createHttpApi } from "@marianmeres/http-utils";
+import { serve } from "../src/adapters/deno.ts";
 
 const hostname = "127.0.0.1";
 
-// Helper to find available port
-function getAvailablePort(): number {
-	const listener = Deno.listen({ hostname, port: 0 });
-	const port = listener.addr.port;
-	listener.close();
-	return port;
+/** A server started by {@linkcode startTestServer}. */
+export interface TestServer {
+	/** The real bound port (the server listens on `port: 0`). */
+	port: number;
+	/**
+	 * `http://localhost:<port>` - deliberately `localhost`, not the bound
+	 * `127.0.0.1`: tests rely on the two being different host names (proxy
+	 * allowlists, `ctx.url` assertions).
+	 */
+	base: string;
+	/**
+	 * Closes the server and all of its connections (forceful, via the abort
+	 * signal); resolves once the server is fully closed.
+	 */
+	close: () => Promise<void>;
 }
 
-/** Start test server with custom return data suitable for testing */
-export async function startTestServer(handler: DeminoServeHandler) {
-	const port = getAvailablePort();
+/**
+ * Starts a test server for the given handler through the runtime adapter (the
+ * harness is the adapter's first consumer), silently, on a free port.
+ */
+export async function startTestServer(
+	handler: DeminoServeHandler,
+): Promise<TestServer> {
+	// Closed through the abort signal, not `shutdown()`: tests may leave a request
+	// in flight on purpose (e.g. an upstream still sleeping after the proxy timed
+	// out) and a graceful shutdown would wait for it forever. Aborting closes the
+	// server and all its connections - exactly what the previous harness did.
 	const ac = new AbortController();
-	// By default `Deno.serve` prints the message ... If you like to
-	// change this behavior, you can specify a custom `onListen` callback.
-	const server = await Deno.serve(
-		{ hostname, port, signal: ac.signal, onListen(_) {} },
-		handler,
-	);
-	// server.finished.then(() => console.log("Server closed"));
-	return { port, ac, server, base: `http://localhost:${port}` };
+	const srv = await serve(handler, {
+		hostname,
+		port: 0,
+		signal: ac.signal,
+		onListen() {},
+	});
+	return {
+		port: srv.port,
+		base: `http://localhost:${srv.port}`,
+		close: async () => {
+			ac.abort();
+			await srv.finished;
+		},
+	};
 }
 
 /** DRY */
@@ -129,8 +153,7 @@ export function runTestServerTests(
 				} catch (e) {
 					throw e;
 				} finally {
-					srv?.ac?.abort();
-					await srv?.server?.finished;
+					await srv?.close();
 				}
 			},
 		);

@@ -17,8 +17,7 @@ async function withServer(app: Demino, fn: (base: string) => Promise<void>) {
 		srv = await startTestServer(app);
 		await fn(srv.base);
 	} finally {
-		srv?.ac?.abort();
-		await srv?.server?.finished;
+		await srv?.close();
 	}
 }
 
