@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	type Demino,
 	demino,
@@ -150,7 +151,7 @@ test("routeMeta: handler is last positional arg (route-level mws don't shadow me
 });
 
 test("routeMeta: works for file-based routes (meta on exported handler)", async () => {
-	const _dirname = import.meta.dirname!;
+	const _dirname = dirname(fileURLToPath(import.meta.url));
 	const root = join(_dirname, "./fixtures/_root_meta");
 
 	const seen: Record<string, unknown> = {};

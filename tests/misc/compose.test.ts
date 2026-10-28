@@ -1,18 +1,21 @@
-import { join } from "@std/path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { demino } from "../../src/demino.ts";
 import { deminoCompose } from "../../src/misc/compose.ts";
 import { assertResp, startTestServer } from "../_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
-Deno.test("composition", async () => {
+const staticDir = fileURLToPath(new URL("../static", import.meta.url));
+
+test("composition", async () => {
 	let srv: Srv | null = null;
 
 	// landing page example
 	const home = demino();
 	home.get("/", () => "Hello");
 	home.get("/[slug]", (_r, _i, ctx) => `Marketing: ${ctx.params.slug}`);
-	home.static("/files", join(import.meta.dirname!, "../static"));
+	home.static("/files", staticDir);
 
 	// api example
 	const api = demino("/api", (_r, _i, ctx) => {
@@ -25,13 +28,13 @@ Deno.test("composition", async () => {
 	const blog = demino("/blog");
 	blog.get("/", (_r, _i, _c) => `Blog root`);
 	blog.get("/[slug]", (_r, _i, ctx) => `Blog: ${ctx.params.slug}`);
-	blog.static("/files", join(import.meta.dirname!, "../static"));
+	blog.static("/files", staticDir);
 
 	// mounted "inside" of another - must win over /blog/[slug]
 	const special = demino("/blog/special");
 	special.get("/", (_r, _i, _c) => `special`);
 	special.get("/[slug]", (_r, _i, ctx) => `special: ${ctx.params.slug}`);
-	special.static("/files", join(import.meta.dirname!, "../static"));
+	special.static("/files", staticDir);
 
 	const app = deminoCompose([home, api, blog, special]);
 

@@ -1,10 +1,11 @@
+import { test } from "node:test";
 import { demino } from "../../src/demino.ts";
 import { DeminoRegexRouter } from "../../src/router/regex-router.ts";
 import { assertResp, startTestServer } from "../_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
-Deno.test("regex router", async () => {
+test("regex router", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino("", [], {

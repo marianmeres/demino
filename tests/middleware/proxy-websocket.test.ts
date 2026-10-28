@@ -15,8 +15,14 @@ function createWsClient(
 	options?: { protocols?: string[]; headers?: HeadersInit },
 ) {
 	// the options bag (protocols + headers) is a non-standard constructor
-	// extension, supported by Deno, Bun and Node 26 (undici 8)
-	const ws = new WebSocket(url, options ?? {});
+	// extension, supported by Deno, Bun and Node 26 (undici 8); `lib.dom` only
+	// knows `string | string[]` as the second argument, so it is typed locally
+	// (same as `dialUpstream` in src/middleware/proxy/websocket.ts)
+	const WebSocketWithOptions = WebSocket as unknown as new (
+		url: string | URL,
+		options?: { protocols?: string[]; headers?: HeadersInit },
+	) => WebSocket;
+	const ws = new WebSocketWithOptions(url, options ?? {});
 	ws.binaryType = "arraybuffer";
 
 	const opened = Promise.withResolvers<boolean>();

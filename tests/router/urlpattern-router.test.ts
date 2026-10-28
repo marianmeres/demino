@@ -1,10 +1,11 @@
+import { test } from "node:test";
 import { demino } from "../../src/demino.ts";
 import { DeminoUrlPatternRouter } from "../../src/mod.ts";
 import { assertResp, startTestServer } from "../_utils.ts";
 
 type Srv = Awaited<ReturnType<typeof startTestServer>>;
 
-Deno.test("urlpattern router", async () => {
+test("urlpattern router", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino("", [], {

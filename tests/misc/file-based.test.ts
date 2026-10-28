@@ -1,11 +1,13 @@
-import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
-import { join } from "@std/path";
+import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { demino } from "../../src/demino.ts";
 import { deminoFileBased, routesCompare } from "../../src/misc/file-based.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 // absolute
-const _dirname = import.meta.dirname!;
+const _dirname = dirname(fileURLToPath(import.meta.url));
 const root1 = join(_dirname, "../fixtures/_root1");
 // const root2 = join(_dirname, "../fixtures/_root2");
 
@@ -59,16 +61,16 @@ runTestServerTests([
 		name: "routes specificity sorting works",
 		fn: () => {
 			let routes = ["/z", "/y", "/[x]", "/x"];
-			assertEquals(routes.toSorted(routesCompare).join(), "/x,/y,/z,/[x]");
+			assert.equal(routes.toSorted(routesCompare).join(), "/x,/y,/z,/[x]");
 
 			routes = ["/a/z", "/a/y", "/a/[x]", "/a/x"];
-			assertEquals(
+			assert.equal(
 				routes.toSorted(routesCompare).join(),
 				"/a/x,/a/y,/a/z,/a/[x]",
 			);
 
 			routes = ["/z", "/y", "/[x]", "/x", "/x/y", "/x/y/z"];
-			assertEquals(
+			assert.equal(
 				routes.toSorted(routesCompare).join(),
 				"/x/y/z,/x/y,/x,/y,/z,/[x]",
 			);
@@ -81,23 +83,22 @@ runTestServerTests([
 		fn: async () => {
 			const app = demino();
 			app.logger(null);
-			const err = await assertRejects(
-				() =>
-					deminoFileBased(app, "./__demino_does_not_exist__", {
-						verbose: false,
-					}),
-				Error,
+			const err = await deminoFileBased(app, "./__demino_does_not_exist__", {
+				verbose: false,
+			}).then(
+				() => assert.fail("expected deminoFileBased to reject"),
+				(e: unknown) => e as Error,
 			);
 			// the portable contract: a *plain* Error (no runtime-specific class) that
 			// carries `name: "NotFound"` and the fs-style `code: "ENOENT"`
-			assert(
+			assert.ok(
 				Object.getPrototypeOf(err) === Error.prototype,
 				`expected a plain Error, got ${err.constructor.name}`,
 			);
-			assertEquals(err.name, "NotFound");
-			assertEquals((err as { code?: string }).code, "ENOENT");
-			assertMatch(err.message, /does not exist/i);
-			assertMatch(err.message, /__demino_does_not_exist__/);
+			assert.equal(err.name, "NotFound");
+			assert.equal((err as { code?: string }).code, "ENOENT");
+			assert.match(err.message, /does not exist/i);
+			assert.match(err.message, /__demino_does_not_exist__/);
 		},
 	},
 	{
@@ -128,9 +129,9 @@ runTestServerTests([
 				"tests/fixtures/_root2/c/d/index.ts",
 				"tests/fixtures/_root2/index.ts",
 			];
-			assertEquals(files, expected);
+			assert.deepEqual(files, expected);
 			// ...and the dotfile in that dir (.DS_Store) never shows up
-			assert(!debug.some((l) => l.includes(".DS_Store")));
+			assert.ok(!debug.some((l) => l.includes(".DS_Store")));
 		},
 	},
 	{
@@ -156,14 +157,14 @@ runTestServerTests([
 			});
 
 			// warned about the missing one...
-			assert(
+			assert.ok(
 				warnings.some((w) => /__demino_missing__/.test(w)),
 				`expected a warning mentioning the missing dir, got: ${
 					JSON.stringify(warnings)
 				}`,
 			);
 			// ...and routes from the real dir were still registered
-			assert(app.routes().length > 0, "expected routes from the real root dir");
+			assert.ok(app.routes().length > 0, "expected routes from the real root dir");
 		},
 	},
 	{
@@ -174,20 +175,19 @@ runTestServerTests([
 			app.logger(null);
 			// point at this very test file — exists, but is not a directory
 			const notADir = join(_dirname, "file-based.test.ts");
-			await assertRejects(
+			await assert.rejects(
 				() =>
 					deminoFileBased(app, notADir, {
 						verbose: false,
 						ignoreMissingRootDir: true,
 					}),
-				TypeError,
-				"is not a directory",
+				{ name: "TypeError", message: /is not a directory/ },
 			);
 		},
 	},
 ]);
 
-Deno.test("deminoFileBased: a trailing slash in rootDir still registers routes", async () => {
+test("deminoFileBased: a trailing slash in rootDir still registers routes", async () => {
 	// A trailing separator used to survive `normalize` and then eat the leading "/"
 	// of every derived route, silently producing a zero-route app. It must behave
 	// exactly like the no-trailing-slash form.
@@ -196,12 +196,12 @@ Deno.test("deminoFileBased: a trailing slash in rootDir still registers routes",
 	await deminoFileBased(app, root1 + "/", { verbose: false });
 
 	const routes = app.routes().map((r) => r.route);
-	assert(routes.length > 0, "expected routes to be registered");
-	assert(
+	assert.ok(routes.length > 0, "expected routes to be registered");
+	assert.ok(
 		routes.every((r) => r.startsWith("/")),
 		`every route must start with "/", got: ${routes.join(", ")}`,
 	);
-	assert(
+	assert.ok(
 		routes.includes("/a"),
 		`expected "/a" among routes, got: ${routes.join(", ")}`,
 	);

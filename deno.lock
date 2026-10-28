@@ -9,10 +9,6 @@
     "jsr:@marianmeres/pubsub@3": "3.0.0",
     "jsr:@marianmeres/release@*": "2.0.0",
     "jsr:@marianmeres/simple-router@^3.4.0": "3.4.0",
-    "jsr:@std/assert@^1.0.19": "1.0.19",
-    "jsr:@std/internal@^1.0.12": "1.0.14",
-    "jsr:@std/internal@^1.0.14": "1.0.14",
-    "jsr:@std/path@^1.1.6": "1.1.6",
     "npm:@marianmeres/clog@^3.21.0": "3.23.0",
     "npm:@marianmeres/http-utils@^2.12.0": "2.12.0",
     "npm:@marianmeres/midware@^1.5.0": "1.5.0",
@@ -58,21 +54,6 @@
       "integrity": "0066d33ef73a148051b1f3daf60876047803cd993704d0efa69d07a0a30bf9e8",
       "dependencies": [
         "jsr:@marianmeres/pubsub"
-      ]
-    },
-    "@std/assert@1.0.19": {
-      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.12"
-      ]
-    },
-    "@std/internal@1.0.14": {
-      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
-    },
-    "@std/path@1.1.6": {
-      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.14"
       ]
     }
   },
@@ -244,9 +225,6 @@
       "jsr:@marianmeres/mcp-server@^1.3.2",
       "jsr:@marianmeres/midware@^1.5.0",
       "jsr:@marianmeres/simple-router@^3.4.0",
-      "jsr:@std/assert@^1.0.19",
-      "jsr:@std/fs@^1.0.24",
-      "jsr:@std/path@^1.1.6",
       "npm:mrmime@^2.0.1"
     ],
     "packageJson": {
