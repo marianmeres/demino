@@ -1,11 +1,11 @@
 import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
-import { green, red } from "@std/fmt/colors";
 import { serveDir, type ServeDirOptions } from "@std/http/file-server";
-import requestIp from "request-ip";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { isHostAllowed } from "./middleware/proxy/utils.ts";
+import { green, red } from "./utils/ansi.ts";
+import { getClientIpFromHeaders } from "./utils/client-ip.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
 import { isValidDate } from "./utils/is-valid-date.ts";
 
@@ -71,8 +71,8 @@ export interface DeminoContext {
 	 * Client IP address. Gated by {@link DeminoOptions.trustProxy}: with it off
 	 * (default), this is the direct socket peer and forwarding headers are ignored
 	 * (a forged `X-Forwarded-For` has no effect); with it on, it is resolved from
-	 * `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` (via `request-ip`), falling
-	 * back to the socket peer.
+	 * `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` (precedence in
+	 * {@link getClientIpFromHeaders}), falling back to the socket peer.
 	 *
 	 * Caveat with `trustProxy` on: the left-most `X-Forwarded-For` is client-spoofable
 	 * unless the front proxy OVERWRITES the header (not the appending default). Treat
@@ -691,8 +691,9 @@ function resolveForwardedAuthority(
  *
  * - `trustProxy` off → the DIRECT socket peer address only; forwarding headers are
  *   ignored (secure default; a forged `X-Forwarded-For` has zero effect).
- * - `trustProxy` on → the forwarded client IP via `request-ip` (CF-Connecting-IP, the
- *   left-most `X-Forwarded-For`, X-Real-IP, …), falling back to the socket peer.
+ * - `trustProxy` on → the forwarded client IP via {@link getClientIpFromHeaders}
+ *   (`X-Client-IP`, the left-most valid `X-Forwarded-For`, `CF-Connecting-IP`,
+ *   `X-Real-IP`, …), falling back to the socket peer.
  *
  * SECURITY — the LEFT-MOST `X-Forwarded-For` entry is only trustworthy if the front
  * proxy OVERWRITES the header with the real peer (e.g. nginx
@@ -711,10 +712,7 @@ function resolveClientIp(
 ): string {
 	const socketIp = info.remoteAddr?.hostname ?? "";
 	if (!trustProxy) return socketIp;
-	const fromHeaders = requestIp.getClientIp({
-		headers: Object.fromEntries(req.headers), // requestIp needs plain object
-	});
-	return fromHeaders || socketIp;
+	return getClientIpFromHeaders(req.headers) ?? socketIp;
 }
 
 /** Internal DRY helper */
@@ -803,7 +801,8 @@ export interface DeminoOptions {
 	 * This flag ALSO gates `ctx.ip`: with `trustProxy` off, `ctx.ip` is the direct
 	 * socket peer and `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` are ignored;
 	 * with it on (any form — `true` or `{ allowedHosts }`), `ctx.ip` is resolved from
-	 * those forwarding headers (via `request-ip`). See {@link resolveClientIp}.
+	 * those forwarding headers (via {@link getClientIpFromHeaders}). See
+	 * {@link resolveClientIp}.
 	 *
 	 * Vocabulary is the de-facto `X-Forwarded-*` set (matches the proxy middleware).
 	 */

@@ -80,12 +80,6 @@ Deno.serve(app)
 | `@std/path`                  | Path utilities                   |
 | `@std/fs`                    | File system (file-based routing) |
 
-### NPM Packages
-
-| Package      | Purpose             |
-| ------------ | ------------------- |
-| `request-ip` | Client IP detection |
-
 ## Key Files
 
 | File                              | Responsibility                                                                     |

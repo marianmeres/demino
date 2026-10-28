@@ -219,14 +219,9 @@ middleware), `HANDLER` (Infinity, final handler). Tag a middleware
 - @marianmeres/midware - Middleware chaining
 - @marianmeres/simple-router - Default router implementation
 - @std/assert - Test assertions
-- @std/fmt - Formatting utilities (colors)
 - @std/fs - File system utilities (walkSync)
 - @std/http - HTTP utilities (serveDir)
 - @std/path - Path utilities
-
-### NPM
-
-- request-ip - Client IP detection
 
 ## Common Patterns
 
@@ -442,7 +437,7 @@ exported). Routing is unaffected (always `url.pathname`).
 OFF, `ctx.ip` is the **direct socket peer** and `X-Forwarded-For`/`X-Real-IP`/
 `CF-Connecting-IP` are ignored (a forged `X-Forwarded-For` has zero effect, and
 `rateLimit()` keyed on `ctx.ip` can't be spoofed). With it ON, `ctx.ip` is resolved
-from those forwarding headers (via `request-ip`, left-most `X-Forwarded-For`), falling
+from those forwarding headers (`X-Client-IP`, left-most `X-Forwarded-For`, …), falling
 back to the socket. Previously `ctx.ip` trusted `X-Forwarded-For` **ungated**.
 
 ## Context Logger Access
@@ -566,7 +561,7 @@ const app2 = demino("", [], {
   `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` **ungated** (spoofable by any client
   that can reach the origin directly). Now: with `trustProxy` **off** (default),
   `ctx.ip` is the direct socket peer and those headers are ignored; with it **on**,
-  `ctx.ip` is resolved from them (via `request-ip`), unchanged from before. **Action:**
+  `ctx.ip` is resolved from them, unchanged from before. **Action:**
   an app behind a proxy that reads `ctx.ip` (or keys `rateLimit()` on it) must set
   `trustProxy` to keep seeing the real client IP — otherwise `ctx.ip` becomes the
   proxy's address. This is the secure default and matches how `ctx.url` treats

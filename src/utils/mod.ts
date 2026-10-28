@@ -1,3 +1,4 @@
+export * from "./client-ip.ts";
 export * from "./cookies.ts";
 export * from "./create-demino-clog.ts";
 export * from "./is-fn.ts";

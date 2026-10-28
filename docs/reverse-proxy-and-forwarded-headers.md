@@ -116,12 +116,13 @@ and `resolveClientIp()` builds `ctx.ip`. All three are private.
 ### `ctx.ip`
 
 `ctx.ip` is the direct socket peer when `trustProxy` is off, and is resolved from the
-forwarding headers (via `request-ip`: `CF-Connecting-IP`, the left-most `X-Forwarded-For`,
-`X-Real-IP`, …) when it is on. This was a **behavior change** — `ctx.ip` previously
-trusted `X-Forwarded-For` unconditionally. An app behind a proxy that reads `ctx.ip` (or
-keys [`rateLimit()`](../README.md#ratelimit) on it) must set `trustProxy` to keep seeing
-the real client IP. The upside: with `trustProxy` off, a client cannot spoof its IP to
-evade or poison an IP-keyed rate limiter.
+forwarding headers (`X-Client-IP`, the left-most valid `X-Forwarded-For`,
+`CF-Connecting-IP`, `X-Real-IP`, … — the precedence lives in the exported
+`getClientIpFromHeaders()`) when it is on. This was a **behavior change** — `ctx.ip`
+previously trusted `X-Forwarded-For` unconditionally. An app behind a proxy that reads
+`ctx.ip` (or keys [`rateLimit()`](../README.md#ratelimit) on it) must set `trustProxy` to
+keep seeing the real client IP. The upside: with `trustProxy` off, a client cannot spoof
+its IP to evade or poison an IP-keyed rate limiter.
 
 > **With `trustProxy` on, `ctx.ip` is only as trustworthy as your proxy config.** Demino
 > reads the **left-most** `X-Forwarded-For` token, which is client-controlled if the proxy
