@@ -2,7 +2,7 @@
  * Test harness shared by every server test.
  *
  * Runner-agnostic: tests are `node:test` + `node:assert/strict`, so the same
- * files run under `deno test`, `node --test` and `bun test`. The only
+ * files run under `deno test` and `node --test`. The only
  * runtime-specific part of the whole suite lives here: {@linkcode startTestServer}
  * picks the runtime adapter (the harness is the adapter contract's first
  * consumer).
@@ -25,23 +25,28 @@ const hostname = "127.0.0.1";
 
 /** `true` under Deno. */
 export const isDeno: boolean = "Deno" in globalThis;
-/** `true` under Bun. */
-export const isBun: boolean = "Bun" in globalThis;
-/** `true` under Node (neither Deno nor Bun). */
-export const isNode: boolean = !isDeno && !isBun;
+/**
+ * `true` under Node - or anything that reports a `process.versions.node`
+ * (Deno aside); such a runtime gets the Node adapter, untested and unsupported.
+ */
+export const isNode: boolean = !isDeno &&
+	typeof globalThis.process?.versions?.node === "string";
 
 let servePromise: Promise<ServeFn> | undefined;
 
 /**
  * Resolves the runtime adapter's `serve()` for the runtime the tests are
  * running on. Imported lazily so a test file never loads an adapter for a
- * runtime it is not on; resolved once per process.
+ * runtime it is not on; resolved once per process. Any other runtime fails
+ * loudly.
  */
 function pickServe(): Promise<ServeFn> {
 	servePromise ??= (async () => {
 		if (isDeno) return (await import("../src/adapters/deno.ts")).serve;
-		if (isBun) return (await import("../src/adapters/bun.ts")).serve;
-		return (await import("../src/adapters/node.ts")).serve;
+		if (isNode) return (await import("../src/adapters/node.ts")).serve;
+		throw new Error(
+			"tests/_utils.ts: no runtime adapter for this runtime - run the suite on Deno or Node",
+		);
 	})();
 	return servePromise;
 }

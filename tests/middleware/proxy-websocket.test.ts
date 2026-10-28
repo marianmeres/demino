@@ -15,7 +15,7 @@ function createWsClient(
 	options?: { protocols?: string[]; headers?: HeadersInit },
 ) {
 	// the options bag (protocols + headers) is a non-standard constructor
-	// extension, supported by Deno, Bun and Node 26 (undici 8); `lib.dom` only
+	// extension, supported by Deno and Node 26 (undici 8); `lib.dom` only
 	// knows `string | string[]` as the second argument, so it is typed locally
 	// (same as `dialUpstream` in src/middleware/proxy/websocket.ts)
 	const WebSocketWithOptions = WebSocket as unknown as new (

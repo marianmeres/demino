@@ -108,7 +108,7 @@ i.e. a `(req, info?) => Promise<Response>` function that a runtime adapter's
 
 ```ts
 import { demino } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino();
 app.get("/", () => "Hello World");
@@ -284,8 +284,7 @@ type DeminoUpgradeWebSocket = (
 
 All fields are optional on purpose: the app can be called directly (e.g. in tests) with no
 `info` at all — Demino normalises a missing `info` to a frozen empty object — and a runtime's
-own server passes whatever it has (Deno: `remoteAddr`; Bun: nothing usable). The three adapters
-fill all of them. `ctx.ip` reads `remoteAddr` (unless `trustProxy` is on).
+own server passes whatever it has (Deno: `remoteAddr`). Both adapters fill all of them. `ctx.ip` reads `remoteAddr` (unless `trustProxy` is on).
 
 `upgradeWebSocket` has the same shape on every runtime: call it, keep the `socket`, return the
 `response`. The socket is CONNECTING until the handler has returned that response, then fires
@@ -502,7 +501,6 @@ subpath.
 | -------------------------- | ------- | -------------------------------------- | ----------------------------------------------------------------------- |
 | `@marianmeres/demino/deno` | Deno    | the built-in HTTP server               | `Deno.upgradeWebSocket`                                                 |
 | `@marianmeres/demino/node` | Node    | own bridge over `node:http` (HTTP/1.1) | via the optional `ws` package (absent if missing or `webSockets: false`) |
-| `@marianmeres/demino/bun`  | Bun     | the built-in HTTP server               | per-socket facade over Bun's server-level WebSocket handlers            |
 
 ### serve()
 
@@ -520,7 +518,7 @@ function serve(handler: DeminoServeHandler, options?: ServeOptions): Promise<Ser
 - `options` ([`ServeOptions`](#serveoptions), optional) — listen options.
 
 **Returns:** `Promise<ServeHandle>` — a promise on every runtime, even where the server starts
-synchronously. Rejects when the port cannot be bound (`code: "EADDRINUSE"` on all three
+synchronously. Rejects when the port cannot be bound (`code: "EADDRINUSE"` on both
 runtimes) or when the adapter's runtime global is missing (e.g. `/deno` imported on Node).
 
 Per request the adapter builds the `Request`, fills [`DeminoServeInfo`](#deminoserveinfo)
@@ -535,7 +533,7 @@ reverse proxy's job.
 
 ```ts
 import { demino } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/node"; // or "/deno", "/bun"
+import { serve } from "@marianmeres/demino/node"; // or "/deno"
 
 const app = demino();
 app.get("/", () => "Hello");
@@ -547,9 +545,12 @@ await server.shutdown();
 
 **Without an adapter:** on Deno, `Deno.serve(app)` keeps working (the app is structurally a
 Deno serve handler); `info` then has `remoteAddr` only, so [`proxy()`](#proxy) WebSocket
-tunneling falls back to plain HTTP with one warning. On Bun, `Bun.serve({ fetch: app })` serves
-the app, but `ctx.ip` is empty and there is no upgrade capability. Node has no web-standard
-server, so the adapter is required there.
+tunneling falls back to plain HTTP with one warning. Node has no web-standard server, so the
+adapter is required there.
+
+**Bun is not a supported runtime.** A Demino app is a web-standard handler, so
+`Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket tunneling
+are not available there, and nothing is tested on Bun.
 
 ---
 
@@ -588,8 +589,8 @@ interface ServeHandle {
 }
 ```
 
-`shutdown()` is idempotent. On Node and Bun it closes open WebSockets with `1001` instead of
-waiting for them, and force-closes whatever is still open after 5 s.
+`shutdown()` is idempotent. On Node it closes open WebSockets with `1001` instead of waiting
+for them, and force-closes whatever is still open after 5 s.
 
 ---
 
@@ -1369,7 +1370,7 @@ to a runtime adapter's [`serve()`](#serve).
 
 ```ts
 import { demino, deminoCompose } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino();
 const api = demino("/api");
@@ -1431,7 +1432,7 @@ routes/
 
 ```ts
 import { demino, deminoFileBased } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino();
 await deminoFileBased(app, "./routes");
@@ -1509,7 +1510,7 @@ interface LogListenInfoOptions {
 
 ```ts
 import { deminoCompose, logListenInfo } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 await serve(deminoCompose([app]), {
 	port: parseInt(process.env.SERVER_PORT || "") || undefined,
@@ -1559,7 +1560,7 @@ function createLogListenInfo(
 
 ```ts
 import { createLogListenInfo } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 // human readable output locally, a single JSON line in docker
 await serve(app, {

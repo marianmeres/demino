@@ -6,20 +6,13 @@ import { demino, type DeminoServeInfo } from "../../src/demino.ts";
 import { serve } from "../../src/adapters/node.ts";
 import { serve as serveViaShim } from "../../src/node.ts";
 import type { ServeHandle } from "../../src/adapters/types.ts";
-import { isBun } from "../_utils.ts";
 
 /**
  * Node adapter: `serve()` over an own `node:http` bridge. These tests run on
- * every runtime (Deno and Bun through their `node:http` compatibility) - a
- * divergence is a finding, not something to paper over. The whole suite runs
- * through this adapter under Node (see `tests/_utils.ts`); this file covers the
- * bridge's own edges.
- *
- * Bun: `import("ws")` does not resolve to the npm package there - Bun ships its
- * own native-backed substitute (server sockets are `BunWebSocketMocked`, with no
- * `pause()`/`resume()`), so the adapter's hold-frames-until-101 step cannot run
- * and the three tests that open a WebSocket through this adapter are
- * `{ skip: isBun }`. WebSockets on Bun are the `/bun` adapter's job.
+ * both runtimes (Deno through its `node:http` compatibility) - a divergence is
+ * a finding, not something to paper over. The whole suite runs through this
+ * adapter under Node (see `tests/_utils.ts`); this file covers the bridge's own
+ * edges.
  */
 
 const silent = { hostname: "127.0.0.1", port: 0, onListen() {} };
@@ -153,8 +146,7 @@ test("node adapter: defaults are 0.0.0.0 and the url renders it as localhost", a
 test("node adapter: a port in use rejects instead of throwing synchronously", async () => {
 	const first = await serve(() => new Response("x"), silent);
 	try {
-		// `code` is the contract; the message is the runtime's (Bun's node:http
-		// says "Failed to start server. Is port N in use?")
+		// `code` is the contract; the message is the runtime's
 		await assert.rejects(
 			serve(() => new Response("y"), { ...silent, port: first.port }),
 			(e: unknown) => (e as { code?: string }).code === "EADDRINUSE",
@@ -571,10 +563,7 @@ test("node adapter: onError is forwarded, and a failing onError still yields a 5
 // WebSocket upgrades (via `ws`)
 // ---------------------------------------------------------------------------
 
-test("node adapter: info.upgradeWebSocket performs an echo upgrade with a subprotocol", {
-	// Bun's built-in `ws` substitute has no `pause()`/`resume()` (see the header)
-	skip: isBun,
-}, async () => {
+test("node adapter: info.upgradeWebSocket performs an echo upgrade with a subprotocol", async () => {
 	const serverClosed = Promise.withResolvers<{ code: number; reason: string }>();
 	const serverOpened = Promise.withResolvers<void>();
 	let status101 = 0;
@@ -638,43 +627,36 @@ test("node adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 	}
 });
 
-test(
-	"node adapter: frames sent before the handler returns are not lost, server close propagates",
-	{
-		// Bun's built-in `ws` substitute has no `pause()`/`resume()` (see the header)
-		skip: isBun,
-	},
-	async () => {
-		// the client fires a message right after its handshake; the handler is
-		// still awaiting when it arrives, so the adapter must hold it until the
-		// handler has committed and installed `onmessage`
-		const got = Promise.withResolvers<string>();
-		const app = demino();
-		app.logger(null);
-		app.get("/slow", async (req, info) => {
-			const { socket, response } = info.upgradeWebSocket!(req);
-			await sleep(50);
-			socket.onmessage = (e) => {
-				got.resolve(String(e.data));
-				socket.close(4001, "server-bye");
-			};
-			return response;
-		});
+test("node adapter: frames sent before the handler returns are not lost, server close propagates", async () => {
+	// the client fires a message right after its handshake; the handler is
+	// still awaiting when it arrives, so the adapter must hold it until the
+	// handler has committed and installed `onmessage`
+	const got = Promise.withResolvers<string>();
+	const app = demino();
+	app.logger(null);
+	app.get("/slow", async (req, info) => {
+		const { socket, response } = info.upgradeWebSocket!(req);
+		await sleep(50);
+		socket.onmessage = (e) => {
+			got.resolve(String(e.data));
+			socket.close(4001, "server-bye");
+		};
+		return response;
+	});
 
-		const srv = await serve(app, silent);
-		try {
-			const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/slow`);
-			const closed = new Promise<CloseEvent>((r) => (ws.onclose = r));
-			ws.onopen = () => ws.send("early");
-			assert.equal(await timed(got.promise, 3000, "the early frame"), "early");
-			const ev = await timed(closed, 3000, "client close");
-			assert.equal(ev.code, 4001);
-			assert.equal(ev.reason, "server-bye");
-		} finally {
-			await srv.shutdown();
-		}
-	},
-);
+	const srv = await serve(app, silent);
+	try {
+		const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/slow`);
+		const closed = new Promise<CloseEvent>((r) => (ws.onclose = r));
+		ws.onopen = () => ws.send("early");
+		assert.equal(await timed(got.promise, 3000, "the early frame"), "early");
+		const ev = await timed(closed, 3000, "client close");
+		assert.equal(ev.code, 4001);
+		assert.equal(ev.reason, "server-bye");
+	} finally {
+		await srv.shutdown();
+	}
+});
 
 test("node adapter: an upgrade request to a route answering 401 gets a raw 401 on the socket", async () => {
 	const app = demino();
@@ -760,10 +742,7 @@ test("node adapter: shutdown() resolves finished and is idempotent", async () =>
 	await assert.rejects(() => fetch(`http://127.0.0.1:${srv.port}/`));
 });
 
-test("node adapter: shutdown() closes WebSockets with 1001 and resolves promptly", {
-	// Bun's built-in `ws` substitute has no `pause()`/`resume()` (see the header)
-	skip: isBun,
-}, async () => {
+test("node adapter: shutdown() closes WebSockets with 1001 and resolves promptly", async () => {
 	const app = demino();
 	app.logger(null);
 	app.get("/ws", (req, info) => {
@@ -783,10 +762,7 @@ test("node adapter: shutdown() closes WebSockets with 1001 and resolves promptly
 	assert.equal(ev.code, 1001);
 });
 
-test("node adapter: shutdown() resolves within 6 s with a held-open in-flight request", {
-	// waits out the 5 s force-close grace period on purpose; `bun test` defaults to 5 s
-	timeout: 10_000,
-}, async () => {
+test("node adapter: shutdown() resolves within 6 s with a held-open in-flight request", async () => {
 	const never = new Promise<Response>(() => {});
 	const reached = Promise.withResolvers<void>();
 	const srv = await serve((req) => {

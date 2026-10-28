@@ -7,10 +7,11 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 - **Name**: @marianmeres/demino
 - **Registry**: JSR (jsr.io/@marianmeres/demino) + npm (dual-published via `@marianmeres/npmbuild`)
 - **Version**: 2.0.0 (this branch; `deno.json` keeps the last 1.x number until the release task bumps it)
-- **Runtime**: web standards + the `node:*` subset — Deno, Node (≥ 22) and Bun through runtime adapters
+- **Runtime**: web standards + the `node:*` subset — Deno and Node (≥ 22) through runtime adapters;
+  Bun is not supported (plain HTTP works under `Bun.serve({ fetch: app })`, untested)
 - **Type**: Web server framework
 - **Entry Points**: `src/mod.ts` (core, `.`); adapters `src/deno.ts` (`./deno`), `src/node.ts`
-  (`./node`), `src/bun.ts` (`./bun`); barrels `./middleware`, `./misc`, `./router`, `./utils`
+  (`./node`); barrels `./middleware`, `./misc`, `./router`, `./utils`
 
 ## Core Concept
 
@@ -26,7 +27,7 @@ only the adapter import differs.
 ## Architecture Overview
 
 ```
-serve(app)         <- @marianmeres/demino/deno | /node | /bun  (ServeFn: owns the server,
+serve(app)         <- @marianmeres/demino/deno | /node  (ServeFn: owns the server,
   |                   fills DeminoServeInfo {remoteAddr, upgradeWebSocket, raw}, returns ServeHandle)
   v
 demino()           -> Demino app (a DeminoServeHandler; also a drop-in Deno serve handler)
@@ -46,7 +47,6 @@ src/
 ├── demino.ts                 # Core: demino(), Demino, DeminoContext, DeminoServeInfo, types
 ├── deno.ts                   # Flat shim -> adapters/deno.ts   (exports["./deno"])
 ├── node.ts                   # Flat shim -> adapters/node.ts   (exports["./node"])
-├── bun.ts                    # Flat shim -> adapters/bun.ts    (exports["./bun"])
 ├── middleware.ts             # Flat shim -> middleware/mod.ts  (exports["./middleware"])
 ├── misc.ts                   # Flat shim -> misc/mod.ts        (exports["./misc"])
 ├── router.ts                 # Flat shim -> router/mod.ts      (exports["./router"])
@@ -54,8 +54,7 @@ src/
 ├── adapters/
 │   ├── types.ts              # ServeOptions, ServeHandle, ServeFn (+ internal toUrl); no runtime code
 │   ├── deno.ts               # serve() over Deno's built-in server (the only file that may say `Deno`)
-│   ├── node.ts               # serve() over node:http - own bridge; optional `ws` for upgrades
-│   └── bun.ts                # serve() over Bun.serve; per-socket WebSocket facade (only file saying `Bun`)
+│   └── node.ts               # serve() over node:http - own bridge; optional `ws` for upgrades
 ├── static/
 │   ├── mod.ts                # Static exports barrel
 │   ├── serve-static.ts       # serveStatic(), DeminoStaticOptions, ServeStaticOptions, DeminoStaticHeaders
@@ -100,12 +99,12 @@ src/
     ├── is-plain-object.ts    # Plain object type guard
     └── is-valid-date.ts      # Date type guard
 
-tests/                        # node:test suite - runs under deno test, node --test and bun test
-├── _utils.ts                 # Harness: startTestServer()/runTestServerTests() via the current runtime's adapter; isDeno/isBun/isNode
+tests/                        # node:test suite - runs under deno test and node --test
+├── _utils.ts                 # Harness: startTestServer()/runTestServerTests() via the current runtime's adapter; isDeno/isNode
 ├── demino.test.ts            # Core framework tests
 ├── portability.test.ts       # Guard: no runtime globals / @std / non-erasable TS in src/
 ├── manifest-sync.test.ts     # Guard: deno.json <-> package.json <-> exports map
-├── adapters/                 # One test file per adapter (deno/node/bun)
+├── adapters/                 # One test file per adapter (deno/node)
 ├── middleware/               # Middleware tests
 ├── router/                   # Router tests
 ├── misc/                     # compose, file-based, static
@@ -137,7 +136,7 @@ type DeminoHandler = (
 interface DeminoServeInfo {
 	remoteAddr?: DeminoRemoteAddr; // { hostname, port, transport? } - socket peer; feeds ctx.ip
 	upgradeWebSocket?: DeminoUpgradeWebSocket; // (req, { protocol? }) => { socket, response }
-	raw?: unknown; // runtime's own per-request object (Deno info / IncomingMessage / Bun Server)
+	raw?: unknown; // runtime's own per-request object (Deno info / IncomingMessage)
 }
 type DeminoServeHandler = (req: Request, info?: DeminoServeInfo) => Response | Promise<Response>;
 ```
@@ -145,7 +144,7 @@ type DeminoServeHandler = (req: Request, info?: DeminoServeInfo) => Response | P
 Every field optional: a missing `info` is normalised to a frozen `{}`, so always write
 `info.remoteAddr?.hostname`. Capabilities are feature-detected through `info` (never by
 sniffing the runtime). `upgradeWebSocket` is CONNECTING until the handler returned the 101,
-then `open` — the same contract on all three runtimes (Node/Bun hold early frames).
+then `open` — the same contract on both runtimes (Node holds early frames).
 
 ### Adapter contract (`src/adapters/types.ts`)
 
@@ -162,7 +161,7 @@ interface ServeOptions {
 interface ServeHandle {
 	readonly hostname: string; readonly port: number; readonly url: string;
 	readonly finished: Promise<void>;
-	shutdown(): Promise<void>; // graceful; Node/Bun force after 5 s
+	shutdown(): Promise<void>; // graceful; Node forces after 5 s
 	ref(): void; unref(): void;
 }
 ```
@@ -318,7 +317,7 @@ precedence is inlined in `getClientIpFromHeaders()`.
 
 ```ts
 import { demino } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino();
 app.get("/", () => "Hello");
@@ -376,22 +375,21 @@ app.get("/ws", (req, info) => {
 
 ## Testing
 
-One `node:test` + `node:assert/strict` suite, three runners:
+One `node:test` + `node:assert/strict` suite, two runners:
 
 ```bash
 deno task test            # Deno
 npm test                  # Node (run `npm install` once on a fresh checkout)
-bun test                  # Bun (5 s default per-test timeout; pass { timeout } to slow tests)
 npm run typecheck         # tsc --noEmit over src/ + tests/ (the only type gate)
 deno task test:watch      # Deno watch mode
 ```
 
 Test files located in: `tests/`. Server tests go through `startTestServer()` /
 `runTestServerTests()` in `tests/_utils.ts`, which picks the adapter of the current runtime.
-Runtime-only cases use `{ skip: !isDeno }` / `{ skip: isBun }` with a comment stating why.
+Runtime-only cases use `{ skip: !isDeno }` with a comment stating why.
 Guards: `tests/portability.test.ts`, `tests/manifest-sync.test.ts`,
-`tests/types/deno-serve-compat.test.ts`. CI (`.github/workflows/ci.yml`) runs Deno (pinned),
-Node 24 + 26 and Bun.
+`tests/types/deno-serve-compat.test.ts`. CI (`.github/workflows/ci.yml`) runs Deno (pinned)
+and Node 24 + 26.
 
 ## Tasks and Scripts
 
@@ -399,7 +397,6 @@ Node 24 + 26 and Bun.
 deno task dev             # Run main module with watch
 deno task test            # Run all tests on Deno
 npm test                  # Run all tests on Node
-bun test                  # Run all tests on Bun
 npm run typecheck         # tsc --noEmit
 deno publish --dry-run    # JSR package check
 deno task npm:build       # Build the npm package into .npm-dist/
@@ -434,11 +431,11 @@ deno task publish         # deno publish + npm publish of .npm-dist/
    `info.upgradeWebSocket`. Without it (app handed to the runtime's own server, or the Node
    adapter with `webSockets: false` / no `ws`) upgrade requests are forwarded as plain HTTP
    and one warning is logged per process.
-9. **`ctx.ip` without an adapter**: Deno's own server passes `remoteAddr`, so `ctx.ip` works;
-   Bun's `Bun.serve({ fetch: app })` passes its `Server` as `info`, so `ctx.ip` is `""` — use
-   the Bun adapter.
+9. **`ctx.ip` without an adapter**: Deno's own server passes `remoteAddr`, so `ctx.ip` works.
+   Bun is not supported: `Bun.serve({ fetch: app })` serves plain HTTP, but `ctx.ip` is `""`
+   and there is no upgrade capability.
 10. **Adapter defaults mirror Deno**: `0.0.0.0:8000`, `onListen` prints the listen info,
-    `signal` abort is forceful, `shutdown()` graceful (Node/Bun force after 5 s), port in use
+    `signal` abort is forceful, `shutdown()` graceful (Node forces after 5 s), port in use
     rejects with `code: "EADDRINUSE"`.
 
 ## Common Modifications
@@ -543,7 +540,7 @@ upgraded only after the upstream handshake succeeds → dial failures stay regul
 errors (502/504/`onError`). Close code + reason propagate both ways. `timeout` bounds the
 handshake only. N/A for tunnels: `maxRedirects`, `cache`, response transforms. The client leg
 needs `info.upgradeWebSocket` (an adapter's `serve()`), see Special Behaviors #8. Upstream dial
-uses the global `WebSocket` with `{ protocols, headers }` (works on Deno, Bun and Node ≥ 22).
+uses the global `WebSocket` with `{ protocols, headers }` (works on Deno and Node ≥ 22).
 Impl: `src/middleware/proxy/websocket.ts` (internal, not exported).
 
 ## trustProxy / proxy-aware ctx.url (since 1.15.0)
@@ -621,11 +618,10 @@ const app2 = demino("", [], {
 
 ### 2.0.0
 
-- **Runtime adapters** `@marianmeres/demino/deno`, `/node`, `/bun`: one `serve(handler,
+- **Runtime adapters** `@marianmeres/demino/deno`, `/node`: one `serve(handler,
   options?) => Promise<ServeHandle>` (`ServeOptions`, `ServeHandle`, `ServeFn` exported from
   the root too). Node adapter = own `node:http` bridge (streams, backpressure, multi-`Set-Cookie`,
-  `req.signal` on client abort, optional `ws` upgrades); Bun adapter = `Bun.serve` + per-socket
-  WebSocket facade.
+  `req.signal` on client abort, optional `ws` upgrades).
 - **`DeminoServeInfo`** (`remoteAddr?`, `upgradeWebSocket?`, `raw?`) + `DeminoServeHandler`,
   `DeminoRemoteAddr`, `DeminoUpgradeWebSocket(Options)`.
 - **`serveStatic()`** + `DeminoStaticOptions` / `ServeStaticOptions` / `DeminoStaticHeaders`
@@ -633,7 +629,7 @@ const app2 = demino("", [], {
 - **`DeminoListenAddr`** (what `onListen` receives); `getClientIpFromHeaders()` documented.
 - **npm package** (dual-published; `engines.node >= 22`), subpath exports `./middleware`,
   `./misc`, `./router`, `./utils` now real.
-- **Test suite on `node:test`**, green on Deno, Node and Bun; portability + manifest-sync
+- **Test suite on `node:test`**, green on Deno and Node; portability + manifest-sync
   guards; GitHub Actions matrix.
 
 ### 1.18.0 (additive, no breaking change)
@@ -723,7 +719,7 @@ const app2 = demino("", [], {
 ### 2.0.0
 
 - **Runtime decoupling.** `src/` is web standards + `node:*` only; servers start through the
-  runtime adapters (`@marianmeres/demino/deno`, `/node`, `/bun`). Published to JSR **and**
+  runtime adapters (`@marianmeres/demino/deno`, `/node`). Published to JSR **and**
   npm (Node ≥ 22). Every forced consumer edit is sed-able (type renames).
   Consumer guide: [docs/MIGRATION-2.0.md](./docs/MIGRATION-2.0.md).
 - **Handler info type:** `Deno.ServeHandlerInfo` → `DeminoServeInfo` (type-only;
@@ -742,11 +738,10 @@ const app2 = demino("", [], {
   `onListen` argument still satisfies it (type-only).
 - **Proxy WebSocket tunneling needs `info.upgradeWebSocket`** → an adapter's `serve()`. Under
   a bare `Deno.serve(app)` upgrade requests fall through to the HTTP path with one warning.
-- **`ctx.ip` under a bare `Bun.serve({ fetch: app })`** is `""` — use the Bun adapter.
 - **Dependencies:** removed `@std/*` and `request-ip` (inlined as `getClientIpFromHeaders()`,
   header precedence preserved, `Forwarded` dropped); added `mrmime`; optional `ws` peer for
   Node WebSocket upgrades.
-- **Package exports:** `.`, `./deno`, `./node`, `./bun`, `./middleware`, `./misc`,
+- **Package exports:** `.`, `./deno`, `./node`, `./middleware`, `./misc`,
   `./router`, `./utils` (the barrel subpaths `AGENTS.md`/`mcp.ts` claimed before now
   resolve); npm `engines.node >= 22`.
 - **Tests:** `node:test` + `node:assert/strict` (was `Deno.test` + `@std/assert`); the

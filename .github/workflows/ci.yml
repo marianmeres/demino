@@ -1,4 +1,4 @@
-# Demino promises "runs on Deno, Node and Bun"; only a matrix proves that on every
+# Demino promises "runs on Deno and Node"; only a matrix proves that on every
 # push. Each job runs exactly the commands of `deno.json` tasks / `package.json`
 # scripts, so CI checks what `deno task ...` and `npm run ...` check locally -
 # nothing is defined only here.
@@ -7,8 +7,6 @@
 #   bug-fix-only mode; bump the pin deliberately, in its own commit).
 # - Node runs the two current majors; the suite is type-stripped, so
 #   `npm run typecheck` (tsc --noEmit) is the only type gate.
-# - Bun runs the same `node:test` files; its dependencies come from `npm ci`
-#   (package-lock.json is the one lockfile), Bun only runs the tests.
 # - `deno fmt --check` / `deno lint` are deliberately not gated: the repo never
 #   enforced them and gating is a reformat decision, not a CI one.
 
@@ -60,23 +58,3 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
-
-  bun:
-    name: Bun ${{ matrix.bun }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        bun: ["1.4.3"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26.x"
-          cache: npm
-      - run: npm ci
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ matrix.bun }}
-      - run: bun test

@@ -4,7 +4,8 @@
 
 ### Steps
 
-1. Import `serve` from the adapter subpath of the runtime you are on
+1. Import `serve` from the adapter subpath of the runtime you are on (Deno or Node; Bun is not
+   supported - plain HTTP works under `Bun.serve({ fetch: app })`, untested)
 2. Pass the app (or a `deminoCompose()` result); `await` the `ServeHandle`
 
 ### Template
@@ -13,7 +14,6 @@
 import { demino } from "@marianmeres/demino";
 import { serve } from "@marianmeres/demino/deno"; // Deno
 // import { serve } from "@marianmeres/demino/node"; // Node  (npm i ws for WebSockets)
-// import { serve } from "@marianmeres/demino/bun";  // Bun
 
 const app = demino();
 app.get("/", () => "Hello");
@@ -26,7 +26,7 @@ const server = await serve(app, { port: 8000 }); // defaults: 0.0.0.0:8000, logL
 
 - [ ] Same code on every runtime except the adapter import line
 - [ ] Node: `ws` installed if `info.upgradeWebSocket` (WebSocket tunneling) is needed
-- [ ] No `Deno.*`/`Bun.*` in app code that must run elsewhere — read `info` instead
+- [ ] No `Deno.*` in app code that must run elsewhere — read `info` instead
 
 ---
 
@@ -38,7 +38,6 @@ Run, in this order, before committing (CI runs the same):
 deno task test           # Deno
 npm test                 # Node (needs `npm install` once)
 npm run typecheck        # tsc --noEmit over src/ + tests/
-bun test                 # Bun
 deno publish --dry-run   # JSR package shape (slow types, exports map)
 deno task npm:build      # npm package into .npm-dist/ (deno task npm:smoke also imports it)
 ```
@@ -79,7 +78,7 @@ export function myMiddleware(options: MyMiddlewareOptions = {}): DeminoHandler {
 - [ ] Options interface exported
 - [ ] Added to `src/middleware/mod.ts`
 - [ ] Portable: no runtime global, no `@std/` import (`tests/portability.test.ts` fails otherwise)
-- [ ] Tests pass on all three runtimes: `deno task test`, `npm test`, `bun test`
+- [ ] Tests pass on both runtimes: `deno task test`, `npm test`
 
 ---
 
@@ -156,8 +155,8 @@ export function myUtil(input: string): string {
 ### Steps
 
 1. Create `src/adapters/[name].ts` exporting `serve: ServeFn` (from `./types.ts`). Type the
-   slice of the runtime global you use locally (see `deno.ts`/`bun.ts`) so `tsc` checks the
-   file without ambient runtime types
+   slice of the runtime global you use locally (see `deno.ts`) so `tsc` checks the file
+   without ambient runtime types
 2. Per request fill a `DeminoServeInfo`: `remoteAddr` (read at request start — peers vanish
    once the connection closes), `upgradeWebSocket` (Deno-shaped: `{ socket, response }`,
    socket CONNECTING until the handler returned the 101, then `open`), `raw`
@@ -189,7 +188,7 @@ export function myUtil(input: string): string {
 1. Add it to `deno.json` `imports` (`npm:`/`jsr:` specifier) **and** `package.json`
    `dependencies` with the same `^x.y.z` range — `tests/manifest-sync.test.ts` fails otherwise
 2. Add it to the `dependencies` list in `scripts/build-npm.ts` (published `package.json`)
-3. Import it by its bare name from `src/`; confirm it runs on Deno, Node and Bun
+3. Import it by its bare name from `src/`; confirm it runs on Deno and Node
 4. `npm install` to refresh `package-lock.json`
 
 ### Checklist
@@ -295,7 +294,7 @@ export default [authMiddleware];
 
 ```ts
 import { demino, deminoFileBased } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino();
 await deminoFileBased(app, "./routes");
@@ -325,7 +324,7 @@ await serve(app);
 
 ```ts
 import { demino, deminoCompose } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const app = demino(); // Root routes
 const api = demino("/api"); // API routes

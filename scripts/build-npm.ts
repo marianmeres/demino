@@ -77,7 +77,6 @@ await npmBuild({
 			"middleware",
 			"deno",
 			"node",
-			"bun",
 			"web-standards",
 		],
 		devDependencies,

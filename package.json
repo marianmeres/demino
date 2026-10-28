@@ -7,7 +7,6 @@
   },
   "scripts": {
     "test": "node --test \"tests/**/*.test.ts\"",
-    "test:bun": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

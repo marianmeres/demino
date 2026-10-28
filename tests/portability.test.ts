@@ -5,14 +5,14 @@
  *
  *  (a) no runtime coupling outside `src/adapters/` - no `Deno.`, `Bun.`,
  *      `typeof Deno|Bun`, `globalThis.Deno|Bun`, `"Deno"|"Bun" in globalThis`;
- *  (b) `src/adapters/deno.ts` is the only file saying `Deno`, `src/adapters/bun.ts`
- *      the only one saying `Bun`;
+ *  (b) `src/adapters/deno.ts` is the only file saying `Deno`; no file says `Bun`
+ *      (not a supported runtime, so nothing in `src/` may couple to it);
  *  (c) no `@std/`, `jsr:`, `npm:` or `https:` import specifiers anywhere in `src/`;
  *  (d) erasable-only syntax - no `enum`, no `namespace`, no constructor parameter
- *      properties (Node and Bun strip types, they never check or lower them).
+ *      properties (Node strips types, it never checks or lowers them).
  *
- * The flat shims (`src/deno.ts`, `src/node.ts`, `src/bun.ts`) only re-export and
- * therefore pass (a). Runs the same on Deno, Node and Bun (`node:test`).
+ * The flat shims (`src/deno.ts`, `src/node.ts`) only re-export and therefore
+ * pass (a). Runs the same on Deno and Node (`node:test`).
  */
 
 import assert from "node:assert/strict";
@@ -24,10 +24,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SRC = join(ROOT, "src");
 
-/** Files that may say `Deno` resp. `Bun` in code (comments and strings aside). */
-const RUNTIME_OWNER: Record<"Deno" | "Bun", string> = {
+/**
+ * The one file that may say `Deno` resp. `Bun` in code (comments and strings
+ * aside); `null` - no file may.
+ */
+const RUNTIME_OWNER: Record<"Deno" | "Bun", string | null> = {
 	Deno: "src/adapters/deno.ts",
-	Bun: "src/adapters/bun.ts",
+	Bun: null,
 };
 
 /** Import specifier prefixes that are not portable (Deno-only resolution). */

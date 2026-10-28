@@ -1,7 +1,7 @@
 # Migrating to Demino 2.0
 
 Demino 2.0 decouples the core from Deno. The library is web standards plus the `node:*`
-subset, servers start through a runtime adapter (`@marianmeres/demino/deno`, `/node`, `/bun`),
+subset, servers start through a runtime adapter (`@marianmeres/demino/deno`, `/node`),
 and the package is published to JSR **and** npm (Node 22+). Routing, middlewares, the context,
 error handling, composition and the loggers are unchanged.
 
@@ -10,7 +10,7 @@ For a typical 1.x Deno app the whole migration is:
 1. one `sed` over type annotations (`Deno.ServeHandlerInfo` → `DeminoServeInfo`, [item 1](#1-handler-info-type)),
 2. a look at the options you pass to `app.static`, if any ([item 3](#3-appstatic-options)),
 3. optionally, starting the server through the adapter instead of `Deno.serve(app)` - required
-   only for WebSocket tunneling through `proxy()` and for `ctx.ip` on Bun ([item 2](#2-demino-no-longer-extends-denoservehandler)).
+   only for WebSocket tunneling through `proxy()` ([item 2](#2-demino-no-longer-extends-denoservehandler)).
 
 `Deno.serve(app)` keeps compiling and running. The ten items below are the complete list of
 what a consumer can observe; items 1-5 may need an edit, 6-10 only matter in the situation
@@ -80,7 +80,7 @@ tunneling ([item 6](#6-proxy-websocket-tunneling-needs-an-adapter)) behaves exac
 back, and the upgrade capability on `info`:
 
 ```ts
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 const server = await serve(app, { port: 3000 }); // onListen defaults to logListenInfo
 server.url; // "http://localhost:3000/"
@@ -172,21 +172,21 @@ uses `logListenInfo` as its default `onListen`, so through `serve()` you pass no
 ## 6. Proxy WebSocket tunneling needs an adapter
 
 `proxy()` tunnels WebSocket upgrades through `info.upgradeWebSocket`, which only the adapters
-provide. Under a bare `Deno.serve(app)` (or `Bun.serve({ fetch: app })`) an upgrade request
-falls through to the plain HTTP proxy path and the app logger warns once:
+provide. Under a bare `Deno.serve(app)` an upgrade request falls through to the plain HTTP
+proxy path and the app logger warns once:
 
 ```
-[proxy] WebSocket tunneling needs a runtime adapter (`info.upgradeWebSocket` is missing) - forwarding the upgrade request as plain HTTP. Start the app through @marianmeres/demino/deno, /node or /bun to enable tunnels.
+[proxy] WebSocket tunneling needs a runtime adapter (`info.upgradeWebSocket` is missing) - forwarding the upgrade request as plain HTTP. Start the app through @marianmeres/demino/deno or /node to enable tunnels.
 ```
 
 Start the app through the adapter's `serve()` ([item 2](#2-demino-no-longer-extends-denoservehandler)).
 On Node also install `ws` ([item 8](#8-dependencies)).
 
-## 7. `ctx.ip` under a bare `Bun.serve({ fetch: app })`
+## 7. Bun is not a supported runtime
 
-Bun passes its `Server` object as the handler's second argument. It has no `remoteAddr`, so
-`ctx.ip` is `""` there. The Bun adapter (`@marianmeres/demino/bun`) fills `remoteAddr` from
-`server.requestIP()`; use it.
+Bun is not a supported runtime. A demino app is a web-standard handler, so
+`Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket
+tunneling are not available there, and nothing is tested on Bun.
 
 ## 8. Dependencies
 
@@ -194,7 +194,7 @@ Removed: every `@std/*` dependency (`@std/http`, `@std/fs`, `@std/path`, `@std/f
 `@std/assert`) and `request-ip`. Added: `mrmime` (content types for static files). Optional:
 `ws` on Node, imported lazily by the Node adapter for WebSocket upgrades - without it the
 Node adapter serves plain HTTP and warns once (`webSockets: false` opts out silently). On
-Deno and Bun nothing is optional; `ws` is never loaded there.
+Deno nothing is optional; `ws` is never loaded there.
 
 ## 9. Package exports and the npm package
 
@@ -203,7 +203,6 @@ Deno and Bun nothing is optional; `ws` is never loaded there.
 | `@marianmeres/demino`            | everything (core, middlewares, routers, static, utils) |
 | `@marianmeres/demino/deno`       | `serve()` for Deno                                     |
 | `@marianmeres/demino/node`       | `serve()` for Node (`node:http` bridge, optional `ws`) |
-| `@marianmeres/demino/bun`        | `serve()` for Bun                                      |
 | `@marianmeres/demino/middleware` | the bundled middlewares only                           |
 | `@marianmeres/demino/misc`       | `deminoCompose`, `deminoFileBased`                     |
 | `@marianmeres/demino/router`     | the routers                                            |

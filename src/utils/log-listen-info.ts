@@ -106,7 +106,7 @@ function useJson(json: LogListenInfoOptions["json"]): boolean {
  * @example Explicit `onListen` with an adapter's `serve()`
  * ```ts
  * import { logListenInfo } from "@marianmeres/demino";
- * import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+ * import { serve } from "@marianmeres/demino/deno"; // or "/node"
  *
  * await serve(app, { onListen: logListenInfo });
  * ```

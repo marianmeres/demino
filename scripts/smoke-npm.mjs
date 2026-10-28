@@ -6,7 +6,7 @@
  * `npm install --install-links <.npm-dist>` - a packed copy, as a consumer
  * gets it, not a symlink into this repo - and then, on Node, inside that project:
  *
- *  - checks the installed package.json: the eight `exports` keys, the five
+ *  - checks the installed package.json: the seven `exports` keys, the five
  *    runtime dependencies, `ws` as an optional peer, `engines.node`;
  *  - imports every subpath;
  *  - `demino()` + `serve()` from `@marianmeres/demino/node`: listens on port 0,
@@ -33,7 +33,6 @@ const EXPECTED_EXPORTS = [
 	".",
 	"./deno",
 	"./node",
-	"./bun",
 	"./middleware",
 	"./misc",
 	"./router",
@@ -53,7 +52,6 @@ import assert from "node:assert/strict";
 import { demino } from "${PKG}";
 import { serve } from "${PKG}/node";
 import * as denoAdapter from "${PKG}/deno";
-import * as bunAdapter from "${PKG}/bun";
 import * as middleware from "${PKG}/middleware";
 import * as misc from "${PKG}/misc";
 import * as router from "${PKG}/router";
@@ -62,12 +60,11 @@ import * as utils from "${PKG}/utils";
 assert.equal(typeof demino, "function", "demino");
 assert.equal(typeof serve, "function", "serve (node)");
 assert.equal(typeof denoAdapter.serve, "function", "serve (deno)");
-assert.equal(typeof bunAdapter.serve, "function", "serve (bun)");
 assert.equal(typeof middleware.cors, "function", "middleware.cors");
 assert.equal(typeof misc.deminoCompose, "function", "misc.deminoCompose");
 assert.equal(typeof router.DeminoFixedRouter, "function", "router.DeminoFixedRouter");
 assert.equal(typeof utils.logListenInfo, "function", "utils.logListenInfo");
-console.log("smoke: all eight subpaths import");
+console.log("smoke: all seven subpaths import");
 
 const app = demino("", [], { logger: null });
 app.get("/", () => "smoke ok");

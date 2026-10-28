@@ -6,13 +6,13 @@ Demino is a minimal web framework on web standards: a Demino app is a
 `(req: Request, info?: DeminoServeInfo) => Promise<Response>` function. It adds routing,
 middleware chaining, error handling, static file serving and logging on top of that one
 signature. The core is runtime-agnostic (web APIs plus the `node:*` subset); a thin **runtime
-adapter** per runtime (`/deno`, `/node`, `/bun`) owns the HTTP server, fills in `info` and
+adapter** per runtime (`/deno`, `/node`) owns the HTTP server, fills in `info` and
 returns a uniform `ServeHandle`.
 
 ## Component Map
 
 ```
-serve(app)   ← @marianmeres/demino/deno | /node | /bun
+serve(app)   ← @marianmeres/demino/deno | /node
      │         (runtime adapter: owns the server, builds the Request,
      │          fills DeminoServeInfo, writes the Response back)
      ▼
@@ -50,7 +50,6 @@ serve(app)   ← @marianmeres/demino/deno | /node | /bun
 | ------- | ----------------------- | -------------------------------------- | ----------------- | ----------------------------------------------------------------------- | ----------------------- |
 | Deno    | `src/adapters/deno.ts`  | the built-in HTTP server               | yes               | `Deno.upgradeWebSocket`                                                 | Deno's handler info     |
 | Node    | `src/adapters/node.ts`  | own bridge over `node:http` (HTTP/1.1) | yes               | via the optional `ws` package (absent if missing or `webSockets: false`) | `IncomingMessage`       |
-| Bun     | `src/adapters/bun.ts`   | the built-in HTTP server               | yes (`requestIP`) | per-socket facade over Bun's server-level `websocket` handlers          | Bun `Server`            |
 
 - **Contract**: `src/adapters/types.ts` — `ServeOptions`, `ServeHandle`, `ServeFn` (plus the
   internal `toUrl`). Handler-side types `DeminoServeHandler`, `DeminoServeInfo`,
@@ -58,24 +57,27 @@ serve(app)   ← @marianmeres/demino/deno | /node | /bun
   nothing from `adapters/` except `types.ts`; no adapter imports another.
 - **One signature**: `serve(handler, options?) => Promise<ServeHandle>`; defaults
   `0.0.0.0:8000`, `onListen: logListenInfo`. `signal` abort = forceful close of listener and
-  every connection; `shutdown()` = graceful, Node/Bun force after 5 s.
+  every connection; `shutdown()` = graceful, Node forces after 5 s.
 - **WebSocket contract**: `upgradeWebSocket(req, { protocol? })` returns `{ socket, response }`;
   the socket is CONNECTING until the handler has returned the 101, then fires `open`. Node
-  (`ws` sockets are born open) and Bun (`open` fires inside `upgrade()`) hold frames back until
-  then, so the same handler code works on all three.
-- **Flat shims**: `src/deno.ts`, `src/node.ts`, `src/bun.ts` re-export their adapter; the
+  (`ws` sockets are born open) holds frames back until then, so the same handler code works on
+  both.
+- **Flat shims**: `src/deno.ts`, `src/node.ts` re-export their adapter; the
   `deno.json` exports map and the npm build point at these (npmbuild maps `./x` to `src/x.ts`).
 - **Without an adapter**: on Deno the app is structurally a Deno serve handler and can be
   handed to the runtime directly (`info` then has `remoteAddr` only — no upgrade capability).
-  On Bun, `Bun.serve({ fetch: app })` passes the `Server` as `info`, so `ctx.ip` is `""` and
-  there is no upgrade capability. Node has no web-standard server; the adapter is required.
+  Node has no web-standard server; the adapter is required.
+- **Bun is not a supported runtime**: a Demino app is a web-standard handler, so
+  `Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket
+  tunneling are not available there, and nothing is tested on Bun.
 
 ### Portability invariant
 
 `src/` outside `src/adapters/` never touches a runtime global. Enforced by
 `tests/portability.test.ts` (see [Conventions → Portability](./conventions.md#portability)):
-no `Deno.`/`Bun.` outside the adapters, each name only in its own adapter file, no `@std/` /
-`jsr:` / `npm:` / `https:` specifiers in `src/`, erasable-only TypeScript.
+no `Deno.` outside the adapters, the name `Deno` only in `src/adapters/deno.ts` and `Bun`
+nowhere (not a supported runtime), no `@std/` / `jsr:` / `npm:` / `https:` specifiers in
+`src/`, erasable-only TypeScript.
 
 ## Data Flow
 
@@ -139,7 +141,6 @@ anywhere in `src/`.
 | `src/adapters/types.ts`           | Adapter contract: `ServeOptions`, `ServeHandle`, `ServeFn`                         |
 | `src/adapters/deno.ts`            | Deno adapter (built-in server)                                                     |
 | `src/adapters/node.ts`            | Node adapter (own `node:http` bridge, optional `ws`)                               |
-| `src/adapters/bun.ts`             | Bun adapter (built-in server, per-socket WebSocket facade)                         |
 | `src/static/serve-static.ts`      | `serveStatic()` + `DeminoStaticOptions` (what `app.static()` calls)                |
 | `src/static/mime.ts`              | Content-type lookup (`mrmime`)                                                     |
 | `src/router/abstract.ts`          | `DeminoRouter` base class                                                          |

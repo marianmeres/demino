@@ -11,7 +11,7 @@ export const tools: McpToolDefinition[] = [
 	{
 		name: "generate-demino-app",
 		description:
-			"Generate boilerplate TypeScript code for a Demino web app with routes, middleware, optional multi-app composition and the serve() call of the chosen runtime adapter (Deno, Node or Bun)",
+			"Generate boilerplate TypeScript code for a Demino web app with routes, middleware, optional multi-app composition and the serve() call of the chosen runtime adapter (Deno or Node)",
 		params: {
 			mountPath: z
 				.string()
@@ -68,10 +68,10 @@ export const tools: McpToolDefinition[] = [
 				.optional()
 				.describe("Include file-based routing setup"),
 			runtime: z
-				.enum(["deno", "node", "bun"])
+				.enum(["deno", "node"])
 				.optional()
 				.describe(
-					'Runtime adapter to serve through (default "deno"); selects the "@marianmeres/demino/<runtime>" import and the specifier prefix ("jsr:" on Deno, bare on Node/Bun)',
+					'Runtime adapter to serve through (default "deno"); selects the "@marianmeres/demino/<runtime>" import and the specifier prefix ("jsr:" on Deno, bare on Node)',
 				),
 		},
 		handler: async (args: Record<string, unknown>) => {
@@ -82,11 +82,11 @@ export const tools: McpToolDefinition[] = [
 			const middleware = args.middleware as string[] | undefined;
 			const compose = args.compose as boolean | undefined;
 			const fileBased = args.fileBased as boolean | undefined;
-			const runtime = (args.runtime as "deno" | "node" | "bun" | undefined) ??
+			const runtime = (args.runtime as "deno" | "node" | undefined) ??
 				"deno";
 
-			// Deno resolves the package from JSR directly; Node and Bun through npm
-			// (bare specifier), so the prefix differs while the subpaths stay the same
+			// Deno resolves the package from JSR directly; Node through npm (bare
+			// specifier), so the prefix differs while the subpaths stay the same
 			const pkg = `${runtime === "deno" ? "jsr:" : ""}@marianmeres/demino`;
 			const imports: string[] = [
 				`import { demino } from "${pkg}";`,

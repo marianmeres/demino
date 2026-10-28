@@ -152,7 +152,7 @@ response is runtime-generated). A malformed upgrade request falls through to the
 HTTP proxy path.
 
 **Needs the adapter's upgrade capability:** the client leg is upgraded through
-`info.upgradeWebSocket`, which only a runtime adapter's `serve()` (`/deno`, `/node`, `/bun`)
+`info.upgradeWebSocket`, which only a runtime adapter's `serve()` (`/deno`, `/node`)
 provides. Without it — the app handed straight to the runtime's own server, or the Node adapter
 with `webSockets: false` / no `ws` installed — upgrade requests are forwarded as plain HTTP
 exactly as with `webSockets: false`, and one warning is logged per process. Impl:
@@ -210,7 +210,7 @@ Options: `maxSize` (bytes, required); `allowUnknownLength` (default `false`).
 Behavior:
 
 - `Content-Length` > `maxSize` → `413 Payload Too Large` (no bytes buffered).
-- `Content-Length` ≤ `maxSize` → allowed; the HTTP server (Deno, Node and Bun alike) caps
+- `Content-Length` ≤ `maxSize` → allowed; the HTTP server (Deno and Node alike) caps
   the read at the declared length, so a handler can never receive more than advertised
   (under-declaring cannot bypass the limit).
 - Body present but no `Content-Length` (chunked) → `411 Length Required`, unless

@@ -75,7 +75,7 @@ const D = (globalThis as unknown as { Deno?: DenoRuntime }).Deno;
  * @param handler - The app or composed handler
  * @param options - Listen options (see {@linkcode ServeOptions})
  * @returns The running server's {@linkcode ServeHandle}
- * @throws Error when the `Deno` global is missing (use the `/node` or `/bun` adapter)
+ * @throws Error when the `Deno` global is missing (use the `/node` adapter)
  */
 // async on purpose: a synchronous throw from `Deno.serve` (e.g. port in use) must
 // surface as a rejection, like every other adapter failure
@@ -86,7 +86,7 @@ export const serve: ServeFn = async (
 ): Promise<ServeHandle> => {
 	if (!D) {
 		throw new Error(
-			"@marianmeres/demino/deno: `Deno` is not defined - use the /node or /bun adapter",
+			"@marianmeres/demino/deno: `Deno` is not defined - use the /node adapter",
 		);
 	}
 

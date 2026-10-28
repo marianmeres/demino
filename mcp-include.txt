@@ -1,4 +1,4 @@
 Minimal web framework on web standards (Request in, Response out) with routing, middleware
 chaining, error handling, static file serving (app.static / serveStatic) and HTTP + WebSocket
-proxying. Runs on Deno, Node and Bun through one shared serve() per runtime adapter
-(@marianmeres/demino/deno, /node, /bun); building blocks, not batteries.
+proxying. Runs on Deno and Node through one shared serve() per runtime adapter
+(@marianmeres/demino/deno, /node); building blocks, not batteries.

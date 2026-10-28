@@ -73,8 +73,8 @@ export class TokenBucket {
 		refillPerSecond: number,
 		_logger?: DeminoLogger | null,
 	) {
-		// a plain assignment, not a parameter property: Node and Bun strip types
-		// and never lower non-erasable syntax
+		// a plain assignment, not a parameter property: Node strips types and
+		// never lowers non-erasable syntax
 		this._logger = _logger;
 		[maxSize, refillPerSecond].forEach((v) => {
 			if (v <= 0) {

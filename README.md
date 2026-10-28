@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/@marianmeres/demino)](LICENSE)
 
 "Demino" (Deno minimal) - minimalistic web server framework built on web standards
-(`Request` in, `Response` out), running on **Deno, Node and Bun**, providing:
+(`Request` in, `Response` out), running on **Deno and Node**, providing:
 
 - **routing**,
 - **middlewares support**,
@@ -28,9 +28,9 @@ deno add jsr:@marianmeres/demino
 npm install @marianmeres/demino
 ```
 
-The npm package needs Node 22 or newer (Bun uses it too). WebSocket upgrades on Node need the
-optional [`ws`](https://www.npmjs.com/package/ws) package (`npm install ws`); without it the
-Node adapter serves plain HTTP and warns once.
+The npm package needs Node 22 or newer. WebSocket upgrades on Node need the optional
+[`ws`](https://www.npmjs.com/package/ws) package (`npm install ws`); without it the Node adapter
+serves plain HTTP and warns once.
 
 ## API Documentation
 
@@ -40,7 +40,7 @@ For complete API reference, see [API.md](API.md).
 
 ```ts
 import { demino } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 // create the Demino app instance
 const app = demino();
@@ -65,7 +65,6 @@ server is the only runtime-specific step, and it is one import away:
 | ------- | -------------------------- | -------------------------------------- |
 | Deno    | `@marianmeres/demino/deno` | the built-in HTTP server               |
 | Node    | `@marianmeres/demino/node` | own bridge over `node:http` (HTTP/1.1) |
-| Bun     | `@marianmeres/demino/bun`  | the built-in HTTP server               |
 
 Every adapter exports the same `serve(handler, options?)`, resolves with the same `ServeHandle`,
 and defaults to `0.0.0.0:8000` with the listen info printed (pass `onListen: () => {}` to
@@ -85,7 +84,7 @@ const server = await serve(app, {
 });
 
 server.url; // "http://127.0.0.1:3000/"
-await server.shutdown(); // graceful; Node and Bun force-close after 5 s
+await server.shutdown(); // graceful; Node force-closes after 5 s
 ```
 
 `ServeOptions`: `port`, `hostname`, `signal` (aborting closes the server and every connection
@@ -99,16 +98,17 @@ What the adapter puts on the handler's `info` argument (a `DeminoServeInfo`):
 - `remoteAddr` - the socket peer (`{ hostname, port, transport }`); what `ctx.ip` reports when
   `trustProxy` is off,
 - `upgradeWebSocket(req, { protocol? })` - the WebSocket upgrade capability, with the same
-  `{ socket, response }` shape on every runtime (Node: through the optional `ws`; Bun: a
-  per-socket facade over Bun's server-level handlers). The [proxy](#proxy) middleware needs it
-  for WebSocket tunneling,
+  `{ socket, response }` shape on every runtime (Node: through the optional `ws`). The
+  [proxy](#proxy) middleware needs it for WebSocket tunneling,
 - `raw` - the runtime's own per-request object, untyped.
 
 **Without an adapter.** On Deno, `Deno.serve(app)` works unchanged: `info` then carries
-`remoteAddr` only, so everything except WebSocket tunneling behaves the same. On Bun,
-`Bun.serve({ fetch: app })` serves the app, but Bun passes its `Server` as `info`, so `ctx.ip`
-is empty and there is no upgrade capability - use the adapter. On Node there is no web-standard
-server to hand the app to, so the adapter is the way.
+`remoteAddr` only, so everything except WebSocket tunneling behaves the same. On Node there is
+no web-standard server to hand the app to, so the adapter is the way.
+
+**Bun is not a supported runtime.** A Demino app is a web-standard handler, so
+`Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket tunneling
+are not available there, and nothing is tested on Bun.
 
 ## Mount path
 
@@ -917,7 +917,7 @@ routes) where each group has its own isolated middleware stack.
 
 ```typescript
 import { demino, deminoCompose } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 // Main app for public routes
 const app = demino();
@@ -994,7 +994,7 @@ controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ## Breaking changes (2.0.0)
 
 Demino 2.0 decouples the core from Deno: web standards plus `node:*` inside, runtime
-adapters (`@marianmeres/demino/deno`, `/node`, `/bun`) to start the server, published to JSR
+adapters (`@marianmeres/demino/deno`, `/node`) to start the server, published to JSR
 **and** npm. Routing, middlewares, context, error handling and composition are untouched. The
 complete list with before/after snippets is in
 [docs/MIGRATION-2.0.md](docs/MIGRATION-2.0.md); for a typical Deno app the migration is one
@@ -1016,8 +1016,7 @@ grep -rl 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInf
 
 Structural compatibility is kept, so `Deno.serve(app)` compiles and runs; `info` then carries
 `remoteAddr` only. Prefer `serve()` from an adapter ([Runtimes](#runtimes)) for WebSocket
-tunneling through `proxy()` and for `ctx.ip` on Bun (a bare `Bun.serve({ fetch: app })`
-leaves it empty).
+tunneling through `proxy()`.
 
 ### `app.static` options are `DeminoStaticOptions`
 
@@ -1036,7 +1035,7 @@ became `etag: boolean`. Removed: `enableCors` (mount `cors()` on the route), `qu
 - Dependencies: `@std/*` and `request-ip` removed, `mrmime` added, `ws` an optional peer for
   WebSocket upgrades on Node. The client-IP header precedence behind `trustProxy` is unchanged
   (the never-matching RFC 7239 `Forwarded` aside) and exported as `getClientIpFromHeaders()`.
-- Exports: `.`, `./deno`, `./node`, `./bun`, `./middleware`, `./misc`, `./router`, `./utils`;
+- Exports: `.`, `./deno`, `./node`, `./middleware`, `./misc`, `./router`, `./utils`;
   the npm package needs Node 22+.
 
 ## Breaking changes (1.15.0)
@@ -1147,7 +1146,7 @@ a runtime's own server API (its `onListen` argument satisfies the `{ hostname, p
 
 ```ts
 import { deminoCompose, logListenInfo } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 await serve(deminoCompose([app, api, admin]), {
 	port: parseInt(process.env.SERVER_PORT || "") || undefined,
@@ -1164,7 +1163,7 @@ preconfigure the callback):
 
 ```ts
 import { createLogListenInfo, deminoCompose } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+import { serve } from "@marianmeres/demino/deno"; // or "/node"
 
 await serve(deminoCompose([app, api, admin]), {
 	// `true` = always json, `"auto"` = json only when stdout is not a TTY

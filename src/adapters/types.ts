@@ -2,7 +2,7 @@
  * Runtime adapter contract.
  *
  * A runtime adapter is a small `serve()` function that starts an HTTP server on
- * one runtime (Deno, Node, Bun), calls a {@linkcode DeminoServeHandler} for every
+ * one runtime (Deno, Node), calls a {@linkcode DeminoServeHandler} for every
  * request with a filled-in {@linkcode DeminoServeInfo}, and returns a
  * {@linkcode ServeHandle}. All adapters share this one signature, so an app's
  * `server.ts` differs between runtimes only in the adapter import path.
@@ -78,8 +78,8 @@ export interface ServeHandle {
 	 */
 	readonly finished: Promise<void>;
 	/**
-	 * Graceful shutdown: stop accepting, let in-flight requests finish. Node and
-	 * Bun bound the wait (5 s) and then force-close.
+	 * Graceful shutdown: stop accepting, let in-flight requests finish. Node
+	 * bounds the wait (5 s) and then force-closes.
 	 */
 	shutdown(): Promise<void>;
 	/** Keep the process alive while the server runs (the default). */

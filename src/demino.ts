@@ -142,8 +142,8 @@ export interface DeminoServeInfo {
 	/** WebSocket upgrade capability, if the runtime adapter provides one. */
 	upgradeWebSocket?: DeminoUpgradeWebSocket;
 	/**
-	 * The runtime's own per-request object (Deno `ServeHandlerInfo`, Bun `Server`,
-	 * node `IncomingMessage`). Untyped escape hatch.
+	 * The runtime's own per-request object (Deno `ServeHandlerInfo`, node
+	 * `IncomingMessage`). Untyped escape hatch.
 	 */
 	raw?: unknown;
 }

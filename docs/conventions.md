@@ -8,12 +8,11 @@ src/
 ├── demino.ts           # Core implementation (+ DeminoServeInfo / DeminoServeHandler types)
 ├── deno.ts             # Flat shim: `@marianmeres/demino/deno`  → adapters/deno.ts
 ├── node.ts             # Flat shim: `@marianmeres/demino/node`  → adapters/node.ts
-├── bun.ts              # Flat shim: `@marianmeres/demino/bun`   → adapters/bun.ts
 ├── middleware.ts       # Flat shim: `@marianmeres/demino/middleware` → middleware/mod.ts
 ├── misc.ts / router.ts / utils.ts   # Flat shims for the other barrels
 ├── adapters/
 │   ├── types.ts        # ServeOptions / ServeHandle / ServeFn (the contract; no runtime code)
-│   └── {deno,node,bun}.ts  # One serve() per runtime — the ONLY files that may touch a runtime global
+│   └── {deno,node}.ts  # One serve() per runtime — the ONLY files that may touch a runtime global
 ├── static/
 │   ├── mod.ts          # Static barrel export
 │   ├── serve-static.ts # serveStatic() + DeminoStaticOptions
@@ -43,8 +42,8 @@ src/
 
 ## Portability
 
-`src/` runs unchanged on Deno, Node and Bun. The rule, enforced by
-`tests/portability.test.ts` on every runtime:
+`src/` runs unchanged on Deno and Node. The rule, enforced by
+`tests/portability.test.ts` on both runtimes:
 
 ✅ Do:
 
@@ -54,19 +53,21 @@ src/
   `node:os`, `node:net`, `node:stream`, `node:http` (adapter only)
 - read `process.env` / `process.stdout.isTTY` defensively (every supported runtime exposes the
   shape; see `src/utils/ansi.ts`, `src/utils/log-listen-info.ts`)
-- in an adapter, type the slice of `Deno` / `Bun` you use locally, so the file checks under a
-  plain `tsc` run without ambient runtime types
+- in an adapter, type the slice of `Deno` you use locally, so the file checks under a plain
+  `tsc` run without ambient runtime types
 - `import type` for types (`verbatimModuleSyntax`)
 
 ❌ Don't:
 
-- `Deno.*`, `Bun.*`, `typeof Deno`, `globalThis.Bun`, `"Deno" in globalThis` anywhere outside
-  `src/adapters/`; the word `Deno` belongs to `src/adapters/deno.ts` only, `Bun` to
-  `src/adapters/bun.ts` only (comments and strings aside)
+- `Deno.*`, `typeof Deno`, `globalThis.Deno`, `"Deno" in globalThis` anywhere outside
+  `src/adapters/`; the word `Deno` belongs to `src/adapters/deno.ts` only (comments and
+  strings aside)
+- the word `Bun` anywhere in `src/` code: Bun is not a supported runtime (plain HTTP works
+  under `Bun.serve({ fetch: app })`, untested), so nothing may couple to it
 - `@std/`, `jsr:`, `npm:` or `https:` import specifiers in `src/` — bare specifiers only, so the
   same source resolves through `deno.json` `imports` and `package.json`
-- non-erasable TypeScript: `enum`, `namespace`, constructor parameter properties (Node and Bun
-  strip types, they never lower them)
+- non-erasable TypeScript: `enum`, `namespace`, constructor parameter properties (Node strips
+  types, it never lowers them)
 - a new dependency in only one manifest — `deno.json` `imports` and `package.json` must carry
   the same range (`tests/manifest-sync.test.ts`), and `scripts/build-npm.ts` lists the
   published ones
@@ -173,17 +174,16 @@ Filesystem "not found" is reported portably: a plain `Error` with `code: "ENOENT
 
 - **Location**: `tests/` directory
 - **Naming**: `*.test.ts`
-- **Framework**: `node:test` + `node:assert/strict` — one suite, three runners:
-  `deno task test`, `npm test`, `bun test`
+- **Framework**: `node:test` + `node:assert/strict` — one suite, two runners:
+  `deno task test`, `npm test`
 - **Servers**: never start one by hand — `startTestServer(handler)` /
   `runTestServerTests([...])` from `tests/_utils.ts` go through the adapter of the current
   runtime (the only runtime-specific code in the suite) on a free port, silently
-- **Runtime-specific cases**: `{ skip: !isDeno }` / `{ skip: isBun }` with `isDeno` / `isBun` /
-  `isNode` from `tests/_utils.ts`, and a comment stating the reason — only for differences by
-  design (e.g. Bun substitutes its own `ws`, the Deno adapter tests need `Deno`)
-- **Timeouts**: `bun test` defaults to 5 s per test; pass `{ timeout }` to slower tests
+- **Runtime-specific cases**: `{ skip: !isDeno }` with `isDeno` / `isNode` from
+  `tests/_utils.ts`, and a comment stating the reason — only for differences by design (e.g.
+  the Deno adapter tests need `Deno`)
 - **Types**: `npm run typecheck` (`tsc --noEmit`, `src/` + `tests/`) is the only type gate —
-  Node and Bun strip types without checking
+  Node strips types without checking
 
 ```ts
 import assert from "node:assert/strict";
@@ -219,7 +219,6 @@ Run tests:
 ```bash
 deno task test        # Deno
 npm test              # Node (after `npm install`)
-bun test              # Bun
 npm run typecheck     # tsc --noEmit
 ```
 

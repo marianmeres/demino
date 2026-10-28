@@ -64,7 +64,7 @@ export interface DeminoFileBasedOptions {
  * @example Basic usage
  * ```ts
  * import { demino, deminoFileBased } from "@marianmeres/demino";
- * import { serve } from "@marianmeres/demino/deno"; // or "/node", "/bun"
+ * import { serve } from "@marianmeres/demino/deno"; // or "/node"
  *
  * const app = demino();
  * await deminoFileBased(app, "./routes");

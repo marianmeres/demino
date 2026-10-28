@@ -5,7 +5,6 @@
     ".": "./src/mod.ts",
     "./deno": "./src/deno.ts",
     "./node": "./src/node.ts",
-    "./bun": "./src/bun.ts",
     "./middleware": "./src/middleware.ts",
     "./misc": "./src/misc.ts",
     "./router": "./src/router.ts",

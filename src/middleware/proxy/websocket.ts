@@ -137,8 +137,8 @@ function dialUpstream(
 ): Promise<WebSocket> {
 	return new Promise<WebSocket>((resolve, reject) => {
 		// The `{ protocols, headers }` options bag is not in the WHATWG WebSocket
-		// standard, but every runtime we ship an adapter for accepts it — Deno,
-		// Node (undici) and Bun were all probed sending custom headers and
+		// standard, but every runtime we ship an adapter for accepts it — Deno
+		// and Node (undici) were both probed sending custom headers and
 		// negotiating a subprotocol through it. De-facto, not spec: it is what
 		// makes cookie/authorization forwarding and the hop-counter loop guard
 		// possible on this leg, so there is no per-runtime client here.

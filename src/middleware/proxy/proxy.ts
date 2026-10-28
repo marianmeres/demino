@@ -42,7 +42,7 @@ export interface ProxyOptions {
 	 *
 	 * Tunneling needs the runtime adapter's upgrade capability
 	 * (`info.upgradeWebSocket`, provided when the app is started through
-	 * `@marianmeres/demino/deno`, `/node` or `/bun`). Without it — the app
+	 * `@marianmeres/demino/deno` or `/node`). Without it — the app
 	 * handed straight to the runtime's own server with no adapter in between,
 	 * or the Node adapter with `webSockets: false` or `ws` missing — the upgrade
 	 * request is forwarded as plain HTTP exactly as with `webSockets: false`,
@@ -374,7 +374,7 @@ export function proxy(
 						"[proxy] WebSocket tunneling needs a runtime adapter " +
 							"(`info.upgradeWebSocket` is missing) - forwarding the upgrade " +
 							"request as plain HTTP. Start the app through " +
-							"@marianmeres/demino/deno, /node or /bun to enable tunnels.",
+							"@marianmeres/demino/deno or /node to enable tunnels.",
 					);
 				}
 			}
