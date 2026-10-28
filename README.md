@@ -479,8 +479,9 @@ What you get: `GET`/`HEAD` only (anything else is a 405 with `Allow`), content t
 301 redirects to the normalised path (`/a//b` → `/a/b`, a directory without a trailing slash →
 with it, a file with one → without), and 404 for anything outside the root, dot-segments (unless
 `showDotfiles`) and missing files. Filesystem errors other than "not found" are thrown, so they
-reach your error handler. The route must not contain dynamic segments; for CORS put `cors()` on
-the mount (`app.use("/files", cors())`).
+reach your error handler. The route must not contain dynamic segments. For CORS, set the header
+through `headers` (`{ "access-control-allow-origin": "*" }`): `cors()` cannot add it, because a
+middleware's `ctx.headers` never reach a `Response` the handler returns.
 
 `serveStatic` is also usable on its own, under any route of yours:
 
@@ -1009,22 +1010,24 @@ inline handlers are inferred):
 
 ```sh
 # macOS (BSD sed); on Linux use `sed -i` without the ''
-grep -rl 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
+grep -rl --include='*.ts' --exclude-dir=node_modules 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
 ```
 
 ### `Demino` no longer extends `Deno.ServeHandler`
 
-Structural compatibility is kept, so `Deno.serve(app)` compiles and runs; `info` then carries
-`remoteAddr` only. Prefer `serve()` from an adapter ([Runtimes](#runtimes)) for WebSocket
-tunneling through `proxy()`.
+Structural compatibility with `Deno.serve`'s TCP handler is kept, so `Deno.serve(app)`
+compiles and runs; `info` then carries `remoteAddr` only. A parameter typed as the bare
+`Deno.ServeHandler` (which also admits Unix and Vsock addresses) no longer accepts an app -
+narrow it to `Deno.ServeHandler<Deno.NetAddr>`. Prefer `serve()` from an adapter
+([Runtimes](#runtimes)) for WebSocket tunneling through `proxy()`.
 
 ### `app.static` options are `DeminoStaticOptions`
 
 Own `serveStatic()` on `node:fs` replaces `@std/http`'s `serveDir`. Kept: `showIndex`,
 `showDotfiles`; `headers` is now `HeadersInit` or a per-request function; `etagAlgorithm`
-became `etag: boolean`. Removed: `enableCors` (mount `cors()` on the route), `quiet`,
-`showDirListing`. `ETag` values change once; static 301s send a relative `Location`. See
-[Serving static files](#serving-static-files).
+became `etag: boolean`. Removed: `enableCors` (set `access-control-allow-origin` through
+`headers`), `quiet`, `showDirListing`. `ETag` values change once; static 301s send a relative
+`Location`. See [Serving static files](#serving-static-files).
 
 ### Smaller changes
 

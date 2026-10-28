@@ -494,7 +494,9 @@ on bad percent-encoding, 301 (relative `Location`) to the normalised path / trai
 form, 404 outside root / dot-segments / missing, weak `ETag` `W/"<size>-<mtime>"` +
 `Last-Modified` + 304, single `Range` → 206/416, content types via `mrmime`
 (`application/octet-stream` fallback, `; charset=utf-8` on text-like). Non-ENOENT fs errors
-are thrown (reach the error handler). CORS is not a static option — `app.use(route, cors())`.
+are thrown (reach the error handler). CORS is not a static option, and `cors()` cannot add
+it (a handler-returned `Response` never gets `ctx.headers`) — use
+`headers: { "access-control-allow-origin": "*" }`.
 
 ## Rate Limiting
 
@@ -724,12 +726,14 @@ const app2 = demino("", [], {
   Consumer guide: [docs/MIGRATION-2.0.md](./docs/MIGRATION-2.0.md).
 - **Handler info type:** `Deno.ServeHandlerInfo` → `DeminoServeInfo` (type-only;
   `remoteAddr?`, `upgradeWebSocket?`, `raw?`). `Demino` no longer extends
-  `Deno.ServeHandler` but stays structurally compatible: `Deno.serve(app)` compiles and runs
-  (`info` then carries `remoteAddr` only).
+  `Deno.ServeHandler` but stays structurally compatible with its TCP form: `Deno.serve(app)`
+  compiles and runs (`info` then carries `remoteAddr` only); a bare `Deno.ServeHandler`
+  parameter (`<Deno.Addr>`, admits Unix/Vsock) no longer accepts an app →
+  `Deno.ServeHandler<Deno.NetAddr>`.
 - **`app.static` options:** own `serveStatic()` on `node:fs` replaces `@std/http/serveDir`.
   `DeminoStaticOptions` = `showIndex`, `showDotfiles`, `etag`, `headers`
-  (`HeadersInit | (req, filePath) => HeadersInit`). Removed: `enableCors` (use `cors()` on
-  the mount), `quiet`, `showDirListing`, `etagAlgorithm`, `headers: string[]`. ETag values
+  (`HeadersInit | (req, filePath) => HeadersInit`). Removed: `enableCors` (set
+  `access-control-allow-origin` via `headers`), `quiet`, `showDirListing`, `etagAlgorithm`, `headers: string[]`. ETag values
   change once (weak `W/"<size>-<mtime>"`); static 301s emit a relative `Location`; bad
   percent-encoding is a 400.
 - **`deminoFileBased` missing root:** throws a plain `Error` with `code: "ENOENT"`,

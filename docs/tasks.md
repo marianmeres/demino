@@ -234,7 +234,8 @@ app.get("/assets/*", (req) =>
 ### Checklist
 
 - [ ] `route` has no dynamic segments (`[x]`, `:x`)
-- [ ] CORS, if needed, via `app.use(route, cors())` — not a static option
+- [ ] CORS, if needed, via `headers: { "access-control-allow-origin": … }` — `cors()` does not
+  reach a handler-returned `Response`
 - [ ] Non-"not found" fs errors reach the app's error handler (they are thrown)
 
 ---

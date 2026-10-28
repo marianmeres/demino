@@ -37,14 +37,17 @@ adapters fill in the rest. Rename the annotations in place:
 
 ```sh
 # macOS (BSD sed)
-grep -rl 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
+grep -rl --include='*.ts' --exclude-dir=node_modules 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
 # Linux (GNU sed)
-grep -rl 'Deno\.ServeHandlerInfo' src | xargs sed -i 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
+grep -rl --include='*.ts' --exclude-dir=node_modules 'Deno\.ServeHandlerInfo' src | xargs sed -i 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
 ```
 
-(`src` is wherever your handlers live.) `DeminoServeInfo` is not a global the way `Deno.*`
-was, so every file that now names it needs the import: add `type DeminoServeInfo` to the
-file's existing import from `@marianmeres/demino`, or add one:
+(`src` is wherever your handlers live - in a workspace, every member: see
+[Workspace consumers](#workspace-consumers).) Keep the `--include`/`--exclude-dir`: a frontend
+kept under the same directory brings a `node_modules` and generated build output that also
+mention the type, and those are not yours to edit. `DeminoServeInfo` is not a global the way
+`Deno.*` was, so every file that now names it needs the import: add `type DeminoServeInfo` to
+the file's existing import from `@marianmeres/demino`, or add one:
 
 ```ts
 import type { DeminoContext, DeminoServeInfo } from "@marianmeres/demino";
@@ -58,7 +61,9 @@ Or drop the annotations: for handlers written inline in `app.get(...)` / `app.us
 three parameter types are inferred.
 
 Less common, also type-only: a handler you typed as `Deno.ServeHandler` is a
-`DeminoServeHandler`; `info.remoteAddr` is a `DeminoRemoteAddr` (was `Deno.NetAddr`).
+`DeminoServeHandler` (a parameter that hands your app to `Deno.serve` is different - see
+[`Deno.serve` types that stay](#denoserve-types-that-stay)); `info.remoteAddr` is a
+`DeminoRemoteAddr` (was `Deno.NetAddr`).
 Anything Deno-specific you read off `info` (e.g. `info.completed`) is at `info.raw` when the
 app runs through the Deno adapter, and still directly on `info` under a bare
 `Deno.serve(app)` - cast as needed.
@@ -66,8 +71,10 @@ app runs through the Deno adapter, and still directly on `info` under a bare
 ## 2. `Demino` no longer extends `Deno.ServeHandler`
 
 The app type is now a plain call signature, `(req: Request, info?: DeminoServeInfo) =>
-Promise<Response>`, structurally compatible with what `Deno.serve()` expects. Both of these
-still compile and run:
+Promise<Response>`, structurally compatible with what `Deno.serve()` expects on TCP. (It no
+longer fits a bare `Deno.ServeHandler`, which also admits Unix and Vsock addresses - see
+[`Deno.serve` types that stay](#denoserve-types-that-stay).) Both of these still compile and
+run:
 
 ```ts
 Deno.serve(app);
@@ -110,7 +117,7 @@ instead of `@std/http`'s `serveDir`, so the options are `DeminoStaticOptions`, n
 | `showDotfiles` (default `false`)      | same                                                                          |
 | `headers: string[]` (`"name: value"`) | `headers: HeadersInit \| (req, filePath) => HeadersInit` - on 200/206/304 only |
 | `etagAlgorithm`                       | `etag: boolean` (default `true`); the algorithm is fixed                      |
-| `enableCors`                          | removed - mount `cors()` on the route                                         |
+| `enableCors`                          | removed - set `access-control-allow-origin` through `headers`                 |
 | `quiet`                               | removed - nothing is logged                                                   |
 | `showDirListing`                      | removed - a directory without `index.html` is a 404                           |
 
@@ -120,10 +127,13 @@ A type error points you at each use. Two common 1.x patterns:
 // 1.x: CORS through the static options
 app.static("/files", dir, { enableCors: true, quiet: true });
 
-// 2.0: CORS is a middleware on the mount
-app.use("/files", cors());
-app.static("/files", dir);
+// 2.0: the header through the headers option
+app.static("/files", dir, { headers: { "access-control-allow-origin": "*" } });
 ```
+
+Not `cors()`: a middleware's `ctx.headers` never reach a `Response` the handler returns, and
+the static handler returns one, so `app.use("/files/*", cors())` leaves static responses
+without the header (as it did in 1.x).
 
 ```ts
 // 1.x: a wrapper around serveDir that re-built the Response to add Cache-Control
@@ -226,6 +236,62 @@ which `request-ip` accepted only when its whole value was a bare IP - a real
 `Forwarded: for=…` value never matched, so nothing can have depended on it. The `trustProxy`
 gating itself is as in 1.15+.
 
+## Workspace consumers
+
+In a Deno workspace, a member that lists `@marianmeres/demino` in its own `deno.json`
+`imports` resolves its own copy - it does not inherit the root entry. Bump every one of them
+to 2.0, and run [item 1](#1-handler-info-type) over every member's sources (`src packages`, or
+wherever the members live), not only the app's `src`:
+
+```sh
+grep -rln --include=deno.json --exclude-dir=node_modules '"@marianmeres/demino"' .
+```
+
+A dependency still on demino 1.x keeps its own copy: its `^1.x` range never matches 2.0, so
+the graph holds both, and their types do not mix. `deno check` fails wherever a 2.0 value meets
+that package's API - your middlewares passed into it, an app it built joined with yours in one
+array or handed to `deminoCompose`; the errors name both copies (`…/demino/1.18.0/…` next to
+yours). `@marianmeres/sse` 1.0.0 is one (`createSSEApp` takes and returns 1.x types). Nothing
+on your side fixes it - the dependency needs a release on `^2.0.0`. What is left on 1.x after
+your bump shows in the lock file:
+
+```sh
+grep -n '"jsr:@marianmeres/demino@^1' deno.lock
+```
+
+Rehearsing against a local demino checkout through a path import differs from a registry
+install in two ways. Deno links a path into a directory whose `deno.json` is named
+`@marianmeres/demino` as that package at the `version` the file declares, so while the
+checkout still says 1.x, your dependencies' 1.x copies fold onto it and the errors above stay
+hidden until the real release. And the checkout is type-checked as your own code, against your
+graph's `@types/node`: an old one that some npm package brings along (`jimp` brings
+`@types/node@16.9.1` through `image-q`) reports errors inside demino's `src/` that a registry
+install never shows - `deno check` reports diagnostics from remote modules only with `--all`.
+
+## `Deno.serve` types that stay
+
+[Item 1](#1-handler-info-type) renames Demino's handler-info type. Types that describe
+`Deno.serve` itself are Deno's and stay, even where the grep in
+[Verifying the migration](#verifying-the-migration) lists them:
+
+- `server.addr as Deno.NetAddr` - the address of the server `Deno.serve` returned.
+- `Deno.errors.NotFound` thrown by Deno's own APIs (`Deno.Command`, `Deno.readFile`, …) -
+  [item 4](#4-deminofilebased-missing-root) is about `deminoFileBased` only.
+- A Deno handler type on a helper that hands your app to `Deno.serve` (a test server, say) -
+  with one change if it is the bare `Deno.ServeHandler`. That means
+  `Deno.ServeHandler<Deno.Addr>`, whose `remoteAddr` may be a Unix or Vsock address with no
+  `hostname`/`port`, and a 2.0 app does not accept that (the 1.x `Demino` extended the bare
+  type). Narrow it to what `Deno.serve`'s TCP overloads take, or use `DeminoServeHandler` if
+  the helper only ever serves Demino apps:
+
+```ts
+// 1.x: handler: Deno.ServeHandler - a 2.0 app no longer fits it
+function startTestServer(handler: Deno.ServeHandler<Deno.NetAddr>, port = 0) {
+	const server = Deno.serve({ port, onListen() {} }, handler);
+	return { server, port: (server.addr as Deno.NetAddr).port }; // stays as it was
+}
+```
+
 ## Verifying the migration
 
 ```sh
@@ -233,5 +299,7 @@ grep -rn 'Deno\.ServeHandlerInfo\|Deno\.ServeHandler\b\|ServeDirOptions\|Deno\.e
 deno check src/server.ts   # or: npx tsc --noEmit
 ```
 
-Then run your tests. Tests that exercise static files should expect the `ETag` and
+The grep also lists [the `Deno.serve` types that stay](#denoserve-types-that-stay); in a
+workspace, run both over every member (`deno check packages/*/src/mod.ts`). Then run your
+tests. Tests that exercise static files should expect the `ETag` and
 `Location` differences from [item 3](#3-appstatic-options); nothing else is observable.
