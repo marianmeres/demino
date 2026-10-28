@@ -670,6 +670,7 @@ test("bun adapter: ref/unref are wired", { skip: !isBun }, async () => {
 	}
 });
 
+// the one test that needs the `Bun` global to be absent: it runs on Deno and Node only
 test("bun adapter: serve() rejects without the Bun global", { skip: isBun }, async () => {
 	await assert.rejects(serve(() => new Response("x"), silent), /`Bun` is not defined/);
 });
