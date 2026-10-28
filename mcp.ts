@@ -11,7 +11,7 @@ export const tools: McpToolDefinition[] = [
 	{
 		name: "generate-demino-app",
 		description:
-			"Generate boilerplate TypeScript code for a Demino web app with routes, middleware, and optional multi-app composition",
+			"Generate boilerplate TypeScript code for a Demino web app with routes, middleware, optional multi-app composition and the serve() call of the chosen runtime adapter (Deno, Node or Bun)",
 		params: {
 			mountPath: z
 				.string()
@@ -67,6 +67,12 @@ export const tools: McpToolDefinition[] = [
 				.boolean()
 				.optional()
 				.describe("Include file-based routing setup"),
+			runtime: z
+				.enum(["deno", "node", "bun"])
+				.optional()
+				.describe(
+					'Runtime adapter to serve through (default "deno"); selects the "@marianmeres/demino/<runtime>" import and the specifier prefix ("jsr:" on Deno, bare on Node/Bun)',
+				),
 		},
 		handler: async (args: Record<string, unknown>) => {
 			const mountPath = args.mountPath as string | undefined;
@@ -76,9 +82,15 @@ export const tools: McpToolDefinition[] = [
 			const middleware = args.middleware as string[] | undefined;
 			const compose = args.compose as boolean | undefined;
 			const fileBased = args.fileBased as boolean | undefined;
+			const runtime = (args.runtime as "deno" | "node" | "bun" | undefined) ??
+				"deno";
 
+			// Deno resolves the package from JSR directly; Node and Bun through npm
+			// (bare specifier), so the prefix differs while the subpaths stay the same
+			const pkg = `${runtime === "deno" ? "jsr:" : ""}@marianmeres/demino`;
 			const imports: string[] = [
-				'import { demino } from "jsr:@marianmeres/demino";',
+				`import { demino } from "${pkg}";`,
+				`import { serve } from "${pkg}/${runtime}";`,
 			];
 			const mwImports: string[] = [];
 			const mwSetup: string[] = [];
@@ -105,9 +117,7 @@ export const tools: McpToolDefinition[] = [
 
 			if (mwImports.length) {
 				imports.push(
-					`import { ${
-						mwImports.join(", ")
-					} } from "jsr:@marianmeres/demino/middleware";`,
+					`import { ${mwImports.join(", ")} } from "${pkg}/middleware";`,
 				);
 			}
 
@@ -116,9 +126,7 @@ export const tools: McpToolDefinition[] = [
 			if (fileBased) miscImports.push("deminoFileBased");
 			if (miscImports.length) {
 				imports.push(
-					`import { ${
-						miscImports.join(", ")
-					} } from "jsr:@marianmeres/demino/misc";`,
+					`import { ${miscImports.join(", ")} } from "${pkg}/misc";`,
 				);
 			}
 
@@ -140,9 +148,9 @@ export const tools: McpToolDefinition[] = [
 			}
 
 			if (compose) {
-				code += "Deno.serve(deminoCompose([app]));\n";
+				code += "await serve(deminoCompose([app]));\n";
 			} else {
-				code += "Deno.serve(app);\n";
+				code += "await serve(app);\n";
 			}
 
 			return code;
