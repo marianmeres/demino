@@ -1,4 +1,5 @@
-import { assert, assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { type Demino, demino, DEMINO_SORT, type DeminoHandler } from "../src/demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
 
@@ -15,15 +16,15 @@ async function withServer(app: Demino, fn: (base: string) => Promise<void>) {
 	}
 }
 
-Deno.test("DEMINO_SORT: exposes the expected coordinate values", () => {
-	assertEquals(DEMINO_SORT.PRE, 100);
-	assertEquals(DEMINO_SORT.DEFAULT, 1000);
-	assertEquals(DEMINO_SORT.HANDLER, Infinity);
-	assert(DEMINO_SORT.PRE < DEMINO_SORT.DEFAULT);
-	assert(DEMINO_SORT.DEFAULT < DEMINO_SORT.HANDLER);
+test("DEMINO_SORT: exposes the expected coordinate values", () => {
+	assert.equal(DEMINO_SORT.PRE, 100);
+	assert.equal(DEMINO_SORT.DEFAULT, 1000);
+	assert.equal(DEMINO_SORT.HANDLER, Infinity);
+	assert.ok(DEMINO_SORT.PRE < DEMINO_SORT.DEFAULT);
+	assert.ok(DEMINO_SORT.DEFAULT < DEMINO_SORT.HANDLER);
 });
 
-Deno.test("DEMINO_SORT.PRE: a tagged middleware runs before a default one", async () => {
+test("DEMINO_SORT.PRE: a tagged middleware runs before a default one", async () => {
 	const log: string[] = [];
 
 	// registered AFTER the default mw, but tagged PRE -> must still run first
@@ -46,7 +47,7 @@ Deno.test("DEMINO_SORT.PRE: a tagged middleware runs before a default one", asyn
 	});
 });
 
-Deno.test(
+test(
 	"sort order does not leak across routes when a handler fn is reused (regression)",
 	async () => {
 		// `shared` is the terminal handler on /health AND an early middleware on
@@ -83,6 +84,6 @@ Deno.test(
 		});
 
 		// the shared function object must NOT have been mutated by the framework
-		assertEquals(shared.__midwarePreExecuteSortOrder, undefined);
+		assert.equal(shared.__midwarePreExecuteSortOrder, undefined);
 	},
 );

@@ -1,4 +1,15 @@
-import { assert, assertEquals, assertMatch } from "@std/assert";
+/**
+ * Test harness shared by every server test.
+ *
+ * Runner-agnostic: tests are `node:test` + `node:assert/strict`, so the same
+ * files run under `deno test`, `node --test` and `bun test`. The only
+ * runtime-specific part of the whole suite lives here: {@linkcode startTestServer}
+ * picks the runtime adapter (the harness is the adapter contract's first
+ * consumer).
+ */
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { isPlainObject } from "../src/utils/is-plain-object.ts";
 import {
 	type Demino,
@@ -8,9 +19,37 @@ import {
 	type DeminoServeHandler,
 } from "../src/demino.ts";
 import { createHttpApi } from "@marianmeres/http-utils";
-import { serve } from "../src/adapters/deno.ts";
+import type { ServeFn } from "../src/adapters/types.ts";
 
 const hostname = "127.0.0.1";
+
+/** `true` under Deno. */
+export const isDeno: boolean = "Deno" in globalThis;
+/** `true` under Bun. */
+export const isBun: boolean = "Bun" in globalThis;
+/** `true` under Node (neither Deno nor Bun). */
+export const isNode: boolean = !isDeno && !isBun;
+
+let servePromise: Promise<ServeFn> | undefined;
+
+/**
+ * Resolves the runtime adapter's `serve()` for the runtime the tests are
+ * running on. Imported lazily so a test file never loads an adapter for a
+ * runtime it is not on; resolved once per process.
+ *
+ * Only the Deno adapter exists so far: the Node and Bun branches are added by
+ * the rows that land those adapters, until then they fail loudly.
+ */
+function pickServe(): Promise<ServeFn> {
+	servePromise ??= (async () => {
+		if (isDeno) return (await import("../src/adapters/deno.ts")).serve;
+		const runtime = isBun ? "Bun" : "Node";
+		throw new Error(
+			`tests/_utils.ts: no runtime adapter for ${runtime} yet - run the suite on Deno`,
+		);
+	})();
+	return servePromise;
+}
 
 /** A server started by {@linkcode startTestServer}. */
 export interface TestServer {
@@ -36,6 +75,7 @@ export interface TestServer {
 export async function startTestServer(
 	handler: DeminoServeHandler,
 ): Promise<TestServer> {
+	const serve = await pickServe();
 	// Closed through the abort signal, not `shutdown()`: tests may leave a request
 	// in flight on purpose (e.g. an upstream still sleeping after the proxy timed
 	// out) and a graceful shutdown would wait for it forever. Aborting closes the
@@ -65,7 +105,7 @@ export async function assertResp(
 	headersCheck?: Record<string, string | boolean | RegExp>,
 ) {
 	resp = await resp;
-	assertEquals(resp.status, status);
+	assert.equal(resp.status, status);
 	const text = await resp.text();
 
 	if (textCheck === undefined && status === 404) {
@@ -73,24 +113,24 @@ export async function assertResp(
 	}
 
 	if (textCheck instanceof RegExp) {
-		assertMatch(text, textCheck);
+		assert.match(text, textCheck);
 	} else if (typeof textCheck === "boolean") {
-		if (textCheck) assert(text, "text() is not truthy");
-		else assert(!text, "text() is not falsy");
+		if (textCheck) assert.ok(text, "text() is not truthy");
+		else assert.ok(!text, "text() is not falsy");
 	} else if (isPlainObject(textCheck) || Array.isArray(textCheck)) {
-		assertEquals(JSON.parse(text), textCheck);
+		assert.deepEqual(JSON.parse(text), textCheck);
 	} else if (textCheck !== undefined) {
-		assertEquals(text, textCheck as string);
+		assert.equal(text, textCheck as string);
 	}
 
 	Object.entries(headersCheck || {}).forEach(([k, v]) => {
 		if (v instanceof RegExp) {
-			assertMatch(resp.headers.get(k)!, v);
+			assert.match(resp.headers.get(k)!, v);
 		} else if (typeof v === "boolean") {
 			if (v) {
-				assert(resp.headers.has(k), `Expecting headers to HAVE a "${k}" key`);
+				assert.ok(resp.headers.has(k), `Expecting headers to HAVE a "${k}" key`);
 			} else {
-				assert(
+				assert.ok(
 					!resp.headers.has(k),
 					`Expecting headers to NOT HAVE a "${k}" key, got: "${
 						resp.headers.get(
@@ -100,7 +140,7 @@ export async function assertResp(
 				);
 			}
 		} else {
-			assertEquals(
+			assert.equal(
 				resp.headers.get(k)!,
 				v,
 				`Expected: "${k}: ${v}", Actual: "${k}: ${resp.headers.get(k)}"`,
@@ -123,7 +163,11 @@ export interface TestServerTestOpts {
 	del: ReturnType<typeof createHttpApi>["del"];
 }
 
-//
+/**
+ * Registers one `node:test` test per definition; each non-`raw` one gets a
+ * fresh, silently-logging app on its own server, closed after the test.
+ * `ignore` maps to the runner's `skip`, `only` to its `only`.
+ */
 export function runTestServerTests(
 	tests: {
 		name: string;
@@ -138,8 +182,9 @@ export function runTestServerTests(
 	for (const def of tests) {
 		const { name, ignore, only } = def;
 		if (typeof def.fn !== "function") continue;
-		Deno.test(
-			{ name, ignore, only },
+		test(
+			name,
+			{ skip: ignore, only },
 			def.raw ? () => def.fn({} as unknown as TestServerTestOpts) : async () => {
 				let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
 				try {

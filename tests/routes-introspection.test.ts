@@ -1,4 +1,5 @@
-import { assert, assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
 	type Demino,
 	demino,
@@ -24,7 +25,7 @@ async function withServer(app: Demino, fn: (base: string) => Promise<void>) {
 /** Find a single routes() row by method+route (asserts uniqueness). */
 function row(rows: DeminoRouteInfo[], method: string, route: string) {
 	const hits = rows.filter((r) => r.method === method && r.route === route);
-	assertEquals(
+	assert.equal(
 		hits.length,
 		1,
 		`expected exactly one ${method} ${route} row, got ${hits.length}`,
@@ -32,7 +33,7 @@ function row(rows: DeminoRouteInfo[], method: string, route: string) {
 	return hits[0];
 }
 
-Deno.test("routes(): lists each registration once with its meta", () => {
+test("routes(): lists each registration once with its meta", () => {
 	const app = demino();
 	app.get("/a", withMeta({ perm: "a:read" }, () => "a"));
 	app.post("/a", withMeta({ perm: "a:write" }, () => "a"));
@@ -40,60 +41,60 @@ Deno.test("routes(): lists each registration once with its meta", () => {
 
 	const rows = app.routes();
 
-	assertEquals(row(rows, "GET", "/a").meta, { perm: "a:read" });
-	assertEquals(row(rows, "POST", "/a").meta, { perm: "a:write" });
-	assertEquals(row(rows, "GET", "/b").meta, {});
+	assert.deepEqual(row(rows, "GET", "/a").meta, { perm: "a:read" });
+	assert.deepEqual(row(rows, "POST", "/a").meta, { perm: "a:write" });
+	assert.deepEqual(row(rows, "GET", "/b").meta, {});
 });
 
-Deno.test("routes(): auto-HEAD is reported (inherits GET registration) ", () => {
+test("routes(): auto-HEAD is reported (inherits GET registration) ", () => {
 	const app = demino();
 	app.get("/a", withMeta({ perm: "a:read" }, () => "a"));
 
 	const rows = app.routes();
 	// GET registration auto-adds HEAD -> both present, both carry the meta
-	assertEquals(row(rows, "GET", "/a").meta, { perm: "a:read" });
-	assertEquals(row(rows, "HEAD", "/a").meta, { perm: "a:read" });
+	assert.deepEqual(row(rows, "GET", "/a").meta, { perm: "a:read" });
+	assert.deepEqual(row(rows, "HEAD", "/a").meta, { perm: "a:read" });
 });
 
-Deno.test("routes(): ALL-router routes are reported under ALL", () => {
+test("routes(): ALL-router routes are reported under ALL", () => {
 	const app = demino();
 	app.all("/x", withMeta({ perm: "x" }, () => "x"));
 
 	const rows = app.routes();
-	assertEquals(row(rows, "ALL", "/x").meta, { perm: "x" });
+	assert.deepEqual(row(rows, "ALL", "/x").meta, { perm: "x" });
 });
 
-Deno.test("routes(): catch-all routes are present", () => {
+test("routes(): catch-all routes are present", () => {
 	const app = demino();
 	app.get("/files/*", withMeta({ public: true }, () => "f"));
 
 	const rows = app.routes();
 	const hit = rows.find((r) => r.route === "/files/*" && r.method === "GET");
-	assert(hit, "catch-all route should be enumerated");
-	assertEquals(hit!.meta, { public: true });
+	assert.ok(hit, "catch-all route should be enumerated");
+	assert.deepEqual(hit!.meta, { public: true });
 });
 
-Deno.test("routes(): meta entries are frozen", () => {
+test("routes(): meta entries are frozen", () => {
 	const app = demino();
 	app.get("/a", withMeta({ perm: "a" }, () => "a"));
 
 	const r = row(app.routes(), "GET", "/a");
-	assert(Object.isFrozen(r.meta), "routes() meta must be frozen");
+	assert.ok(Object.isFrozen(r.meta), "routes() meta must be frozen");
 });
 
-Deno.test("routes(): reflects re-registration (last registration wins)", () => {
+test("routes(): reflects re-registration (last registration wins)", () => {
 	const app = demino();
 	app.get("/a", withMeta({ perm: "old" }, () => "a"));
 	app.get("/a", withMeta({ perm: "new" }, () => "a2"));
 
-	assertEquals(row(app.routes(), "GET", "/a").meta, { perm: "new" });
+	assert.deepEqual(row(app.routes(), "GET", "/a").meta, { perm: "new" });
 });
 
-Deno.test("routes(): mount path is reflected in reported routes", () => {
+test("routes(): mount path is reflected in reported routes", () => {
 	const app = demino("/api");
 	app.get("/users", withMeta({ perm: "users:read" }, () => "u"));
 
-	assertEquals(row(app.routes(), "GET", "/api/users").meta, {
+	assert.deepEqual(row(app.routes(), "GET", "/api/users").meta, {
 		perm: "users:read",
 	});
 });
@@ -101,7 +102,7 @@ Deno.test("routes(): mount path is reflected in reported routes", () => {
 // The load-bearing invariant: what app.routes() reports for a (method, route)
 // MUST equal what ctx.routeMeta is for an actual matched request to that route.
 // If these diverge, any build-time audit built on routes() is false-green.
-Deno.test("routes(): A/B invariant — routes() meta equals per-request ctx.routeMeta", async () => {
+test("routes(): A/B invariant — routes() meta equals per-request ctx.routeMeta", async () => {
 	const seen: Record<string, Readonly<Record<string, unknown>>> = {};
 
 	const app = demino();
@@ -120,8 +121,8 @@ Deno.test("routes(): A/B invariant — routes() meta equals per-request ctx.rout
 		await assertResp(fetch(`${base}/c`), 200, "c");
 
 		// per-request routeMeta must deep-equal the routes() entry for that route
-		assertEquals(seen["/a"], row(rows, "GET", "/a").meta);
-		assertEquals(seen["/b/[id]"], row(rows, "GET", "/b/[id]").meta);
-		assertEquals(seen["/c"], row(rows, "GET", "/c").meta);
+		assert.deepEqual(seen["/a"], row(rows, "GET", "/a").meta);
+		assert.deepEqual(seen["/b/[id]"], row(rows, "GET", "/b/[id]").meta);
+		assert.deepEqual(seen["/c"], row(rows, "GET", "/c").meta);
 	});
 });

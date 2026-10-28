@@ -1,8 +1,9 @@
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { demino, type DeminoLogger } from "../src/demino.ts";
 import { startTestServer } from "./_utils.ts";
 
-Deno.test("a throwing custom error handler does not escape (falls back + still access-logs)", async () => {
+test("a throwing custom error handler does not escape (falls back + still access-logs)", async () => {
 	const accessStatuses: number[] = [];
 	const logger: DeminoLogger = {
 		debug() {},
@@ -26,10 +27,10 @@ Deno.test("a throwing custom error handler does not escape (falls back + still a
 		const r = await fetch(`${srv.base}/x`);
 		await r.text();
 		// fell back to a proper 500 instead of a dropped/unhandled request
-		assertEquals(r.status, 500);
+		assert.equal(r.status, 500);
 		// and the access log still fired for the request (the discriminator: without
 		// the guard the throw escapes before the access-log call)
-		assertEquals(accessStatuses.at(-1), 500);
+		assert.equal(accessStatuses.at(-1), 500);
 	} finally {
 		await srv.close();
 	}

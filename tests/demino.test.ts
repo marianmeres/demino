@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
 	createHttpError,
 	getErrorMessage,
@@ -5,7 +7,6 @@ import {
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
 import { sleep } from "@marianmeres/midware";
-import { assertEquals } from "@std/assert";
 import {
 	type Demino,
 	demino,
@@ -42,7 +43,7 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 	return app;
 };
 
-Deno.test("no route is not found", async () => {
+test("no route is not found", async () => {
 	let srv: Srv | null = null;
 	try {
 		srv = await startTestServer(demino());
@@ -54,7 +55,7 @@ Deno.test("no route is not found", async () => {
 	}
 });
 
-Deno.test("hello world", async () => {
+test("hello world", async () => {
 	let srv: Srv | null = null;
 
 	try {
@@ -83,7 +84,7 @@ Deno.test("hello world", async () => {
 	}
 });
 
-Deno.test("mounted hello world", async () => {
+test("mounted hello world", async () => {
 	let srv: Srv | null = null;
 
 	try {
@@ -147,7 +148,7 @@ Deno.test("mounted hello world", async () => {
 	}
 });
 
-Deno.test("middlewares and various return types", async () => {
+test("middlewares and various return types", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino("", [
@@ -253,7 +254,7 @@ Deno.test("middlewares and various return types", async () => {
 	}
 });
 
-Deno.test("middlewares sort order", async () => {
+test("middlewares sort order", async () => {
 	let srv: Srv | null = null;
 	const log: number[] = [];
 	const m1: DeminoHandler = () => {
@@ -286,7 +287,7 @@ Deno.test("middlewares sort order", async () => {
 	}
 });
 
-Deno.test("constructor middleware array is defensively copied", () => {
+test("constructor middleware array is defensively copied", () => {
 	const m1: DeminoHandler = () => "m1";
 	const m2: DeminoHandler = () => "m2";
 	const m3: DeminoHandler = () => "m3";
@@ -297,12 +298,12 @@ Deno.test("constructor middleware array is defensively copied", () => {
 
 	a.use(m3);
 
-	assertEquals(a.info().globalAppMiddlewaresCount, 3);
-	assertEquals(b.info().globalAppMiddlewaresCount, 2);
-	assertEquals(mws.length, 2);
+	assert.equal(a.info().globalAppMiddlewaresCount, 3);
+	assert.equal(b.info().globalAppMiddlewaresCount, 2);
+	assert.equal(mws.length, 2);
 });
 
-Deno.test("global route middlewares", async () => {
+test("global route middlewares", async () => {
 	let srv: Srv | null = null;
 	let log: number[] = [];
 	const m1: DeminoHandler = () => {
@@ -330,16 +331,16 @@ Deno.test("global route middlewares", async () => {
 			.post("/[id]", (_r, _i, c) => c.params.id);
 
 		await assertResp(fetch(`${srv.base}`), 404);
-		assertEquals(log.length, 0);
+		assert.equal(log.length, 0);
 
 		// all 4 mws in effect
 		await assertResp(fetch(`${srv.base}/foo`), 200, "foo");
-		assertEquals(log, [1, 2, 3, 4]);
+		assert.deepEqual(log, [1, 2, 3, 4]);
 
 		// only first 3
 		log = [];
 		await assertResp(fetch(`${srv.base}/foo`, { method: "POST" }), 200, "foo");
-		assertEquals(log, [1, 2, 3]);
+		assert.deepEqual(log, [1, 2, 3]);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -347,7 +348,7 @@ Deno.test("global route middlewares", async () => {
 	}
 });
 
-Deno.test("error handler", async () => {
+test("error handler", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -368,7 +369,7 @@ Deno.test("error handler", async () => {
 	}
 });
 
-Deno.test("custom error handler", async () => {
+test("custom error handler", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -427,7 +428,7 @@ Deno.test("custom error handler", async () => {
 	}
 });
 
-Deno.test("custom error handler via options", async () => {
+test("custom error handler via options", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino("", [], {
@@ -444,7 +445,7 @@ Deno.test("custom error handler via options", async () => {
 	}
 });
 
-Deno.test("catch all fallback route", async () => {
+test("catch all fallback route", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -468,7 +469,7 @@ Deno.test("catch all fallback route", async () => {
 	}
 });
 
-Deno.test("method catch-all resolves globally last", async () => {
+test("method catch-all resolves globally last", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -506,7 +507,7 @@ Deno.test("method catch-all resolves globally last", async () => {
 	}
 });
 
-Deno.test("same route different method", async () => {
+test("same route different method", async () => {
 	let srv: Srv | null = null;
 
 	const methods = ["get", "post", "put", "delete", "patch"] as const;
@@ -528,7 +529,7 @@ Deno.test("same route different method", async () => {
 	}
 });
 
-Deno.test("default router vs trailing slashes", async () => {
+test("default router vs trailing slashes", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -550,7 +551,7 @@ Deno.test("default router vs trailing slashes", async () => {
 	}
 });
 
-Deno.test("first route match wins", async () => {
+test("first route match wins", async () => {
 	let srv: Srv | null = null;
 
 	const app = demino();
@@ -573,7 +574,7 @@ Deno.test("first route match wins", async () => {
 	}
 });
 
-Deno.test("access log", async () => {
+test("access log", async () => {
 	let srv: Srv | null = null;
 
 	const _log: string[] = [];
@@ -604,13 +605,13 @@ Deno.test("access log", async () => {
 		await assertResp(fetch(`${srv.base}/foo/bar?baz=bat`), 404);
 
 		// because logger intentionally sleeps above (must not prevent the server to respond)
-		assertEquals(_log.length, 0);
+		assert.equal(_log.length, 0);
 
 		// wait for logger to complete
 		await sleep(750);
 
 		// now check
-		assertEquals(_log, [
+		assert.deepEqual(_log, [
 			"GET /?hey 200",
 			"POST /a 200",
 			"PUT /b 418",
@@ -649,7 +650,7 @@ function capturingLogger(): {
 // A thrown 404 from a matched `*` catch-all must NOT pollute the error log (it's
 // the carsinc SEO-redirect / scanner case) — it belongs in the access log, which
 // carries the URL.
-Deno.test("thrown 404 from a catch-all is not error-logged", async () => {
+test("thrown 404 from a catch-all is not error-logged", async () => {
 	let srv: Srv | null = null;
 	const { logger, errors, access } = capturingLogger();
 	const app = demino("", [], { logger });
@@ -659,13 +660,13 @@ Deno.test("thrown 404 from a catch-all is not error-logged", async () => {
 	try {
 		srv = await startTestServer(app);
 		const res = await fetch(`${srv.base}/wp-login.php`);
-		assertEquals(res.status, 404);
+		assert.equal(res.status, 404);
 		await res.text();
 		// no error-log noise...
-		assertEquals(errors.length, 0);
+		assert.equal(errors.length, 0);
 		// ...but the access log saw it, with the URL
-		assertEquals(access.length, 1);
-		assertEquals(new URL(access[0].req.url).pathname, "/wp-login.php");
+		assert.equal(access.length, 1);
+		assert.equal(new URL(access[0].req.url).pathname, "/wp-login.php");
 	} finally {
 		await srv?.close();
 	}
@@ -674,7 +675,7 @@ Deno.test("thrown 404 from a catch-all is not error-logged", async () => {
 // A 5xx is error-logged exactly ONCE (regression test for the old double-log),
 // with request context, and the original throw preserved (via `.cause`) as a
 // stringified stack.
-Deno.test("thrown 5xx is error-logged once, with request context", async () => {
+test("thrown 5xx is error-logged once, with request context", async () => {
 	let srv: Srv | null = null;
 	const { logger, errors } = capturingLogger();
 	const app = demino("", [], { logger });
@@ -684,16 +685,16 @@ Deno.test("thrown 5xx is error-logged once, with request context", async () => {
 	try {
 		srv = await startTestServer(app);
 		const res = await fetch(`${srv.base}/boom`);
-		assertEquals(res.status, 500);
+		assert.equal(res.status, 500);
 		await res.text();
-		assertEquals(errors.length, 1); // once, not twice
+		assert.equal(errors.length, 1); // once, not twice
 		const e = errors[0];
-		assertEquals(e.status, 500);
-		assertEquals(e.method, "GET");
-		assertEquals(new URL(e.url).pathname, "/boom");
-		assertEquals(typeof e.ip, "string");
-		assertEquals(typeof e.error, "string");
-		assertEquals(e.error.includes("kaboom"), true); // original preserved via cause
+		assert.equal(e.status, 500);
+		assert.equal(e.method, "GET");
+		assert.equal(new URL(e.url).pathname, "/boom");
+		assert.equal(typeof e.ip, "string");
+		assert.equal(typeof e.error, "string");
+		assert.equal(e.error.includes("kaboom"), true); // original preserved via cause
 	} finally {
 		await srv?.close();
 	}
@@ -701,7 +702,7 @@ Deno.test("thrown 5xx is error-logged once, with request context", async () => {
 
 // A thrown 4xx (403) is a client fault — not error-logged (read it from the
 // access log).
-Deno.test("thrown 4xx (403) is not error-logged", async () => {
+test("thrown 4xx (403) is not error-logged", async () => {
 	let srv: Srv | null = null;
 	const { logger, errors } = capturingLogger();
 	const app = demino("", [], { logger });
@@ -711,9 +712,9 @@ Deno.test("thrown 4xx (403) is not error-logged", async () => {
 	try {
 		srv = await startTestServer(app);
 		const res = await fetch(`${srv.base}/secret`);
-		assertEquals(res.status, 403);
+		assert.equal(res.status, 403);
 		await res.text();
-		assertEquals(errors.length, 0);
+		assert.equal(errors.length, 0);
 	} finally {
 		await srv?.close();
 	}
@@ -721,7 +722,7 @@ Deno.test("thrown 4xx (403) is not error-logged", async () => {
 
 // A 5xx originating in dispatch (501 for an unknown method) never enters the
 // matched-handler catch, yet is now error-logged WITH context (previously: no URL).
-Deno.test("5xx from dispatch (501) is error-logged with context", async () => {
+test("5xx from dispatch (501) is error-logged with context", async () => {
 	let srv: Srv | null = null;
 	const { logger, errors } = capturingLogger();
 	const app = demino("", [], { logger });
@@ -729,13 +730,13 @@ Deno.test("5xx from dispatch (501) is error-logged with context", async () => {
 	try {
 		srv = await startTestServer(app);
 		const res = await fetch(`${srv.base}/`, { method: "PROPFIND" });
-		assertEquals(res.status, 501);
+		assert.equal(res.status, 501);
 		await res.text();
-		assertEquals(errors.length, 1);
+		assert.equal(errors.length, 1);
 		const e = errors[0];
-		assertEquals(e.status, 501);
-		assertEquals(e.method, "PROPFIND");
-		assertEquals(new URL(e.url).pathname, "/");
+		assert.equal(e.status, 501);
+		assert.equal(e.method, "PROPFIND");
+		assert.equal(new URL(e.url).pathname, "/");
 	} finally {
 		await srv?.close();
 	}
@@ -792,13 +793,13 @@ runTestServerTests([
 				.logger(logger);
 
 			await assertResp(fetch(`${base}/hey`), 200, "ho");
-			assertEquals(_log, ["foo", "bar", "baz"]);
+			assert.deepEqual(_log, ["foo", "bar", "baz"]);
 
 			// now reset and no more logs...
 			app.logger(null);
 			_log = [];
 			await assertResp(fetch(`${base}/hey`), 200, "ho");
-			assertEquals(_log, []);
+			assert.deepEqual(_log, []);
 		},
 	},
 	{
@@ -817,7 +818,7 @@ runTestServerTests([
 
 			app.all("/baz", noop);
 
-			assertEquals(app.info(), {
+			assert.deepEqual(app.info(), {
 				routes: {
 					"/mount/foo": {
 						GET: { localMiddlewaresCount: 2, globalMiddlewaresCount: 1 },
@@ -837,8 +838,8 @@ runTestServerTests([
 	{
 		name: "app getOptions",
 		fn: ({ app, base: _base }) => {
-			assertEquals(app.getOptions().noXPoweredBy, true);
-			assertEquals(app.getOptions().errorHandler, undefined);
+			assert.equal(app.getOptions().noXPoweredBy, true);
+			assert.equal(app.getOptions().errorHandler, undefined);
 		},
 		// only: true,
 		appOptions: {
@@ -856,20 +857,20 @@ runTestServerTests([
 			});
 
 			// read
-			assertEquals(app.locals.foo, "bar");
-			assertEquals(app.locals.baz, undefined);
+			assert.equal(app.locals.foo, "bar");
+			assert.equal(app.locals.baz, undefined);
 
 			await assertResp(fetch(`${base}/`), 204);
-			assertEquals(log, [{ foo: "bar" }]);
+			assert.deepEqual(log, [{ foo: "bar" }]);
 
 			// write
 			app.locals.baz = "bat";
-			assertEquals(app.locals.baz, "bat");
+			assert.equal(app.locals.baz, "bat");
 
 			//
 			log = []; // reset
 			await assertResp(fetch(`${base}/`), 204);
-			assertEquals(log, [{ foo: "bar", baz: "bat" }]);
+			assert.deepEqual(log, [{ foo: "bar", baz: "bat" }]);
 		},
 		// only: true,
 		appLocals: {
@@ -885,9 +886,9 @@ runTestServerTests([
 			});
 
 			// Initial state
-			assertEquals(app.locals.foo, "bar");
+			assert.equal(app.locals.foo, "bar");
 			await assertResp(fetch(`${base}/`), 204);
-			assertEquals(log, [{ foo: "bar" }]);
+			assert.deepEqual(log, [{ foo: "bar" }]);
 
 			// Reassignment is ignored (warning logged)
 			app.locals = { different: "object" };
@@ -895,8 +896,8 @@ runTestServerTests([
 			// Original object still used
 			log = [];
 			await assertResp(fetch(`${base}/`), 204);
-			assertEquals(log, [{ foo: "bar" }]);
-			assertEquals(app.locals.foo, "bar");
+			assert.deepEqual(log, [{ foo: "bar" }]);
+			assert.equal(app.locals.foo, "bar");
 		},
 		appLocals: {
 			foo: "bar",
