@@ -35,9 +35,9 @@ src/
 
 - Each directory has a `mod.ts` barrel that re-exports all public symbols
 - Implementation files are siblings to `mod.ts`
-- Every public subpath is a flat shim `src/<name>.ts` (npmbuild maps entry `x` to `src/x.ts`);
-  `deno.json` `exports`, `tests/manifest-sync.test.ts` (`EXPORTS`) and `scripts/build-npm.ts`
-  all derive from that rule
+- Every public subpath is a flat shim `src/<name>.ts`: `deno.json` `exports` (JSR) maps `./x`
+  to it, `package.json` `exports` (npm) to its `tsc` output `dist/x.js` + `dist/x.d.ts`, and
+  `tests/manifest-sync.test.ts` (`EXPORTS`) checks both maps
 - Test files go in `tests/` directory, mirroring `src/` structure
 
 ## Portability
@@ -69,8 +69,8 @@ src/
 - non-erasable TypeScript: `enum`, `namespace`, constructor parameter properties (Node strips
   types, it never lowers them)
 - a new dependency in only one manifest — `deno.json` `imports` and `package.json` must carry
-  the same range (`tests/manifest-sync.test.ts`), and `scripts/build-npm.ts` lists the
-  published ones
+  the same range (`tests/manifest-sync.test.ts`); `package.json` is also the published npm
+  manifest
 
 ## Naming Conventions
 
@@ -175,15 +175,19 @@ Filesystem "not found" is reported portably: a plain `Error` with `code: "ENOENT
 - **Location**: `tests/` directory
 - **Naming**: `*.test.ts`
 - **Framework**: `node:test` + `node:assert/strict` — one suite, two runners:
-  `deno task test`, `npm test`
+  `pnpm test` (Node), `pnpm run test:deno`
 - **Servers**: never start one by hand — `startTestServer(handler)` /
   `runTestServerTests([...])` from `tests/_utils.ts` go through the adapter of the current
   runtime (the only runtime-specific code in the suite) on a free port, silently
 - **Runtime-specific cases**: `{ skip: !isDeno }` with `isDeno` / `isNode` from
   `tests/_utils.ts`, and a comment stating the reason — only for differences by design (e.g.
   the Deno adapter tests need `Deno`)
-- **Types**: `npm run typecheck` (`tsc --noEmit`, `src/` + `tests/`) is the only type gate —
+- **Types**: `pnpm run typecheck` (`tsc --noEmit`, `src/` + `tests/`) is the only type gate —
   Node strips types without checking
+- **Format / lint**: Biome — `pnpm run format` before committing, `pnpm run lint` is gated.
+  Tabs, 4 wide, 90 columns, double quotes; manifests 2 spaces. The recommended rules the code
+  base broke at adoption (2026-10-29) are set to `warn` in `biome.json`: fixing them changes
+  code, so each is its own change — fix a rule's findings, then delete its line
 
 ```ts
 import assert from "node:assert/strict";
@@ -217,9 +221,9 @@ runTestServerTests([
 Run tests:
 
 ```bash
-deno task test        # Deno
-npm test              # Node (after `npm install`)
-npm run typecheck     # tsc --noEmit
+pnpm test             # Node (after `pnpm install`)
+pnpm run test:deno    # Deno
+pnpm run typecheck    # tsc --noEmit
 ```
 
 Guard tests worth knowing: `tests/portability.test.ts` (the rule above),

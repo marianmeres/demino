@@ -63,7 +63,8 @@ serve(app)   ← @marianmeres/demino/deno | /node
   (`ws` sockets are born open) holds frames back until then, so the same handler code works on
   both.
 - **Flat shims**: `src/deno.ts`, `src/node.ts` re-export their adapter; the
-  `deno.json` exports map and the npm build point at these (npmbuild maps `./x` to `src/x.ts`).
+  `deno.json` exports map points at these, the `package.json` one at their `tsc` output in
+  `dist/`.
 - **Without an adapter**: on Deno the app is structurally a Deno serve handler and can be
   handed to the runtime directly (`info` then has `remoteAddr` only — no upgrade capability).
   Node has no web-standard server; the adapter is required.

@@ -5,7 +5,8 @@ Machine-friendly documentation for AI agents working with @marianmeres/demino.
 ## Package Identity
 
 - **Name**: @marianmeres/demino
-- **Registry**: JSR (jsr.io/@marianmeres/demino) + npm (dual-published via `@marianmeres/npmbuild`)
+- **Registry**: npm + JSR (jsr.io/@marianmeres/demino), dual-published: npm gets the repo root
+  (`package.json`, `dist/` from `tsc`), JSR gets `src/` through `deno.json`
 - **Version**: 2.0.0
 - **Runtime**: web standards + the `node:*` subset — Deno and Node (≥ 22) through runtime adapters;
   Bun is not supported (plain HTTP works under `Bun.serve({ fetch: app })`, untested)
@@ -114,8 +115,13 @@ tests/                        # node:test suite - runs under deno test and node 
 └── static/                   # Static file serving test files
 
 scripts/
-├── build-npm.ts              # npm package into .npm-dist/ (entry points derived from deno.json exports)
-└── smoke-npm.mjs             # Installs .npm-dist into a temp project and imports every subpath (Node)
+└── smoke-npm.mjs             # `pnpm pack`s the root, installs the tarball in a temp project, imports every subpath, serves (Node)
+
+package.json                  # Manifest of record AND the published npm manifest: version, exports (-> dist/), scripts
+deno.json                     # JSR manifest: name, exports (-> src/), jsr: import map; no version, no tasks
+tsconfig.json                 # Type gate (`pnpm run typecheck`, src/ + tests/, no emit)
+tsconfig.build.json           # `pnpm run build`: src/ -> dist/ (JS + .d.ts), rewriteRelativeImportExtensions
+biome.json                    # Format + lint (`pnpm run lint` / `format`)
 ```
 
 ## Critical Types
@@ -308,8 +314,11 @@ precedence is inlined in `getClientIpFromHeaders()`.
 
 ### Dev / tooling
 
-- typescript (`npm run typecheck`, `tsc --noEmit`), @types/node, @types/ws
-- @marianmeres/npmbuild (`scripts/build-npm.ts`), @marianmeres/mcp-server/types (`mcp.ts`)
+- typescript (`pnpm run typecheck`, `pnpm run build`), @types/node, @types/ws
+- @biomejs/biome (`pnpm run lint` / `pnpm run format`)
+- @marianmeres/mcp-server/types (`mcp.ts`, `deno.json` imports only)
+- pnpm (`packageManager`), Node `.node-version` (26) for development - the suite runs `.ts`
+  through Node's type stripping (≥ 24.12); the published package needs Node ≥ 22
 
 ## Common Patterns
 
@@ -378,33 +387,42 @@ app.get("/ws", (req, info) => {
 One `node:test` + `node:assert/strict` suite, two runners:
 
 ```bash
-deno task test            # Deno
-npm test                  # Node (run `npm install` once on a fresh checkout)
-npm run typecheck         # tsc --noEmit over src/ + tests/ (the only type gate)
-deno task test:watch      # Deno watch mode
+pnpm test                 # Node (run `pnpm install` once on a fresh checkout)
+pnpm run test:deno        # Deno (deno test -A tests/)
+pnpm run typecheck        # tsc --noEmit over src/ + tests/ (the only type gate)
+pnpm run test:watch       # Node watch mode
 ```
 
 Test files located in: `tests/`. Server tests go through `startTestServer()` /
 `runTestServerTests()` in `tests/_utils.ts`, which picks the adapter of the current runtime.
 Runtime-only cases use `{ skip: !isDeno }` with a comment stating why.
 Guards: `tests/portability.test.ts`, `tests/manifest-sync.test.ts`,
-`tests/types/deno-serve-compat.test.ts`. CI (`.github/workflows/ci.yml`) runs Deno (pinned)
-and Node 24 + 26.
+`tests/types/deno-serve-compat.test.ts`. CI (`.github/workflows/ci.yml`) runs `pnpm run ci` on
+Node 24 + 26 and `test:deno` + `jsr:check` on Deno (pinned).
 
 ## Tasks and Scripts
 
+Every entry point is a `package.json` script; `deno.json` has no tasks.
+
 ```bash
-deno task dev             # Run main module with watch
-deno task test            # Run all tests on Deno
-npm test                  # Run all tests on Node
-npm run typecheck         # tsc --noEmit
-deno publish --dry-run    # JSR package check
-deno task npm:build       # Build the npm package into .npm-dist/
-deno task npm:smoke       # Build + install into a temp project + import every subpath (Node)
-deno task release         # Bump version (release tooling)
-deno task publish         # deno publish + npm publish of .npm-dist/
-deno task publish:next    # same, npm under the `next` dist-tag (prereleases, e.g. 2.0.0-rc.1)
+pnpm test                 # All tests on Node
+pnpm run test:deno        # All tests on Deno
+pnpm run typecheck        # tsc --noEmit
+pnpm run lint             # Biome: format + lint + import order (gated)
+pnpm run format           # Biome: apply formatting + safe fixes
+pnpm run build            # tsc -p tsconfig.build.json -> dist/
+pnpm run smoke            # build + pnpm pack + install the tarball in a temp project + import + serve
+pnpm run ci               # typecheck + lint + test + smoke (what CI's Node job runs)
+pnpm run jsr:check        # deno publish --dry-run with the package.json version (clean tree)
+pnpm run release          # Bump package.json version, commit, tag, push (@marianmeres/release)
+pnpm run publish:all      # pnpm publish (prepublishOnly: ci + build), then publish:jsr
+pnpm run publish:next     # same, npm under the `next` dist-tag (prereleases, e.g. 2.0.0-rc.1)
+pnpm run publish:jsr      # test:deno, then deno publish --set-version <package.json version>
 ```
+
+`package.json` is the only manifest with a `version`: `release` bumps the first manifest that
+has one, and JSR gets it via `--set-version`. No script may be named `publish` - that is an npm
+lifecycle hook `pnpm publish` would run.
 
 ## Special Behaviors
 
@@ -463,7 +481,8 @@ deno task publish:next    # same, npm under the `next` dist-tag (prereleases, e.
 
 See [docs/tasks.md](./docs/tasks.md#adding-a-runtime-adapter) — exports map, `EXPORTS` in
 `tests/manifest-sync.test.ts`, `RUNTIME_OWNER` in `tests/portability.test.ts`, harness
-`pickServe()`, CI matrix; dependencies go in both manifests plus `scripts/build-npm.ts`.
+`pickServe()`, CI matrix; dependencies go in both manifests (`package.json` is also what npm
+publishes).
 
 ## Error Handling
 

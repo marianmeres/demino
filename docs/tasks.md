@@ -35,11 +35,10 @@ const server = await serve(app, { port: 8000 }); // defaults: 0.0.0.0:8000, logL
 Run, in this order, before committing (CI runs the same):
 
 ```bash
-deno task test           # Deno
-npm test                 # Node (needs `npm install` once)
-npm run typecheck        # tsc --noEmit over src/ + tests/
-deno publish --dry-run   # JSR package shape (slow types, exports map)
-deno task npm:build      # npm package into .npm-dist/ (deno task npm:smoke also imports it)
+pnpm run format          # Biome (formatting + safe fixes)
+pnpm run ci              # typecheck, lint, Node suite, npm smoke (needs `pnpm install` once)
+pnpm run test:deno       # Deno suite
+pnpm run jsr:check       # JSR package shape (slow types, exports map); needs a clean tree
 ```
 
 ---
@@ -78,7 +77,7 @@ export function myMiddleware(options: MyMiddlewareOptions = {}): DeminoHandler {
 - [ ] Options interface exported
 - [ ] Added to `src/middleware/mod.ts`
 - [ ] Portable: no runtime global, no `@std/` import (`tests/portability.test.ts` fails otherwise)
-- [ ] Tests pass on both runtimes: `deno task test`, `npm test`
+- [ ] Tests pass on both runtimes: `pnpm test`, `pnpm run test:deno`
 
 ---
 
@@ -165,8 +164,9 @@ export function myUtil(input: string): string {
    5 s force, `ServeHandle.url` via `toUrl()`, `port: 0` reports the real port, port-in-use
    rejects with `code: "EADDRINUSE"`
 4. Add the flat shim `src/[name].ts` (re-export `serve` + the three types, like `src/deno.ts`)
-5. Add `"./[name]": "./src/[name].ts"` to `deno.json` `exports` **and** to `EXPORTS` in
-   `tests/manifest-sync.test.ts` (`scripts/build-npm.ts` derives npm entry points from the map)
+5. Add `"./[name]": "./src/[name].ts"` to `deno.json` `exports`, its `dist/` twin
+   (`{ "types": "./dist/[name].d.ts", "import": "./dist/[name].js" }`) to `package.json`
+   `exports`, and the entry to `EXPORTS` in `tests/manifest-sync.test.ts`
 6. If the adapter names a new runtime global, add it to `RUNTIME_OWNER` in
    `tests/portability.test.ts`
 7. Teach `pickServe()` in `tests/_utils.ts` to select it, add `tests/adapters/[name].test.ts`,
@@ -187,15 +187,15 @@ export function myUtil(input: string): string {
 
 1. Add it to `deno.json` `imports` (`npm:`/`jsr:` specifier) **and** `package.json`
    `dependencies` with the same `^x.y.z` range — `tests/manifest-sync.test.ts` fails otherwise
-2. Add it to the `dependencies` list in `scripts/build-npm.ts` (published `package.json`)
-3. Import it by its bare name from `src/`; confirm it runs on Deno and Node
-4. `npm install` to refresh `package-lock.json`
+2. Import it by its bare name from `src/`; confirm it runs on Deno and Node
+3. `pnpm install` to refresh `pnpm-lock.yaml` (`package.json` is also the published manifest -
+   nothing else lists the dependency)
 
 ### Checklist
 
 - [ ] No `@std/*` (Deno-only resolution) — use a `node:*` built-in or inline the helper
 - [ ] Zero runtime-specific code inside the dependency
-- [ ] `deno task npm:build` still succeeds
+- [ ] `pnpm run smoke` still succeeds
 
 ---
 
