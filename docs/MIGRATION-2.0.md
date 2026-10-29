@@ -251,9 +251,10 @@ A dependency still on demino 1.x keeps its own copy: its `^1.x` range never matc
 the graph holds both, and their types do not mix. `deno check` fails wherever a 2.0 value meets
 that package's API - your middlewares passed into it, an app it built joined with yours in one
 array or handed to `deminoCompose`; the errors name both copies (`…/demino/1.18.0/…` next to
-yours). `@marianmeres/sse` 1.0.0 is one (`createSSEApp` takes and returns 1.x types). Nothing
-on your side fixes it - the dependency needs a release on `^2.0.0`. What is left on 1.x after
-your bump shows in the lock file:
+yours). `@marianmeres/sse` 1.x and `@marianmeres/ws` 0.7.x are such dependencies
+(`createSSEApp` / `createWSApp` take and return 1.x types); `sse` 2.0.0 and `ws` 0.8.0 are their
+releases on demino 2. Otherwise nothing on your side fixes it - the dependency needs a release
+on `^2.0.0`. What is left on 1.x after your bump shows in the lock file:
 
 ```sh
 grep -n '"jsr:@marianmeres/demino@^1' deno.lock
