@@ -1,0 +1,14 @@
+{
+  // `pnpm run build`: emits src/ to dist/ (ESM + .d.ts), which is what npm gets
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    // sources import with `.ts`; the emitted JS imports `.js`. The `.d.ts` keep
+    // `.ts`, which TypeScript consumers resolve to the sibling `.d.ts`
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src"]
+}

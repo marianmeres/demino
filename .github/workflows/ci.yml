@@ -1,12 +1,14 @@
 # Demino promises "runs on Deno and Node"; only a matrix proves that on every
-# push. Each job runs exactly the commands of `deno.json` tasks / `package.json`
-# scripts, so CI checks what `deno task ...` and `pnpm run ...` check locally -
-# nothing is defined only here.
+# push. Each job runs `package.json` scripts only, so CI checks what
+# `pnpm run ...` checks locally - nothing is defined only here.
 #
-# - Deno is pinned to the exact version used locally (the runtime is in
+# - Node runs the two current majors and is the gate: `pnpm run ci` is the
+#   typecheck (tsc --noEmit, the only type gate - the suite is type-stripped),
+#   the suite, and the npm smoke (build, pack, install, import, serve).
+# - Deno is a consumer runtime (JSR, the `/deno` adapter): the same suite on
+#   Deno plus the JSR publish dry run (type check, slow types, file list). It
+#   is pinned to the exact version used locally (the runtime is in
 #   bug-fix-only mode; bump the pin deliberately, in its own commit).
-# - Node runs the two current majors; the suite is type-stripped, so
-#   `pnpm run typecheck` (tsc --noEmit) is the only type gate.
 # - `deno fmt --check` / `deno lint` are deliberately not gated: the repo never
 #   enforced them and gating is a reformat decision, not a CI one.
 
@@ -38,8 +40,13 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ matrix.deno }}
-      - run: deno task test
-      - run: deno publish --dry-run
+      # pnpm only runs the scripts here; Deno resolves through deno.json
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - run: pnpm run test:deno
+      - run: pnpm run jsr:check
 
   node:
     name: Node ${{ matrix.node }}
@@ -58,5 +65,4 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm run typecheck
+      - run: pnpm run ci

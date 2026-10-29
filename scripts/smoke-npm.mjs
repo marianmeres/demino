@@ -1,13 +1,15 @@
 /**
- * Smoke-imports the built npm package (`deno task npm:smoke`, or
- * `node scripts/smoke-npm.mjs` after `deno task npm:build`).
+ * Smoke-imports the built npm package (`pnpm run smoke`, or
+ * `node scripts/smoke-npm.mjs` after `pnpm run build`).
  *
- * In a throw-away project under the OS temp dir it runs
- * `npm install --install-links <.npm-dist>` - a packed copy, as a consumer
- * gets it, not a symlink into this repo - and then, on Node, inside that project:
+ * `pnpm pack`s the repo root - the tarball `pnpm publish` would upload - and
+ * in a throw-away project under the OS temp dir runs `npm install <tarball>`,
+ * as a consumer gets it, and then, on Node, inside that project:
  *
  *  - checks the installed package.json: the seven `exports` keys, the five
  *    runtime dependencies, `ws` as an optional peer, `engines.node`;
+ *  - checks the tarball carries `dist/` and none of the repo-only directories
+ *    (the root is published, so `files` is all that keeps them out);
  *  - imports every subpath;
  *  - `demino()` + `serve()` from `@marianmeres/demino/node`: listens on port 0,
  *    fetches `/`, expects 200, shuts down.
@@ -20,13 +22,21 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const DIST = join(ROOT, ".npm-dist");
+const DIST = join(ROOT, "dist");
 const PKG = "@marianmeres/demino";
 
 const EXPECTED_EXPORTS = [
@@ -38,6 +48,8 @@ const EXPECTED_EXPORTS = [
 	"./router",
 	"./utils",
 ];
+/** Repo directories the published tarball must not carry. */
+const REPO_ONLY = ["src", "tests", "scripts", "tmp", "node_modules"];
 const EXPECTED_DEPENDENCIES = [
 	"@marianmeres/clog",
 	"@marianmeres/http-utils",
@@ -115,6 +127,13 @@ function checkInstalledManifest(dir) {
 	check(typeof pkg.peerDependencies?.ws === "string", `"ws" is not a peer dependency`);
 	check(pkg.peerDependenciesMeta?.ws?.optional === true, `"ws" peer is not optional`);
 	check(typeof pkg.engines?.node === "string", "engines.node missing");
+	check(
+		existsSync(join(dir, "dist", "mod.js")),
+		"dist/mod.js missing from the tarball",
+	);
+	for (const name of REPO_ONLY) {
+		check(!existsSync(join(dir, name)), `the tarball carries "${name}/"`);
+	}
 	console.log(
 		`smoke: ${pkg.name}@${pkg.version} - exports ${exportKeys.length}/${EXPECTED_EXPORTS.length}, ` +
 			`peer ws ${pkg.peerDependencies.ws} (optional), engines.node ${pkg.engines.node}`,
@@ -122,8 +141,8 @@ function checkInstalledManifest(dir) {
 }
 
 check(
-	existsSync(join(DIST, "package.json")),
-	`${DIST} has no package.json - run \`deno task npm:build\` first`,
+	existsSync(join(DIST, "mod.js")),
+	`${DIST} has no mod.js - run \`pnpm run build\` first`,
 );
 
 const project = mkdtempSync(join(tmpdir(), "demino-npm-smoke-"));
@@ -136,15 +155,19 @@ try {
 			"\t",
 		),
 	);
+	const packDir = join(project, "pack");
+	mkdirSync(packDir);
+	run("pnpm", ["pack", "--pack-destination", packDir], ROOT);
+	const tarballs = readdirSync(packDir).filter((f) => f.endsWith(".tgz"));
+	check(tarballs.length === 1, `expected one tarball, got ${JSON.stringify(tarballs)}`);
 	run(
 		"npm",
 		[
 			"install",
-			"--install-links",
 			"--no-audit",
 			"--no-fund",
 			"--loglevel=error",
-			DIST,
+			join(packDir, tarballs[0]),
 		],
 		project,
 	);

@@ -1,14 +1,91 @@
 {
-  "name": "@marianmeres/demino-dev",
-  "private": true,
+  "name": "@marianmeres/demino",
+  "version": "2.0.0-rc.1",
+  "description": "Minimal web framework on web standards (Request in, Response out): routing, middleware, error handling, static files, HTTP + WebSocket proxying. Runs on Deno and Node.",
+  "license": "MIT",
+  "author": "Marian Meres",
   "type": "module",
   "packageManager": "pnpm@12.16.1",
   "engines": {
-    "node": ">=24.12"
+    "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/mod.js",
+  "types": "dist/mod.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    },
+    "./deno": {
+      "types": "./dist/deno.d.ts",
+      "import": "./dist/deno.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
+    },
+    "./misc": {
+      "types": "./dist/misc.d.ts",
+      "import": "./dist/misc.js"
+    },
+    "./router": {
+      "types": "./dist/router.d.ts",
+      "import": "./dist/router.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "API.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marianmeres/demino.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marianmeres/demino/issues"
+  },
+  "homepage": "https://github.com/marianmeres/demino#readme",
+  "keywords": [
+    "http",
+    "router",
+    "middleware",
+    "deno",
+    "node",
+    "web-standards"
+  ],
   "scripts": {
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"tests/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "test:watch": "node --test --watch \"tests/**/*.test.ts\"",
+    "test:deno": "deno test -A tests/",
+    "smoke": "pnpm run build && node scripts/smoke-npm.mjs",
+    "jsr:check": "deno publish --dry-run --set-version \"$npm_package_version\"",
+    "ci": "pnpm run typecheck && pnpm test && pnpm run smoke",
+    "prepublishOnly": "pnpm run ci && pnpm run build",
+    "release": "npx --yes @marianmeres/release@^2.2.0",
+    "publish:jsr": "pnpm run test:deno && deno publish --set-version \"$npm_package_version\"",
+    "publish:all": "pnpm publish && pnpm run publish:jsr",
+    "publish:next": "pnpm publish --tag next --no-git-checks && pnpm run publish:jsr",
+    "rp": "pnpm run release -y && pnpm run publish:all",
+    "rpm": "pnpm run release minor -y && pnpm run publish:all"
   },
   "dependencies": {
     "@marianmeres/clog": "^3.21.0",
@@ -17,10 +94,18 @@
     "@marianmeres/simple-router": "^3.4.0",
     "mrmime": "^2.0.1"
   },
+  "peerDependencies": {
+    "ws": "^8.18"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24",
+    "@types/ws": "^8.18",
     "typescript": "^7.0.2",
-    "ws": "^8.18",
-    "@types/ws": "^8.18"
+    "ws": "^8.18"
   }
 }

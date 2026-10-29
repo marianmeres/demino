@@ -5,7 +5,7 @@ coverage/
 *.swp
 tmp/*
 node_modules/
-.npm-dist/
+dist/
 
 # pnpm's lockfile is the one committed; another installer must not add a second
 package-lock.json
