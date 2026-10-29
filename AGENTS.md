@@ -144,7 +144,10 @@ interface DeminoServeInfo {
 	upgradeWebSocket?: DeminoUpgradeWebSocket; // (req, { protocol? }) => { socket, response }
 	raw?: unknown; // runtime's own per-request object (Deno info / IncomingMessage)
 }
-type DeminoServeHandler = (req: Request, info?: DeminoServeInfo) => Response | Promise<Response>;
+type DeminoServeHandler = (
+	req: Request,
+	info?: DeminoServeInfo,
+) => Response | Promise<Response>;
 ```
 
 Every field optional: a missing `info` is normalised to a frozen `{}`, so always write
@@ -155,7 +158,10 @@ then `open` — the same contract on both runtimes (Node holds early frames).
 ### Adapter contract (`src/adapters/types.ts`)
 
 ```ts
-type ServeFn = (handler: DeminoServeHandler, options?: ServeOptions) => Promise<ServeHandle>;
+type ServeFn = (
+	handler: DeminoServeHandler,
+	options?: ServeOptions,
+) => Promise<ServeHandle>;
 interface ServeOptions {
 	port?: number; // 8000; 0 = free port
 	hostname?: string; // "0.0.0.0"
@@ -165,10 +171,13 @@ interface ServeOptions {
 	webSockets?: boolean; // Node only: lazily import `ws`; default true
 }
 interface ServeHandle {
-	readonly hostname: string; readonly port: number; readonly url: string;
+	readonly hostname: string;
+	readonly port: number;
+	readonly url: string;
 	readonly finished: Promise<void>;
 	shutdown(): Promise<void>; // graceful; Node forces after 5 s
-	ref(): void; unref(): void;
+	ref(): void;
+	unref(): void;
 }
 ```
 
@@ -523,10 +532,10 @@ it (a handler-returned `Response` never gets `ctx.headers`) — use
 ```ts
 app.use(
 	"/api",
-	rateLimit(
-		(req, info, ctx) => req.headers.get("Authorization"),
-		{ maxSize: 20, refillSizePerSecond: 10 },
-	),
+	rateLimit((req, info, ctx) => req.headers.get("Authorization"), {
+		maxSize: 20,
+		refillSizePerSecond: 10,
+	}),
 );
 ```
 
@@ -700,7 +709,7 @@ const app2 = demino("", [], {
   `trustProxy` host trust validates the forwarded host **after** WHATWG URL parsing
   (so terminator chars like `evil.com#.example.com` can't smuggle a host past the
   allowlist), folds case, range-checks the port (1..65535), and rejects empty-label
-  hosts. See also the **`ctx.ip`** behavior change under *Recent Breaking Changes*.
+  hosts. See also the **`ctx.ip`** behavior change under _Recent Breaking Changes_.
 
 ### 1.13.0 (additive, no breaking change)
 

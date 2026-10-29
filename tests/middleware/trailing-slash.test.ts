@@ -1,5 +1,5 @@
-import { HTTP_STATUS } from "@marianmeres/http-utils";
 import assert from "node:assert/strict";
+import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { trailingSlash } from "../../src/middleware/trailing-slash.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -25,7 +25,7 @@ runTestServerTests([
 			});
 			// OFF
 			await assertResp(fetch(`${base}/baz/bat/`, prm), MP, "", {
-				location: /[^\/]$/,
+				location: /[^/]$/,
 			});
 			// NO-OP (it's correct that the global ms is reached here)
 			await assertResp(fetch(`${base}`, prm), 200, globalMwOutput);

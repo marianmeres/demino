@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { type CookiesLocals, cookies } from "../../src/middleware/cookies.ts";
 import { parseCookies, serializeCookie } from "../../src/utils/cookies.ts";
-import { cookies, type CookiesLocals } from "../../src/middleware/cookies.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 test("serializeCookie - rejects illegal path/domain (attribute / CRLF injection)", () => {
@@ -11,14 +11,11 @@ test("serializeCookie - rejects illegal path/domain (attribute / CRLF injection)
 		{ name: "TypeError", message: /path/ },
 	);
 	// ";" would inject extra cookie attributes
-	assert.throws(
-		() => serializeCookie("s", "v", { path: "/x; HttpOnly" }),
-		TypeError,
-	);
-	assert.throws(
-		() => serializeCookie("s", "v", { domain: "e.com\r\nX-Evil: y" }),
-		{ name: "TypeError", message: /domain/ },
-	);
+	assert.throws(() => serializeCookie("s", "v", { path: "/x; HttpOnly" }), TypeError);
+	assert.throws(() => serializeCookie("s", "v", { domain: "e.com\r\nX-Evil: y" }), {
+		name: "TypeError",
+		message: /domain/,
+	});
 	// legitimate values are unaffected
 	assert.equal(
 		serializeCookie("s", "v", { path: "/", domain: "example.com" }),
@@ -82,17 +79,11 @@ test("serializeCookie - with domain", () => {
 });
 
 test("serializeCookie - with secure", () => {
-	assert.equal(
-		serializeCookie("foo", "bar", { secure: true }),
-		"foo=bar; Secure",
-	);
+	assert.equal(serializeCookie("foo", "bar", { secure: true }), "foo=bar; Secure");
 });
 
 test("serializeCookie - with httpOnly", () => {
-	assert.equal(
-		serializeCookie("foo", "bar", { httpOnly: true }),
-		"foo=bar; HttpOnly",
-	);
+	assert.equal(serializeCookie("foo", "bar", { httpOnly: true }), "foo=bar; HttpOnly");
 });
 
 test("serializeCookie - with sameSite", () => {
@@ -237,9 +228,14 @@ runTestServerTests([
 				return { ok: true };
 			});
 
-			await assertResp(fetch(`${base}/`), 200, { ok: true }, {
-				"set-cookie": "session=abc123; Path=/; Secure; HttpOnly",
-			});
+			await assertResp(
+				fetch(`${base}/`),
+				200,
+				{ ok: true },
+				{
+					"set-cookie": "session=abc123; Path=/; Secure; HttpOnly",
+				},
+			);
 		},
 	},
 	{
@@ -255,10 +251,15 @@ runTestServerTests([
 				return { ok: true };
 			});
 
-			await assertResp(fetch(`${base}/`), 200, { ok: true }, {
-				// httpOnly should be false (not present), secure and path from defaults
-				"set-cookie": "theme=dark; Max-Age=86400; Path=/; Secure",
-			});
+			await assertResp(
+				fetch(`${base}/`),
+				200,
+				{ ok: true },
+				{
+					// httpOnly should be false (not present), secure and path from defaults
+					"set-cookie": "theme=dark; Max-Age=86400; Path=/; Secure",
+				},
+			);
 		},
 	},
 	{

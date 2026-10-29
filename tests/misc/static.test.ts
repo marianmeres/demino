@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { basename } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { serveStatic, type ServeStaticOptions } from "../../src/mod.ts";
+import { type ServeStaticOptions, serveStatic } from "../../src/mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 const fsRoot = fileURLToPath(new URL("../static", import.meta.url));
@@ -111,13 +111,11 @@ runTestServerTests([
 		fn: async ({ base, app }) => {
 			app.static("/files", fsRoot);
 
-			for (
-				const [path, location] of [
-					["/files", "/files/"],
-					["/files//foo.txt", "/files/foo.txt"],
-					["/files/foo.txt/?x=1", "/files/foo.txt?x=1"],
-				]
-			) {
+			for (const [path, location] of [
+				["/files", "/files/"],
+				["/files//foo.txt", "/files/foo.txt"],
+				["/files/foo.txt/?x=1", "/files/foo.txt?x=1"],
+			]) {
 				const res = await fetch(`${base}${path}`, { redirect: "manual" });
 				await res.body?.cancel();
 				assert.equal(res.status, 301, path);
@@ -126,8 +124,7 @@ runTestServerTests([
 		},
 	},
 	{
-		name:
-			"static: 405, Range, 304 and the options reach serveStatic through app.static",
+		name: "static: 405, Range, 304 and the options reach serveStatic through app.static",
 		fn: async ({ base, app }) => {
 			app.static("/files", fsRoot, { showDotfiles: true, showIndex: false });
 
@@ -186,14 +183,12 @@ test("static matrix: non-GET/HEAD → 405 with Allow: GET, HEAD", async () => {
 });
 
 test("static matrix: /a//b → 301 with a relative Location", async () => {
-	for (
-		const [path, location] of [
-			["/files//foo.txt", "/files/foo.txt"],
-			["/files/foo//bar/baz.txt?x=1", "/files/foo/bar/baz.txt?x=1"], // query kept
-			["/files/foo///", "/files/foo/"],
-			["/files///", "/files/"],
-		]
-	) {
+	for (const [path, location] of [
+		["/files//foo.txt", "/files/foo.txt"],
+		["/files/foo//bar/baz.txt?x=1", "/files/foo/bar/baz.txt?x=1"], // query kept
+		["/files/foo///", "/files/foo/"],
+		["/files///", "/files/"],
+	]) {
 		const { res, text } = await drain(call(path));
 		assert.equal(res.status, 301, path);
 		assert.equal(res.headers.get("location"), location, path);
@@ -213,13 +208,11 @@ test("static matrix: file with trailing slash → 301 without it", async () => {
 });
 
 test("static matrix: directory without trailing slash → 301 with it", async () => {
-	for (
-		const [path, location] of [
-			["/files", "/files/"],
-			["/files/foo", "/files/foo/"],
-			["/files/foo?x=1", "/files/foo/?x=1"],
-		]
-	) {
+	for (const [path, location] of [
+		["/files", "/files/"],
+		["/files/foo", "/files/foo/"],
+		["/files/foo?x=1", "/files/foo/?x=1"],
+	]) {
 		const { res } = await drain(call(path));
 		assert.equal(res.status, 301, path);
 		assert.equal(res.headers.get("location"), location, path);
@@ -228,20 +221,18 @@ test("static matrix: directory without trailing slash → 301 with it", async ()
 
 test("static matrix: traversal → 404 and never reads outside fsRoot", async () => {
 	// `tests/_utils.ts` exists one level above `fsRoot` - it must never be served
-	for (
-		const path of [
-			"/files/..%2f..%2fetc/passwd",
-			"/files/../x", // the URL parser already resolves this to `/x`
-			"/files/..%2f_utils.ts",
-			"/files/%2e%2e/_utils.ts",
-			"/files/%2e%2e%2f_utils.ts",
-			"/files/foo/..%2f..%2f_utils.ts",
-			"/files/%5C..%5C..%5C_utils.ts", // encoded backslash
-			"/files/foo.txt%00", // NUL
-			"/filesX/foo.txt", // prefix must be a whole segment
-			"/other/foo.txt",
-		]
-	) {
+	for (const path of [
+		"/files/..%2f..%2fetc/passwd",
+		"/files/../x", // the URL parser already resolves this to `/x`
+		"/files/..%2f_utils.ts",
+		"/files/%2e%2e/_utils.ts",
+		"/files/%2e%2e%2f_utils.ts",
+		"/files/foo/..%2f..%2f_utils.ts",
+		"/files/%5C..%5C..%5C_utils.ts", // encoded backslash
+		"/files/foo.txt%00", // NUL
+		"/filesX/foo.txt", // prefix must be a whole segment
+		"/other/foo.txt",
+	]) {
 		const { res, text } = await drain(call(path));
 		assert.equal(res.status, 404, path);
 		assert.equal(text, "Not Found");
@@ -348,15 +339,13 @@ test("static matrix: If-Modified-Since → 304", async () => {
 });
 
 test("static matrix: Range: bytes=0-2 → 206 + Content-Range + body slice", async () => {
-	for (
-		const [range, contentRange, body] of [
-			["bytes=0-2", "bytes 0-2/10", "012"],
-			["bytes=-3", "bytes 7-9/10", "789"],
-			["bytes=8-", "bytes 8-9/10", "89"],
-			["bytes=0-99", "bytes 0-9/10", "0123456789"], // end clamped
-			["bytes=-99", "bytes 0-9/10", "0123456789"], // start clamped
-		]
-	) {
+	for (const [range, contentRange, body] of [
+		["bytes=0-2", "bytes 0-2/10", "012"],
+		["bytes=-3", "bytes 7-9/10", "789"],
+		["bytes=8-", "bytes 8-9/10", "89"],
+		["bytes=0-99", "bytes 0-9/10", "0123456789"], // end clamped
+		["bytes=-99", "bytes 0-9/10", "0123456789"], // start clamped
+	]) {
 		const { res, text } = await drain(
 			call("/files/range.txt", { headers: { range } }),
 		);
@@ -405,15 +394,13 @@ test("static matrix: HEAD → GET's headers, no body", async () => {
 	const head = await call("/files/foo.txt", { method: "HEAD" });
 	assert.equal(head.status, 200);
 	assert.equal(head.body, null);
-	for (
-		const h of [
-			"etag",
-			"last-modified",
-			"content-type",
-			"content-length",
-			"accept-ranges",
-		]
-	) {
+	for (const h of [
+		"etag",
+		"last-modified",
+		"content-type",
+		"content-length",
+		"accept-ranges",
+	]) {
 		assert.equal(head.headers.get(h), get.headers.get(h), h);
 	}
 	assert.equal(head.headers.get("content-length"), "3");
@@ -429,14 +416,12 @@ test("static matrix: HEAD → GET's headers, no body", async () => {
 });
 
 test("static matrix: Content-Type by extension, charset on text-like types", async () => {
-	for (
-		const [path, type] of [
-			["/files/foo.txt", "text/plain; charset=utf-8"],
-			["/files/index.html", "text/html; charset=utf-8"],
-			["/files/assets/x.js", "text/javascript; charset=utf-8"],
-			["/files/noext", "application/octet-stream"],
-		]
-	) {
+	for (const [path, type] of [
+		["/files/foo.txt", "text/plain; charset=utf-8"],
+		["/files/index.html", "text/html; charset=utf-8"],
+		["/files/assets/x.js", "text/javascript; charset=utf-8"],
+		["/files/noext", "application/octet-stream"],
+	]) {
 		const { res } = await drain(call(path));
 		assert.equal(res.status, 200, path);
 		assert.equal(res.headers.get("content-type"), type, path);
@@ -463,7 +448,10 @@ test("static matrix: headers option (object + function) on 200/206/304, not on 3
 	assert.equal(notModified.status, 304);
 	assert.equal(notModified.headers.get("x-static"), "yes");
 
-	for (const [path, status] of [["/files", 301], ["/files/nope", 404]] as const) {
+	for (const [path, status] of [
+		["/files", 301],
+		["/files/nope", 404],
+	] as const) {
 		const { res } = await drain(call(path, undefined, { headers }));
 		assert.equal(res.status, status, path);
 		assert.equal(res.headers.get("x-static"), null, path);

@@ -1,9 +1,9 @@
 import { createHttpError, getErrorMessage, HTTP_STATUS } from "@marianmeres/http-utils";
 import { Midware, type MidwareUseFn } from "@marianmeres/midware";
+import { isHostAllowed } from "./middleware/proxy/utils.ts";
 import type { DeminoRouter } from "./router/abstract.ts";
 import { DeminoSimpleRouter } from "./router/simple-router.ts";
 import { type DeminoStaticOptions, serveStatic } from "./static/serve-static.ts";
-import { isHostAllowed } from "./middleware/proxy/utils.ts";
 import { green, red } from "./utils/ansi.ts";
 import { getClientIpFromHeaders } from "./utils/client-ip.ts";
 import { isPlainObject } from "./utils/is-plain-object.ts";
@@ -538,8 +538,7 @@ export function createResponseFrom(
 		// plain array
 		Array.isArray(body) ||
 		// plain object without its own `toString` method
-		(isPlainObject(body) &&
-			!Object.prototype.hasOwnProperty.call(body, "toString"))
+		(isPlainObject(body) && !Object.hasOwn(body, "toString"))
 	) {
 		responseBody = JSON.stringify(body);
 		if (!headers.has("content-type")) {
@@ -579,10 +578,7 @@ const EMPTY_INFO: DeminoServeInfo = Object.freeze({});
  * Pathname/search are taken verbatim from `req.url`; only scheme/host/port may be
  * rewritten, so routing (which uses `url.pathname`) is never affected.
  */
-function resolveRequestUrl(
-	req: Request,
-	trustProxy: DeminoOptions["trustProxy"],
-): URL {
+function resolveRequestUrl(req: Request, trustProxy: DeminoOptions["trustProxy"]): URL {
 	const url = new URL(req.url);
 	if (!trustProxy) return url;
 
@@ -592,17 +588,15 @@ function resolveRequestUrl(
 	// Immediate-hop semantics: read the LEFT-MOST token (the trusted proxy must
 	// OVERWRITE, not append). http<->https are both "special" schemes, so the
 	// protocol setter always accepts the change.
-	const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim()
-		.toLowerCase();
+	const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
 	if (proto === "http" || proto === "https") url.protocol = `${proto}:`;
 
 	// X-Forwarded-Host — high-risk (forged host => cache poisoning, link hijack,
 	// open redirect), so it is reflected ONLY against an explicit allowlist. An
 	// empty/omitted list trusts no forwarded host (proto only). `true` (boolean)
 	// never reaches here.
-	const allowedHosts = typeof trustProxy === "object"
-		? trustProxy.allowedHosts
-		: undefined;
+	const allowedHosts =
+		typeof trustProxy === "object" ? trustProxy.allowedHosts : undefined;
 	if (allowedHosts?.length) {
 		const xfHost = h.get("x-forwarded-host")?.split(",")[0]?.trim();
 		const xfPort = h.get("x-forwarded-port")?.split(",")[0]?.trim();
@@ -666,7 +660,10 @@ function resolveForwardedAuthority(
 	// fragment) means the header carried a host-terminating char trying to smuggle a
 	// host past the allowlist — reject loudly instead of adopting the truncated host.
 	if (
-		parsed.username || parsed.password || parsed.search || parsed.hash ||
+		parsed.username ||
+		parsed.password ||
+		parsed.search ||
+		parsed.hash ||
 		parsed.pathname !== "/"
 	) {
 		return null;
@@ -679,8 +676,8 @@ function resolveForwardedAuthority(
 	if (!isHostAllowed(hostname, allowedHosts)) return null;
 	// Port: an explicit port carried by the host wins, then X-Forwarded-Port, else
 	// clear (so the protocol default applies). All range-checked.
-	const port = _normalizeForwardedPort(parsed.port) ??
-		_normalizeForwardedPort(xfPort) ?? "";
+	const port =
+		_normalizeForwardedPort(parsed.port) ?? _normalizeForwardedPort(xfPort) ?? "";
 	return { hostname, port };
 }
 
@@ -859,11 +856,9 @@ export function demino(
 		);
 	}
 	if (mountPath.endsWith("/")) {
-		throw new TypeError(
-			`Mount path must not end with a slash (path: ${mountPath})`,
-		);
+		throw new TypeError(`Mount path must not end with a slash (path: ${mountPath})`);
 	}
-	if (/[\[\]:\*]/.test(mountPath)) {
+	if (/[[\]:*]/.test(mountPath)) {
 		throw new TypeError(
 			`Mount path must not contain dynamic segments (path: ${mountPath})`,
 		);
@@ -891,16 +886,16 @@ export function demino(
 	// initially we are falling back to a console-backed adapter (the bare
 	// `console` object lacks an `access` method, so previously access logs
 	// silently no-op'd; the adapter wires `access` to `console.log`).
-	let _log: DeminoLogger | null = options?.logger === undefined
-		? defaultConsoleLogger()
-		: options.logger;
+	let _log: DeminoLogger | null =
+		options?.logger === undefined ? defaultConsoleLogger() : options.logger;
 	// but we can turn logging off altogether later if needed
 	const getLogger = (): DeminoLogger | null => _log;
 
 	// either use provided, or fallback to default DeminoSimpleRouter
-	const _routerFactory = typeof options?.routerFactory === "function"
-		? options.routerFactory
-		: () => new DeminoSimpleRouter();
+	const _routerFactory =
+		typeof options?.routerFactory === "function"
+			? options.routerFactory
+			: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
 	const _routers = ["ALL", ...supportedMethods].reduce(
@@ -996,8 +991,7 @@ export function demino(
 			// The original throw is preserved as `.cause` of the re-thrown HttpError
 			// (see the matched-handler inner catch below); fall back to the error
 			// itself for errors thrown outside that catch (e.g. 501 dispatch).
-			const cause = (context.error as { cause?: unknown })?.cause ??
-				context.error;
+			const cause = (context.error as { cause?: unknown })?.cause ?? context.error;
 			_doLog("error", {
 				status: r.status,
 				method: req.method,
@@ -1046,15 +1040,7 @@ export function demino(
 		const url = resolveRequestUrl(req, options?.trustProxy);
 		const ip = resolveClientIp(req, info, options?.trustProxy);
 		const start = Date.now();
-		let context = _createContext(
-			start,
-			{},
-			"",
-			getLogger,
-			appLocals,
-			url,
-			ip,
-		);
+		let context = _createContext(start, {}, "", getLogger, appLocals, url, ip);
 
 		// console.log("_app METHOD", method);
 
@@ -1149,14 +1135,15 @@ export function demino(
 							.map((mw, i) => ({
 								mw,
 								i,
-								order: mw.__midwarePreExecuteSortOrder ??
+								order:
+									mw.__midwarePreExecuteSortOrder ??
 									(i === _lastIdx
 										? DEMINO_SORT.HANDLER
 										: DEMINO_SORT.DEFAULT),
 							}))
 							.sort((a, b) =>
 								// `===` guard avoids `Infinity - Infinity` (NaN)
-								a.order === b.order ? a.i - b.i : a.order - b.order
+								a.order === b.order ? a.i - b.i : a.order - b.order,
 							)
 							.map((d) => d.mw);
 
@@ -1223,7 +1210,7 @@ export function demino(
 				// here means none applied. Auto-HEAD is covered because a GET route also
 				// populates the HEAD router.
 				const allow = supportedMethods.filter((m) =>
-					_routers[m].exec(url.pathname, { skipCatchAll: true })
+					_routers[m].exec(url.pathname, { skipCatchAll: true }),
 				);
 				if (allow.length) {
 					// RFC 9110 §15.5.6: a 405 response MUST include `Allow`. Set it on
@@ -1244,10 +1231,7 @@ export function demino(
 
 	//
 	const _createRouteFn = (method: "ALL" | DeminoMethod): DeminoRouteHandler => {
-		return (
-			route: string,
-			...args: (DeminoHandler | DeminoHandler[])[]
-		): Demino => {
+		return (route: string, ...args: (DeminoHandler | DeminoHandler[])[]): Demino => {
 			const _fullRoute = mountPath + route;
 
 			// wrap the provided as array, so we can DRY handle "head" special case below
@@ -1352,7 +1336,7 @@ export function demino(
 	// experimental and ugly
 	_app.static = (route: string, fsRoot: string, options?: DeminoStaticOptions) => {
 		// probably hackish-ly doable, but not worth the dance... (what for, anyway)
-		if (/[\[\]:\*]/.test(route)) {
+		if (/[[\]:*]/.test(route)) {
 			throw new TypeError(
 				`Static route must not contain dynamic segments (route: ${route})`,
 			);

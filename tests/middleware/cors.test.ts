@@ -1,14 +1,14 @@
-import { HTTP_STATUS } from "@marianmeres/http-utils";
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { HTTP_STATUS } from "@marianmeres/http-utils";
 import { cors } from "../../src/mod.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
 test("cors() throws on wildcard origin + credentials true", () => {
-	assert.throws(
-		() => cors({ allowOrigin: "*", allowCredentials: true }),
-		{ name: "TypeError", message: /allowCredentials/ },
-	);
+	assert.throws(() => cors({ allowOrigin: "*", allowCredentials: true }), {
+		name: "TypeError",
+		message: /allowCredentials/,
+	});
 });
 
 test("cors() default config does NOT enable credentials", () => {
@@ -89,12 +89,9 @@ runTestServerTests([
 
 			const origin = "http://hey.ho";
 
-			await assertResp(
-				fetch(`${base}/`, { headers: { origin } }),
-				200,
-				undefined,
-				{ "Access-Control-Allow-Origin": false },
-			);
+			await assertResp(fetch(`${base}/`, { headers: { origin } }), 200, undefined, {
+				"Access-Control-Allow-Origin": false,
+			});
 
 			await assertResp(
 				fetch(`${base}/withcors`, { headers: { origin } }),

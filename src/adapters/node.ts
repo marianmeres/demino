@@ -143,9 +143,13 @@ const WS_KEY = /^[+/0-9A-Za-z]{22}==$/;
  * 400 behind the handler's back).
  */
 function assertUpgradeRequest(req: IncomingMessage): void {
-	const { upgrade, "sec-websocket-key": key, "sec-websocket-version": version } =
-		req.headers;
-	const ok = req.method === "GET" &&
+	const {
+		upgrade,
+		"sec-websocket-key": key,
+		"sec-websocket-version": version,
+	} = req.headers;
+	const ok =
+		req.method === "GET" &&
 		typeof upgrade === "string" &&
 		upgrade.toLowerCase() === "websocket" &&
 		typeof key === "string" &&
@@ -279,8 +283,12 @@ export async function writeResponse(
 	// an empty body is a known length (Deno sends `content-length: 0` too); every
 	// other length is the `Response`'s business - Node chunk-encodes when absent
 	if (
-		!res.body && !isHead && res.status >= 200 && res.status !== 204 &&
-		res.status !== 304 && !("content-length" in headers) &&
+		!res.body &&
+		!isHead &&
+		res.status >= 200 &&
+		res.status !== 204 &&
+		res.status !== 304 &&
+		!("content-length" in headers) &&
 		!("transfer-encoding" in headers)
 	) {
 		headers["content-length"] = "0";
@@ -332,8 +340,10 @@ export async function writeRawResponse(socket: Duplex, res: Response): Promise<v
 	const lines = [`HTTP/1.1 ${res.status} ${reason}`.trimEnd()];
 	res.headers.forEach((value, name) => {
 		if (
-			name !== "set-cookie" && name !== "content-length" &&
-			name !== "transfer-encoding" && name !== "connection"
+			name !== "set-cookie" &&
+			name !== "content-length" &&
+			name !== "transfer-encoding" &&
+			name !== "connection"
 		) {
 			lines.push(`${name}: ${value}`);
 		}
@@ -572,7 +582,7 @@ export const serve: ServeFn = async (
 	listen = { hostname: addr.address, port: addr.port };
 
 	const finished = new Promise<void>((resolve) =>
-		server.once("close", () => resolve())
+		server.once("close", () => resolve()),
 	);
 
 	/** Close now: listener, every HTTP connection, every hijacked/WebSocket socket. */

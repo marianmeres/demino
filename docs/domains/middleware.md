@@ -37,24 +37,30 @@ import { cors } from "@marianmeres/demino";
 app.use(cors());
 
 // With options
-app.use(cors({
-	allowOrigin: "*", // string | string[] | fn
-	allowMethods: ["GET", "POST"], // string[]
-	allowHeaders: ["Content-Type"], // string[]
-	allowCredentials: false, // boolean (default: false)
-	maxAge: 86400, // number (seconds)
-}));
+app.use(
+	cors({
+		allowOrigin: "*", // string | string[] | fn
+		allowMethods: ["GET", "POST"], // string[]
+		allowHeaders: ["Content-Type"], // string[]
+		allowCredentials: false, // boolean (default: false)
+		maxAge: 86400, // number (seconds)
+	}),
+);
 
 // Credentialed: explicit allowlist required
-app.use(cors({
-	allowOrigin: ["https://app.example.com"],
-	allowCredentials: true,
-}));
+app.use(
+	cors({
+		allowOrigin: ["https://app.example.com"],
+		allowCredentials: true,
+	}),
+);
 
 // Dynamic origin
-app.use(cors({
-	allowOrigin: (origin, headers) => whitelist.includes(origin) ? origin : "",
-}));
+app.use(
+	cors({
+		allowOrigin: (origin, headers) => (whitelist.includes(origin) ? origin : ""),
+	}),
+);
 
 // Handle OPTIONS preflight
 app.options("*", cors());
@@ -101,7 +107,10 @@ import { proxy } from "@marianmeres/demino";
 app.get("/api/*", proxy("https://backend/*"));
 
 // Function target
-app.get("/search/[q]", proxy((req, ctx) => `https://api.example.com/?q=${ctx.params.q}`));
+app.get(
+	"/search/[q]",
+	proxy((req, ctx) => `https://api.example.com/?q=${ctx.params.q}`),
+);
 
 // With options
 app.get(
@@ -237,7 +246,10 @@ app.get(
 );
 
 // Weak ETag (faster, less precise)
-app.get("/data", withETag(() => content, { weak: true }));
+app.get(
+	"/data",
+	withETag(() => content, { weak: true }),
+);
 
 // Lift the size cap (default 1 MiB)
 app.get("/large", withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 }));
@@ -306,12 +318,17 @@ import { authz, withPermission, withPublic } from "@marianmeres/demino/middlewar
 
 const rbac = new Rbac(); // ...roles/groups/rules...
 
-app.use(authz({
-	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
-	check: (subject, permission) => rbac.can(subject as any, permission),
-}));
+app.use(
+	authz({
+		resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+		check: (subject, permission) => rbac.can(subject as any, permission),
+	}),
+);
 
-app.get("/health", withPublic(() => "ok"));
+app.get(
+	"/health",
+	withPublic(() => "ok"),
+);
 app.get(
 	"/invoices/[id]",
 	withPermission("invoice:read", (req, info, ctx) => {

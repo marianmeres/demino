@@ -34,7 +34,7 @@ export class DeminoUrlPatternRouter extends DeminoRouter {
 		for (const [pattern, callback] of this.#routes.entries()) {
 			const match = pattern.exec({ pathname });
 			if (match) {
-				// @ts-ignore: groups can have undefined record values, and we formally support only empty strings...
+				// @ts-expect-error: groups can have undefined record values, and we formally support only empty strings...
 				return callback(match.pathname.groups || {});
 			}
 		}

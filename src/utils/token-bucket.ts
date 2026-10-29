@@ -68,11 +68,7 @@ export class TokenBucket {
 	 * const bucket = new TokenBucket(20, 10, console);
 	 * ```
 	 */
-	constructor(
-		maxSize: number,
-		refillPerSecond: number,
-		_logger?: DeminoLogger | null,
-	) {
+	constructor(maxSize: number, refillPerSecond: number, _logger?: DeminoLogger | null) {
 		// a plain assignment, not a parameter property: Node strips types and
 		// never lowers non-erasable syntax
 		this._logger = _logger;
@@ -122,8 +118,8 @@ export class TokenBucket {
 		} else {
 			// Advance lastRefill by exactly the time accounted for by `countToAdd`,
 			// so the unconsumed fraction carries to the next refill call.
-			this.#lastRefill = this.#lastRefill +
-				(countToAdd * 1000) / this.#refillSizePerSec;
+			this.#lastRefill =
+				this.#lastRefill + (countToAdd * 1000) / this.#refillSizePerSec;
 		}
 
 		this.#currentSize = newSize;
@@ -152,9 +148,7 @@ export class TokenBucket {
 
 		// sanitize
 		if (Number.isNaN(quantity) || quantity < 0) {
-			this._logger?.warn?.(
-				`[TokenBucket] Invalid consume quantity '${quantity}'`,
-			);
+			this._logger?.warn?.(`[TokenBucket] Invalid consume quantity '${quantity}'`);
 			return false;
 		}
 

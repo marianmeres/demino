@@ -46,11 +46,10 @@ serve(app)   ← @marianmeres/demino/deno | /node
 
 ## Runtime Adapters
 
-| Adapter | File                    | Server underneath                      | `info.remoteAddr` | `info.upgradeWebSocket`                                                 | `info.raw`              |
-| ------- | ----------------------- | -------------------------------------- | ----------------- | ----------------------------------------------------------------------- | ----------------------- |
-| Deno    | `src/adapters/deno.ts`  | the built-in HTTP server               | yes               | `Deno.upgradeWebSocket`                                                 | Deno's handler info     |
-| Node    | `src/adapters/node.ts`  | own bridge over `node:http` (HTTP/1.1) | yes               | via the optional `ws` package (absent if missing or `webSockets: false`) | `IncomingMessage`       |
-
+| Adapter | File                   | Server underneath                      | `info.remoteAddr` | `info.upgradeWebSocket`                                                  | `info.raw`          |
+| ------- | ---------------------- | -------------------------------------- | ----------------- | ------------------------------------------------------------------------ | ------------------- |
+| Deno    | `src/adapters/deno.ts` | the built-in HTTP server               | yes               | `Deno.upgradeWebSocket`                                                  | Deno's handler info |
+| Node    | `src/adapters/node.ts` | own bridge over `node:http` (HTTP/1.1) | yes               | via the optional `ws` package (absent if missing or `webSockets: false`) | `IncomingMessage`   |
 - **Contract**: `src/adapters/types.ts` — `ServeOptions`, `ServeHandle`, `ServeFn` (plus the
   internal `toUrl`). Handler-side types `DeminoServeHandler`, `DeminoServeInfo`,
   `DeminoRemoteAddr`, `DeminoUpgradeWebSocket` live in `src/demino.ts`. The core imports
@@ -114,13 +113,13 @@ nowhere (not a supported runtime), no `@std/` / `jsr:` / `npm:` / `https:` speci
 
 ### Runtime (published, in both `deno.json` and `package.json`)
 
-| Package                      | Purpose                                     |
-| ---------------------------- | ------------------------------------------- |
-| `@marianmeres/http-utils`    | HTTP errors, status codes                   |
-| `@marianmeres/midware`       | Middleware chaining                         |
-| `@marianmeres/simple-router` | Default router implementation               |
-| `@marianmeres/clog`          | Structured logging (`createDeminoClog`)     |
-| `mrmime`                     | Content types for static files              |
+| Package                      | Purpose                                 |
+| ---------------------------- | --------------------------------------- |
+| `@marianmeres/http-utils`    | HTTP errors, status codes               |
+| `@marianmeres/midware`       | Middleware chaining                     |
+| `@marianmeres/simple-router` | Default router implementation           |
+| `@marianmeres/clog`          | Structured logging (`createDeminoClog`) |
+| `mrmime`                     | Content types for static files          |
 
 ### Optional peer (npm)
 
@@ -136,22 +135,22 @@ anywhere in `src/`.
 
 ## Key Files
 
-| File                              | Responsibility                                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
+| File                              | Responsibility                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `src/demino.ts`                   | Core: `demino()` factory, `Demino` interface, `DeminoContext`, `DeminoServeInfo`, response conversion |
-| `src/adapters/types.ts`           | Adapter contract: `ServeOptions`, `ServeHandle`, `ServeFn`                         |
-| `src/adapters/deno.ts`            | Deno adapter (built-in server)                                                     |
-| `src/adapters/node.ts`            | Node adapter (own `node:http` bridge, optional `ws`)                               |
-| `src/static/serve-static.ts`      | `serveStatic()` + `DeminoStaticOptions` (what `app.static()` calls)                |
-| `src/static/mime.ts`              | Content-type lookup (`mrmime`)                                                     |
-| `src/router/abstract.ts`          | `DeminoRouter` base class                                                          |
-| `src/router/simple-router.ts`     | Default router (bracket params: `/users/[id]`)                                     |
-| `src/router/urlpattern-router.ts` | URL Pattern API router (`:id` params)                                              |
-| `src/middleware/mod.ts`           | Built-in middleware exports                                                        |
-| `src/misc/compose.ts`             | `deminoCompose()` for multi-app                                                    |
-| `src/misc/file-based.ts`          | Directory-based routing (`node:fs`)                                                |
-| `src/utils/client-ip.ts`          | `getClientIpFromHeaders()` (forwarding-header precedence)                          |
-| `src/utils/log-listen-info.ts`    | `logListenInfo()`, `DeminoListenAddr` (every adapter's default `onListen`)         |
+| `src/adapters/types.ts`           | Adapter contract: `ServeOptions`, `ServeHandle`, `ServeFn`                                            |
+| `src/adapters/deno.ts`            | Deno adapter (built-in server)                                                                        |
+| `src/adapters/node.ts`            | Node adapter (own `node:http` bridge, optional `ws`)                                                  |
+| `src/static/serve-static.ts`      | `serveStatic()` + `DeminoStaticOptions` (what `app.static()` calls)                                   |
+| `src/static/mime.ts`              | Content-type lookup (`mrmime`)                                                                        |
+| `src/router/abstract.ts`          | `DeminoRouter` base class                                                                             |
+| `src/router/simple-router.ts`     | Default router (bracket params: `/users/[id]`)                                                        |
+| `src/router/urlpattern-router.ts` | URL Pattern API router (`:id` params)                                                                 |
+| `src/middleware/mod.ts`           | Built-in middleware exports                                                                           |
+| `src/misc/compose.ts`             | `deminoCompose()` for multi-app                                                                       |
+| `src/misc/file-based.ts`          | Directory-based routing (`node:fs`)                                                                   |
+| `src/utils/client-ip.ts`          | `getClientIpFromHeaders()` (forwarding-header precedence)                                             |
+| `src/utils/log-listen-info.ts`    | `logListenInfo()`, `DeminoListenAddr` (every adapter's default `onListen`)                            |
 
 ## Extension Points
 

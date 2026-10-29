@@ -47,10 +47,7 @@ export interface ETagOptions {
  * // Second request with If-None-Match: "abc123..." -> 304 Not Modified (no body)
  * ```
  */
-export function withETag(
-	handler: DeminoHandler,
-	options?: ETagOptions,
-): DeminoHandler {
+export function withETag(handler: DeminoHandler, options?: ETagOptions): DeminoHandler {
 	const { weak = false, maxSizeBytes = 1_048_576 } = options ?? {};
 	const sizeCap = !maxSizeBytes || maxSizeBytes === Infinity ? Infinity : maxSizeBytes;
 
@@ -117,8 +114,7 @@ export function withETag(
 		// Generate ETag using SHA-1 hash
 		const hashBuffer = await crypto.subtle.digest("SHA-1", body);
 		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0"))
-			.join("");
+		const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
 		const etagValue = weak ? `W/"${hashHex}"` : `"${hashHex}"`;
 
@@ -142,16 +138,14 @@ export function withETag(
 				// not just Cache-Control — dropping Vary in particular can cause a
 				// shared cache to serve the wrong negotiated variant.
 				const h304 = new Headers({ etag: etagValue });
-				for (
-					const name of [
-						"cache-control",
-						"vary",
-						"content-location",
-						"expires",
-						"date",
-						"content-language",
-					]
-				) {
+				for (const name of [
+					"cache-control",
+					"vary",
+					"content-location",
+					"expires",
+					"date",
+					"content-language",
+				]) {
 					const v = result.headers.get(name);
 					if (v) h304.set(name, v);
 				}

@@ -29,19 +29,18 @@
  */
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-
-import * as middlewareShim from "../src/middleware.ts";
 import * as middlewareBarrel from "../src/middleware/mod.ts";
-import * as miscShim from "../src/misc.ts";
+import * as middlewareShim from "../src/middleware.ts";
 import * as miscBarrel from "../src/misc/mod.ts";
-import * as routerShim from "../src/router.ts";
+import * as miscShim from "../src/misc.ts";
 import * as routerBarrel from "../src/router/mod.ts";
-import * as utilsShim from "../src/utils.ts";
+import * as routerShim from "../src/router.ts";
 import * as utilsBarrel from "../src/utils/mod.ts";
+import * as utilsShim from "../src/utils.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -165,9 +164,9 @@ test("manifest-sync: every runtime import in deno.json is a package.json depende
 		if (DENO_ONLY.some((re) => re.test(key))) continue;
 		const sections: [string, Record<string, string>][] = OPTIONAL_PEERS.has(name)
 			? [
-				["peerDependencies", pkg.peerDependencies ?? {}],
-				["devDependencies", devDependencies],
-			]
+					["peerDependencies", pkg.peerDependencies ?? {}],
+					["devDependencies", devDependencies],
+				]
 			: [["dependencies", dependencies]];
 		for (const [where, section] of sections) {
 			assert.ok(

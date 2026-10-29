@@ -1,10 +1,10 @@
-import { TimeoutError } from "@marianmeres/midware";
 import {
 	createHttpError,
 	fetchOrThrow,
 	HTTP_ERROR,
 	HTTP_STATUS,
 } from "@marianmeres/http-utils";
+import { TimeoutError } from "@marianmeres/midware";
 import type { DeminoContext, DeminoHandler } from "../../demino.ts";
 import {
 	isHostAllowed,
@@ -195,9 +195,7 @@ let warnedNoUpgradeCapability = false;
  * ```
  */
 export function proxy(
-	target:
-		| string
-		| ((req: Request, ctx: DeminoContext) => string | Promise<string>),
+	target: string | ((req: Request, ctx: DeminoContext) => string | Promise<string>),
 	options?: Partial<ProxyOptions>,
 ): DeminoHandler {
 	const {
@@ -293,9 +291,7 @@ export function proxy(
 		// headers, so it survives self- and cross-proxy hops.
 		const hops = Number(req.headers.get(PROXY_HOPS_HEADER) ?? 0) || 0;
 		if (hops >= MAX_PROXY_HOPS) {
-			throw new Error(
-				`Proxy loop detected (exceeded ${MAX_PROXY_HOPS} hops)`,
-			);
+			throw new Error(`Proxy loop detected (exceeded ${MAX_PROXY_HOPS} hops)`);
 		}
 
 		// Build proxy headers
@@ -306,8 +302,8 @@ export function proxy(
 		if (origin) proxyHeaders.set("origin", origin);
 
 		// Remove standard problematic headers
-		[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach(
-			(name) => proxyHeaders.delete(name),
+		[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach((name) =>
+			proxyHeaders.delete(name),
 		);
 
 		// X-Forwarded-* headers. Derive scheme/host/port from `ctx.url`
@@ -428,7 +424,7 @@ export function proxy(
 				let hopBody: BodyInit | null | undefined = req.body;
 				let hopHeaders = proxyHeaders;
 
-				for (let hop = 0;; hop++) {
+				for (let hop = 0; ; hop++) {
 					const proxyReq = new Request(currentUrl, {
 						method: hopMethod,
 						headers: hopHeaders,
@@ -444,8 +440,11 @@ export function proxy(
 					const resp = await fetchOrThrow(proxyReq, undefined, "Upstream");
 
 					const location = resp.headers.get("location");
-					const isRedirect = resp.status >= 300 && resp.status < 400 &&
-						resp.status !== 304 && !!location;
+					const isRedirect =
+						resp.status >= 300 &&
+						resp.status < 400 &&
+						resp.status !== 304 &&
+						!!location;
 					if (!isRedirect) return await finalizeResponse(resp);
 
 					if (hop >= maxRedirects) {
@@ -463,9 +462,11 @@ export function proxy(
 					// near-universal practice) switch to GET and drop the body;
 					// 307/308 preserve method + body.
 					const m = hopMethod.toUpperCase();
-					const switchToGet = resp.status === 303 ||
+					const switchToGet =
+						resp.status === 303 ||
 						((resp.status === 301 || resp.status === 302) &&
-							m !== "GET" && m !== "HEAD");
+							m !== "GET" &&
+							m !== "HEAD");
 
 					if (!switchToGet && hopBody != null) {
 						// Body-preserving redirect, but the one-shot body was already sent

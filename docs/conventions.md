@@ -74,14 +74,14 @@ src/
 
 ## Naming Conventions
 
-| Item                 | Convention                       | Example                               |
-| -------------------- | -------------------------------- | ------------------------------------- |
-| Types/Interfaces     | `Demino` prefix + PascalCase     | `DeminoContext`, `DeminoHandler`      |
+| Item                 | Convention                       | Example                                |
+| -------------------- | -------------------------------- | -------------------------------------- |
+| Types/Interfaces     | `Demino` prefix + PascalCase     | `DeminoContext`, `DeminoHandler`       |
 | Adapter contract     | bare PascalCase / `serve`        | `ServeOptions`, `ServeHandle`, `serve` |
-| Factory functions    | camelCase, often `demino` prefix | `demino()`, `deminoCompose()`         |
-| Middleware factories | camelCase, descriptive           | `cors()`, `rateLimit()`, `proxy()`    |
-| Utility functions    | camelCase                        | `parseCookies()`, `serializeCookie()` |
-| Constants            | UPPER_SNAKE_CASE                 | `HTTP_STATUS` (from http-utils)       |
+| Factory functions    | camelCase, often `demino` prefix | `demino()`, `deminoCompose()`          |
+| Middleware factories | camelCase, descriptive           | `cors()`, `rateLimit()`, `proxy()`     |
+| Utility functions    | camelCase                        | `parseCookies()`, `serializeCookie()`  |
+| Constants            | UPPER_SNAKE_CASE                 | `HTTP_STATUS` (from http-utils)        |
 
 ## Patterns
 
@@ -106,7 +106,7 @@ export const myMiddleware: DeminoHandler = (req, info, ctx) => { ... };
 All handlers use the same signature:
 
 ```ts
-((req: Request, info: DeminoServeInfo, ctx: DeminoContext) => any);
+(req: Request, info: DeminoServeInfo, ctx: DeminoContext) => any;
 ```
 
 `info` is what the runtime adapter passed to the app: `remoteAddr?`, `upgradeWebSocket?`,

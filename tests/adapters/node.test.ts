@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { createConnection } from "node:net";
 import type { IncomingMessage } from "node:http";
+import { createConnection } from "node:net";
+import { test } from "node:test";
 import { WebSocketServer } from "ws";
-import { demino, type DeminoServeInfo } from "../../src/demino.ts";
 import { serve, wsEngineUsable } from "../../src/adapters/node.ts";
-import { serve as serveViaShim } from "../../src/node.ts";
 import type { ServeHandle } from "../../src/adapters/types.ts";
+import { type DeminoServeInfo, demino } from "../../src/demino.ts";
+import { serve as serveViaShim } from "../../src/node.ts";
 
 /**
  * Node adapter: `serve()` over an own `node:http` bridge. These tests run on
@@ -44,9 +44,8 @@ function rawRequest(
 	} = {},
 ): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const sock = createConnection(
-			{ host: "127.0.0.1", port },
-			() => sock.write(head),
+		const sock = createConnection({ host: "127.0.0.1", port }, () =>
+			sock.write(head),
 		);
 		let received = "";
 		let headSeen = false;
@@ -89,9 +88,9 @@ function upgradeHead(port: number, path: string): string {
 
 async function sha256(data: Uint8Array): Promise<string> {
 	const digest = await crypto.subtle.digest("SHA-256", data as BufferSource);
-	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join(
-		"",
-	);
+	return [...new Uint8Array(digest)]
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -254,11 +253,9 @@ test("node adapter: duplicate request headers survive (rawHeaders), cookies merg
 test("node adapter: HTTP/1.0 request without Host resolves against the listener", async () => {
 	const srv = await serve((req) => new Response(new URL(req.url).host), silent);
 	try {
-		const raw = await rawRequest(
-			srv.port,
-			`GET /nohost HTTP/1.0\r\n\r\n`,
-			{ until: (r) => r.includes(`127.0.0.1:${srv.port}`) },
-		);
+		const raw = await rawRequest(srv.port, `GET /nohost HTTP/1.0\r\n\r\n`, {
+			until: (r) => r.includes(`127.0.0.1:${srv.port}`),
+		});
 		// Node answers an HTTP/1.0 request with an HTTP/1.1 status line (allowed)
 		assert.match(raw, /^HTTP\/1\.[01] 200/);
 		assert.ok(raw.endsWith(`127.0.0.1:${srv.port}`), `body missing in: ${raw}`);
@@ -292,9 +289,8 @@ test("node adapter: a Host header that makes no URL is a 400, not a crash", asyn
 test("node adapter: req.body is null without a body, a stream with one", async () => {
 	const seen: Record<string, string> = {};
 	const srv = await serve(async (req) => {
-		seen[req.method + (req.headers.get("x-case") ?? "")] = req.body === null
-			? "null"
-			: `stream:${await req.text()}`;
+		seen[req.method + (req.headers.get("x-case") ?? "")] =
+			req.body === null ? "null" : `stream:${await req.text()}`;
 		return new Response("ok");
 	}, silent);
 	try {
@@ -416,9 +412,9 @@ test("node adapter: statusText and an empty body's content-length are on the wir
 		(req) =>
 			new URL(req.url).pathname === "/teapot"
 				? new Response("short and stout", {
-					status: 418,
-					statusText: "I'm a teapot",
-				})
+						status: 418,
+						statusText: "I'm a teapot",
+					})
 				: new Response(null, { status: 200 }),
 		silent,
 	);
@@ -445,19 +441,27 @@ test("node adapter: HEAD never reads the body and cancels it", async () => {
 	let cancelled = false;
 	const app = demino();
 	app.logger(null);
-	app.get("/big", () =>
-		new Response(
-			new ReadableStream({
-				pull(controller) {
-					pulls++;
-					controller.enqueue(new TextEncoder().encode("x".repeat(1024)));
-				},
-				cancel() {
-					cancelled = true;
-				},
-			}, { highWaterMark: 0 }),
-			{ headers: { "x-kind": "stream" } },
-		));
+	app.get(
+		"/big",
+		() =>
+			new Response(
+				new ReadableStream(
+					{
+						pull(controller) {
+							pulls++;
+							controller.enqueue(
+								new TextEncoder().encode("x".repeat(1024)),
+							);
+						},
+						cancel() {
+							cancelled = true;
+						},
+					},
+					{ highWaterMark: 0 },
+				),
+				{ headers: { "x-kind": "stream" } },
+			),
+	);
 
 	const srv = await serve(app, silent);
 	try {
@@ -509,15 +513,18 @@ test("node adapter: a client that disconnects cancels the response stream and fi
 test("node adapter: large streamed response arrives whole (write backpressure)", async () => {
 	const chunk = new Uint8Array(64 * 1024).fill(0x61);
 	const chunks = 48; // 3 MiB
-	const srv = await serve(() =>
-		new Response(
-			new ReadableStream({
-				start(controller) {
-					for (let i = 0; i < chunks; i++) controller.enqueue(chunk);
-					controller.close();
-				},
-			}),
-		), silent);
+	const srv = await serve(
+		() =>
+			new Response(
+				new ReadableStream({
+					start(controller) {
+						for (let i = 0; i < chunks; i++) controller.enqueue(chunk);
+						controller.close();
+					},
+				}),
+			),
+		silent,
+	);
 	try {
 		const resp = await fetch(srv.url);
 		const buf = new Uint8Array(await resp.arrayBuffer());
@@ -662,11 +669,14 @@ test("node adapter: frames sent before the handler returns are not lost, server 
 test("node adapter: an upgrade request to a route answering 401 gets a raw 401 on the socket", async () => {
 	const app = demino();
 	app.logger(null);
-	app.get("/ws", () =>
-		new Response("nope", {
-			status: 401,
-			headers: { "www-authenticate": "Bearer", "x-reason": "token" },
-		}));
+	app.get(
+		"/ws",
+		() =>
+			new Response("nope", {
+				status: 401,
+				headers: { "www-authenticate": "Bearer", "x-reason": "token" },
+			}),
+	);
 
 	const srv = await serve(app, silent);
 	try {
@@ -708,10 +718,13 @@ test("node adapter: upgradeWebSocket on a plain request throws a TypeError (Deno
 
 test("node adapter: webSockets: false leaves the capability undefined", async () => {
 	const seen: string[] = [];
-	const srv = await serve((_req, info) => {
-		seen.push(typeof info?.upgradeWebSocket);
-		return new Response("no ws", { status: 426 });
-	}, { ...silent, webSockets: false });
+	const srv = await serve(
+		(_req, info) => {
+			seen.push(typeof info?.upgradeWebSocket);
+			return new Response("no ws", { status: 426 });
+		},
+		{ ...silent, webSockets: false },
+	);
 	try {
 		const resp = await fetch(srv.url);
 		assert.equal(resp.status, 426);
@@ -824,19 +837,25 @@ test("node adapter: signal.abort() closes the server and its connections at once
 	const never = new Promise<Response>(() => {});
 	const reached = Promise.withResolvers<void>();
 	const aborted = Promise.withResolvers<void>();
-	const srv = await serve((req) => {
-		if (new URL(req.url).pathname !== "/hang") return new Response("x");
-		req.signal.addEventListener("abort", () => aborted.resolve());
-		reached.resolve();
-		return never;
-	}, { ...silent, signal: ac.signal });
+	const srv = await serve(
+		(req) => {
+			if (new URL(req.url).pathname !== "/hang") return new Response("x");
+			req.signal.addEventListener("abort", () => aborted.resolve());
+			reached.resolve();
+			return never;
+		},
+		{ ...silent, signal: ac.signal },
+	);
 
 	const resp = await fetch(srv.url);
 	assert.equal(resp.status, 200);
 	await resp.body?.cancel();
 
 	// settle-tracking from the start: the rejection lands while we await other things
-	const hanging = fetch(`${srv.url}hang`).then(() => "resolved", () => "rejected");
+	const hanging = fetch(`${srv.url}hang`).then(
+		() => "resolved",
+		() => "rejected",
+	);
 	await timed(reached.promise, 3000, "the hanging request to reach the handler");
 
 	const started = Date.now();

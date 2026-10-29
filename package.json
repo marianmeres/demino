@@ -80,7 +80,7 @@
     "test:deno": "deno test -A tests/",
     "smoke": "pnpm run build && node scripts/smoke-npm.mjs",
     "jsr:check": "deno publish --dry-run --set-version \"$npm_package_version\"",
-    "ci": "pnpm run typecheck && pnpm test && pnpm run smoke",
+    "ci": "pnpm run typecheck && pnpm run lint && pnpm test && pnpm run smoke",
     "prepublishOnly": "pnpm run ci && pnpm run build",
     "release": "npx --yes @marianmeres/release@^2.2.0",
     "publish:jsr": "pnpm run test:deno && deno publish --set-version \"$npm_package_version\"",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { demino, type DeminoLogger } from "../src/demino.ts";
+import { type DeminoLogger, demino } from "../src/demino.ts";
 
 test("app.head() routes its warning through the configurable logger (not console)", () => {
 	const warns: string[] = [];

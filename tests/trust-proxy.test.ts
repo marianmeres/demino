@@ -79,8 +79,7 @@ runTestServerTests([
 	},
 	{
 		// allowlist match: host adopted AND the internal origin port must NOT leak.
-		name:
-			"trustProxy allowedHosts: adopts a matching host without leaking the origin port",
+		name: "trustProxy allowedHosts: adopts a matching host without leaking the origin port",
 		appOptions: {
 			trustProxy: { allowedHosts: ["example.com", "*.example.com"] },
 		},
@@ -192,16 +191,14 @@ runTestServerTests([
 		fn: async ({ app, base }) => {
 			mount(app);
 			const localhost = /^https:\/\/localhost:\d+\/u$/;
-			for (
-				const forged of [
-					"evil.com#.example.com",
-					"evil.com/.example.com",
-					"evil.com?.example.com",
-					"evil.com\\.example.com",
-					"evil.com@good.example.com",
-					"evil.com:80#.example.com",
-				]
-			) {
+			for (const forged of [
+				"evil.com#.example.com",
+				"evil.com/.example.com",
+				"evil.com?.example.com",
+				"evil.com\\.example.com",
+				"evil.com@good.example.com",
+				"evil.com:80#.example.com",
+			]) {
 				await assertResp(
 					fetch(`${base}${echoUrl}`, {
 						headers: {
@@ -219,8 +216,7 @@ runTestServerTests([
 		// SECURITY: a mixed-case forwarded host must still match a lowercase allowlist
 		// (hostnames are case-insensitive). Previously this failed closed (dropped to
 		// the internal origin) — now it is adopted, normalized to lowercase.
-		name:
-			"trustProxy allowedHosts: mixed-case forwarded host matches and is lowercased",
+		name: "trustProxy allowedHosts: mixed-case forwarded host matches and is lowercased",
 		appOptions: { trustProxy: { allowedHosts: ["example.com"] } },
 		fn: async ({ app, base }) => {
 			mount(app);

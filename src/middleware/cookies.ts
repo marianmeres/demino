@@ -10,10 +10,7 @@ export interface CookiesLocals {
 	/** Set a cookie in the response */
 	setCookie: (name: string, value: string, options?: CookieOptions) => void;
 	/** Delete a cookie by setting it with maxAge=0 */
-	deleteCookie: (
-		name: string,
-		options?: { path?: string; domain?: string },
-	) => void;
+	deleteCookie: (name: string, options?: { path?: string; domain?: string }) => void;
 }
 
 /**
@@ -67,11 +64,7 @@ export function cookies(defaults?: CookieOptions): DeminoHandler {
 		ctx.locals.cookies = parseCookies(req.headers.get("cookie"));
 
 		// Helper to set a cookie (merges with defaults)
-		ctx.locals.setCookie = (
-			name: string,
-			value: string,
-			options?: CookieOptions,
-		) => {
+		ctx.locals.setCookie = (name: string, value: string, options?: CookieOptions) => {
 			ctx.headers.append(
 				"set-cookie",
 				serializeCookie(name, value, { ...defaults, ...options }),

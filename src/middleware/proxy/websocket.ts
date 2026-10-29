@@ -8,8 +8,8 @@
  * @module
  */
 
-import { TimeoutError } from "@marianmeres/midware";
 import { HTTP_ERROR } from "@marianmeres/http-utils";
+import { TimeoutError } from "@marianmeres/midware";
 import type { DeminoUpgradeWebSocket } from "../../demino.ts";
 
 /**
@@ -38,9 +38,7 @@ const WS_INTERNAL_HEADERS = [
 export function isWebSocketUpgradeRequest(req: Request): boolean {
 	if (req.method !== "GET") return false;
 	const containsToken = (headerValue: string | null, token: string) =>
-		(headerValue ?? "")
-			.split(",")
-			.some((v) => v.trim().toLowerCase() === token);
+		(headerValue ?? "").split(",").some((v) => v.trim().toLowerCase() === token);
 	return (
 		containsToken(req.headers.get("upgrade"), "websocket") &&
 		containsToken(req.headers.get("connection"), "upgrade") &&
@@ -99,12 +97,7 @@ export async function proxyWebSocket(
 	const dialHeaders = new Headers(proxyHeaders);
 	WS_INTERNAL_HEADERS.forEach((h) => dialHeaders.delete(h));
 
-	const upstream = await dialUpstream(
-		dialUrl,
-		protocols,
-		dialHeaders,
-		options.timeout,
-	);
+	const upstream = await dialUpstream(dialUrl, protocols, dialHeaders, options.timeout);
 
 	let client: WebSocket;
 	let response: Response;
@@ -179,18 +172,14 @@ function dialUpstream(
 		ws.onerror = (e) => {
 			const detail = (e as ErrorEvent)?.message || "connection failed";
 			fail(
-				new HTTP_ERROR.NetworkError(
-					`Upstream WebSocket unreachable (${detail})`,
-				),
+				new HTTP_ERROR.NetworkError(`Upstream WebSocket unreachable (${detail})`),
 			);
 		};
 		// close-without-error during the handshake (e.g. upstream accepted TCP
 		// then hung up) — `onerror` usually fires first and wins via `settle`
 		ws.onclose = () =>
 			fail(
-				new HTTP_ERROR.NetworkError(
-					"Upstream WebSocket closed during handshake",
-				),
+				new HTTP_ERROR.NetworkError("Upstream WebSocket closed during handshake"),
 			);
 	});
 }
@@ -249,10 +238,7 @@ function pump(client: WebSocket, upstream: WebSocket): void {
  * rather than leaving the leg dangling.
  */
 function closeQuietly(sock: WebSocket, code?: number, reason?: string): void {
-	if (
-		sock.readyState === WebSocket.CLOSED ||
-		sock.readyState === WebSocket.CLOSING
-	) {
+	if (sock.readyState === WebSocket.CLOSED || sock.readyState === WebSocket.CLOSING) {
 		return;
 	}
 	try {

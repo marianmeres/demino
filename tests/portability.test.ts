@@ -16,9 +16,9 @@
  */
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));

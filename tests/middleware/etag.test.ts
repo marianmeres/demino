@@ -4,10 +4,12 @@ import { runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
-		name:
-			"etag: HEAD shares the GET validator (same ETag), and conditional HEAD 304s",
+		name: "etag: HEAD shares the GET validator (same ETag), and conditional HEAD 304s",
 		fn: async ({ app, base }) => {
-			app.get("/d", withETag(() => ({ hello: "world" })));
+			app.get(
+				"/d",
+				withETag(() => ({ hello: "world" })),
+			);
 
 			const g = await fetch(`${base}/d`);
 			await g.text();
@@ -31,7 +33,10 @@ runTestServerTests([
 	{
 		name: "etag: If-None-Match uses weak comparison (W/ prefix ignored)",
 		fn: async ({ app, base }) => {
-			app.get("/d", withETag(() => "hello"));
+			app.get(
+				"/d",
+				withETag(() => "hello"),
+			);
 
 			const g = await fetch(`${base}/d`);
 			await g.text();
@@ -151,7 +156,10 @@ runTestServerTests([
 		name: "etag skips bodies larger than maxSizeBytes",
 		fn: async ({ app, base }) => {
 			const big = "x".repeat(2048);
-			app.get("/big", withETag(() => big, { maxSizeBytes: 1024 }));
+			app.get(
+				"/big",
+				withETag(() => big, { maxSizeBytes: 1024 }),
+			);
 
 			const res = await fetch(`${base}/big`);
 			const body = await res.text();

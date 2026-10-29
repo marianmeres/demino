@@ -226,10 +226,7 @@ Middlewares can be registered as:
 - `app.get("/route", middleware, handler)` - locally for given method and route.
 
 ```typescript
-app
-	.use(someGlobal)
-	.use("/secret", authCheck)
-	.get("/secret", readSecret, handler);
+app.use(someGlobal).use("/secret", authCheck).get("/secret", readSecret, handler);
 ```
 
 ## Context
@@ -323,7 +320,9 @@ can position itself ahead of the normal chain deterministically:
 ```typescript
 import { DEMINO_SORT } from "@marianmeres/demino";
 
-const gate: DeminoHandler = (req, info, ctx) => {/* runs first */};
+const gate: DeminoHandler = (req, info, ctx) => {
+	/* runs first */
+};
 gate.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE;
 app.use(gate);
 ```
@@ -488,7 +487,9 @@ middleware's `ctx.headers` never reach a `Response` the handler returns.
 ```typescript
 import { serveStatic } from "@marianmeres/demino";
 
-app.get("/public/*", (req) => serveStatic(req, { fsRoot: "./public", urlRoot: "public" }));
+app.get("/public/*", (req) =>
+	serveStatic(req, { fsRoot: "./public", urlRoot: "public" }),
+);
 ```
 
 See [API.md](API.md#static-files) for the exact behaviour and all options.
@@ -510,7 +511,7 @@ the URL it actually used and keeps its `https`. Cross-origin targets
 (`redirect("https://other.example")`) stay absolute. This alone fixes the classic
 `https → http → https` redirect chain behind a proxy — no trust, no config.
 
-**`ctx.url` + `trustProxy` (opt-in).** When you need an *absolute* self-URL (canonical
+**`ctx.url` + `trustProxy` (opt-in).** When you need an _absolute_ self-URL (canonical
 links, absolute redirects), read `ctx.url` instead of `new URL(req.url)`. By default
 `ctx.url` equals `new URL(req.url)`. Set `trustProxy` to rebuild it from the proxy's
 `X-Forwarded-*` headers:
@@ -558,14 +559,19 @@ import { Rbac } from "@marianmeres/rbac"; // YOUR app imports rbac, not demino
 
 const rbac = new Rbac(); /* ...roles/groups/rules... */
 
-app.use(authz({
-	// resolve the subject (JWT/cookie/etc.); return null for unauthenticated
-	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
-	// opaque check — meaning of `permission` is entirely yours
-	check: (subject, permission) => rbac.can(subject as any, permission),
-}));
+app.use(
+	authz({
+		// resolve the subject (JWT/cookie/etc.); return null for unauthenticated
+		resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+		// opaque check — meaning of `permission` is entirely yours
+		check: (subject, permission) => rbac.can(subject as any, permission),
+	}),
+);
 
-app.get("/health", withPublic(() => "ok"));
+app.get(
+	"/health",
+	withPublic(() => "ok"),
+);
 app.get(
 	"/invoices/[id]",
 	withPermission("invoice:read", (req, info, ctx) => {
@@ -640,13 +646,15 @@ app.use(cors());
 Dynamic evaluation example (with credentials)
 
 ```ts
-app.use(cors({
-	// string | string[] | ((orig, hdr) => string | string[] | Promise<string | string[]>)
-	allowOrigin: (origin: string, reqHeaders: Headers) => {
-		return (myWhitelist.includes(origin)) ? origin : "";
-	},
-	allowCredentials: true,
-}));
+app.use(
+	cors({
+		// string | string[] | ((orig, hdr) => string | string[] | Promise<string | string[]>)
+		allowOrigin: (origin: string, reqHeaders: Headers) => {
+			return myWhitelist.includes(origin) ? origin : "";
+		},
+		allowCredentials: true,
+	}),
+);
 ```
 
 Note that you may need to explicitly allow the `OPTIONS` request handlers. You may use a
@@ -836,7 +844,10 @@ app.get(
 // Second request with If-None-Match: "abc123..." -> 304 Not Modified (no body)
 
 // Use weak ETags for faster generation (less precise validation)
-app.get("/data", withETag(() => "content", { weak: true }));
+app.get(
+	"/data",
+	withETag(() => "content", { weak: true }),
+);
 
 // Skip hashing for responses larger than the cap (default 1 MiB).
 // Set to 0 / Infinity to disable.
@@ -1086,10 +1097,12 @@ Now:
 app.use(cors());
 
 // after (1.7.0)
-app.use(cors({
-	allowOrigin: ["https://app.example.com", "https://admin.example.com"],
-	allowCredentials: true,
-}));
+app.use(
+	cors({
+		allowOrigin: ["https://app.example.com", "https://admin.example.com"],
+		allowCredentials: true,
+	}),
+);
 ```
 
 ### Default logger now emits access logs

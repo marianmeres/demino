@@ -64,10 +64,7 @@ runTestServerTests([
 			assert.equal(routes.toSorted(routesCompare).join(), "/x,/y,/z,/[x]");
 
 			routes = ["/a/z", "/a/y", "/a/[x]", "/a/x"];
-			assert.equal(
-				routes.toSorted(routesCompare).join(),
-				"/a/x,/a/y,/a/z,/a/[x]",
-			);
+			assert.equal(routes.toSorted(routesCompare).join(), "/a/x,/a/y,/a/z,/a/[x]");
 
 			routes = ["/z", "/y", "/[x]", "/x", "/x/y", "/x/y/z"];
 			assert.equal(
@@ -119,9 +116,9 @@ runTestServerTests([
 
 			// the file lines are the ones carrying a fixture path (strip ANSI first)
 			// deno-lint-ignore no-control-regex
-			const files = debug.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "")).filter((l) =>
-				l.includes("_root2/")
-			);
+			const files = debug
+				.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""))
+				.filter((l) => l.includes("_root2/"));
 			const expected = [
 				"tests/fixtures/_root2/_middleware.ts",
 				"tests/fixtures/_root2/c/_middleware.ts",
@@ -159,9 +156,9 @@ runTestServerTests([
 			// warned about the missing one...
 			assert.ok(
 				warnings.some((w) => /__demino_missing__/.test(w)),
-				`expected a warning mentioning the missing dir, got: ${
-					JSON.stringify(warnings)
-				}`,
+				`expected a warning mentioning the missing dir, got: ${JSON.stringify(
+					warnings,
+				)}`,
 			);
 			// ...and routes from the real dir were still registered
 			assert.ok(app.routes().length > 0, "expected routes from the real root dir");

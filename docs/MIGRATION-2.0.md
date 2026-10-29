@@ -102,7 +102,12 @@ yourself; per request this is all the Deno adapter does:
 
 ```ts
 Deno.serve(tlsOptions, (req, info) =>
-	app(req, { remoteAddr: info.remoteAddr, upgradeWebSocket: Deno.upgradeWebSocket, raw: info }));
+	app(req, {
+		remoteAddr: info.remoteAddr,
+		upgradeWebSocket: Deno.upgradeWebSocket,
+		raw: info,
+	}),
+);
 ```
 
 ## 3. `app.static` options
@@ -111,15 +116,15 @@ Deno.serve(tlsOptions, (req, info) =>
 instead of `@std/http`'s `serveDir`, so the options are `DeminoStaticOptions`, not
 `ServeDirOptions`:
 
-| 1.x (`ServeDirOptions`)               | 2.0 (`DeminoStaticOptions`)                                                   |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| `showIndex` (default `true`)          | same                                                                          |
-| `showDotfiles` (default `false`)      | same                                                                          |
+| 1.x (`ServeDirOptions`)               | 2.0 (`DeminoStaticOptions`)                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| `showIndex` (default `true`)          | same                                                                           |
+| `showDotfiles` (default `false`)      | same                                                                           |
 | `headers: string[]` (`"name: value"`) | `headers: HeadersInit \| (req, filePath) => HeadersInit` - on 200/206/304 only |
-| `etagAlgorithm`                       | `etag: boolean` (default `true`); the algorithm is fixed                      |
-| `enableCors`                          | removed - set `access-control-allow-origin` through `headers`                 |
-| `quiet`                               | removed - nothing is logged                                                   |
-| `showDirListing`                      | removed - a directory without `index.html` is a 404                           |
+| `etagAlgorithm`                       | `etag: boolean` (default `true`); the algorithm is fixed                       |
+| `enableCors`                          | removed - set `access-control-allow-origin` through `headers`                  |
+| `quiet`                               | removed - nothing is logged                                                    |
+| `showDirListing`                      | removed - a directory without `index.html` is a 404                            |
 
 A type error points you at each use. Two common 1.x patterns:
 
@@ -209,8 +214,8 @@ Deno nothing is optional; `ws` is never loaded there.
 
 ## 9. Package exports and the npm package
 
-| Specifier                        | Contents                                              |
-| -------------------------------- | ----------------------------------------------------- |
+| Specifier                        | Contents                                               |
+| -------------------------------- | ------------------------------------------------------ |
 | `@marianmeres/demino`            | everything (core, middlewares, routers, static, utils) |
 | `@marianmeres/demino/deno`       | `serve()` for Deno                                     |
 | `@marianmeres/demino/node`       | `serve()` for Node (`node:http` bridge, optional `ws`) |

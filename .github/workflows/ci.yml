@@ -4,13 +4,12 @@
 #
 # - Node runs the two current majors and is the gate: `pnpm run ci` is the
 #   typecheck (tsc --noEmit, the only type gate - the suite is type-stripped),
-#   the suite, and the npm smoke (build, pack, install, import, serve).
+#   Biome (format, lint, import order), the suite, and the npm smoke (build,
+#   pack, install, import, serve).
 # - Deno is a consumer runtime (JSR, the `/deno` adapter): the same suite on
 #   Deno plus the JSR publish dry run (type check, slow types, file list). It
 #   is pinned to the exact version used locally (the runtime is in
 #   bug-fix-only mode; bump the pin deliberately, in its own commit).
-# - `deno fmt --check` / `deno lint` are deliberately not gated: the repo never
-#   enforced them and gating is a reformat decision, not a CI one.
 
 name: CI
 

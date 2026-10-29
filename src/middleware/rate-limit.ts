@@ -131,8 +131,8 @@ export function rateLimit(
 			for (const [id, row] of clients.entries()) {
 				if (
 					(new Date().valueOf() - row.lastAccess.valueOf()) / 1_000 >=
-						// calculate threshold automatically (anything older will be fully refilled anyway)
-						maxSize / refillSizePerSecond
+					// calculate threshold automatically (anything older will be fully refilled anyway)
+					maxSize / refillSizePerSecond
 				) {
 					clients.delete(id);
 					counter++;
@@ -142,11 +142,7 @@ export function rateLimit(
 		}
 	};
 
-	return async (
-		req: Request,
-		info: DeminoServeInfo,
-		ctx: DeminoContext,
-	) => {
+	return async (req: Request, info: DeminoServeInfo, ctx: DeminoContext) => {
 		const logger = ctx.getLogger();
 		_maybeCleanup(logger);
 

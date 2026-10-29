@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { demino, type DeminoServeInfo } from "../../src/demino.ts";
 import { serve } from "../../src/adapters/deno.ts";
-import { serve as serveViaShim } from "../../src/deno.ts";
 import { type ServeHandle, toUrl } from "../../src/adapters/types.ts";
+import { type DeminoServeInfo, demino } from "../../src/demino.ts";
+import { serve as serveViaShim } from "../../src/deno.ts";
 import { isDeno } from "../_utils.ts";
 
 /**
@@ -14,28 +14,26 @@ import { isDeno } from "../_utils.ts";
 
 const silent = { hostname: "127.0.0.1", port: 0, onListen() {} };
 
-test(
-	"deno adapter: listens on port 0 and reports the real port + url",
-	{ skip: !isDeno },
-	async () => {
-		const app = demino();
-		app.logger(null);
-		app.get("/", () => "hi");
+test("deno adapter: listens on port 0 and reports the real port + url", {
+	skip: !isDeno,
+}, async () => {
+	const app = demino();
+	app.logger(null);
+	app.get("/", () => "hi");
 
-		const srv = await serve(app, silent);
-		try {
-			assert.ok(srv.port > 0, `expected a real port, got ${srv.port}`);
-			assert.equal(srv.hostname, "127.0.0.1");
-			assert.equal(srv.url, `http://127.0.0.1:${srv.port}/`);
+	const srv = await serve(app, silent);
+	try {
+		assert.ok(srv.port > 0, `expected a real port, got ${srv.port}`);
+		assert.equal(srv.hostname, "127.0.0.1");
+		assert.equal(srv.url, `http://127.0.0.1:${srv.port}/`);
 
-			const resp = await fetch(srv.url);
-			assert.equal(resp.status, 200);
-			assert.equal(await resp.text(), "hi");
-		} finally {
-			await srv.shutdown();
-		}
-	},
-);
+		const resp = await fetch(srv.url);
+		assert.equal(resp.status, 200);
+		assert.equal(await resp.text(), "hi");
+	} finally {
+		await srv.shutdown();
+	}
+});
 
 test("deno adapter: onListen receives { hostname, port } matching the handle", {
 	skip: !isDeno,
@@ -152,47 +150,43 @@ test("deno adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 	}
 });
 
-test(
-	"deno adapter: shutdown() resolves finished and is idempotent",
-	{ skip: !isDeno },
-	async () => {
-		const srv = await serve(() => new Response("x"), silent);
-		let finished = false;
-		srv.finished.then(() => (finished = true));
+test("deno adapter: shutdown() resolves finished and is idempotent", {
+	skip: !isDeno,
+}, async () => {
+	const srv = await serve(() => new Response("x"), silent);
+	let finished = false;
+	srv.finished.then(() => (finished = true));
 
-		await srv.shutdown();
-		await srv.finished;
-		assert.ok(finished, "finished should have resolved after shutdown()");
+	await srv.shutdown();
+	await srv.finished;
+	assert.ok(finished, "finished should have resolved after shutdown()");
 
-		// a second shutdown is a no-op, not an error
-		await srv.shutdown();
+	// a second shutdown is a no-op, not an error
+	await srv.shutdown();
 
-		await assert.rejects(() => fetch(`http://127.0.0.1:${srv.port}/`));
-	},
-);
+	await assert.rejects(() => fetch(`http://127.0.0.1:${srv.port}/`));
+});
 
-test(
-	"deno adapter: signal.abort() shuts the server down",
-	{ skip: !isDeno },
-	async () => {
-		const ac = new AbortController();
-		const srv = await serve(() => new Response("x"), {
-			...silent,
-			signal: ac.signal,
-		});
+test("deno adapter: signal.abort() shuts the server down", {
+	skip: !isDeno,
+}, async () => {
+	const ac = new AbortController();
+	const srv = await serve(() => new Response("x"), {
+		...silent,
+		signal: ac.signal,
+	});
 
-		const resp = await fetch(srv.url);
-		assert.equal(resp.status, 200);
-		await resp.body?.cancel();
+	const resp = await fetch(srv.url);
+	assert.equal(resp.status, 200);
+	await resp.body?.cancel();
 
-		ac.abort();
-		await srv.finished;
+	ac.abort();
+	await srv.finished;
 
-		await assert.rejects(() => fetch(srv.url));
-		// shutdown after an abort is still safe
-		await srv.shutdown();
-	},
-);
+	await assert.rejects(() => fetch(srv.url));
+	// shutdown after an abort is still safe
+	await srv.shutdown();
+});
 
 test("deno adapter: onError is forwarded", { skip: !isDeno }, async () => {
 	const boom = () => {

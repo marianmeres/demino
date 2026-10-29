@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
 	type Demino,
-	demino,
 	type DeminoContext,
 	type DeminoRouteInfo,
+	demino,
 	withMeta,
 } from "../src/demino.ts";
 import { assertResp, startTestServer } from "./_utils.ts";
@@ -35,8 +35,14 @@ function row(rows: DeminoRouteInfo[], method: string, route: string) {
 
 test("routes(): lists each registration once with its meta", () => {
 	const app = demino();
-	app.get("/a", withMeta({ perm: "a:read" }, () => "a"));
-	app.post("/a", withMeta({ perm: "a:write" }, () => "a"));
+	app.get(
+		"/a",
+		withMeta({ perm: "a:read" }, () => "a"),
+	);
+	app.post(
+		"/a",
+		withMeta({ perm: "a:write" }, () => "a"),
+	);
 	app.get("/b", () => "b");
 
 	const rows = app.routes();
@@ -48,7 +54,10 @@ test("routes(): lists each registration once with its meta", () => {
 
 test("routes(): auto-HEAD is reported (inherits GET registration) ", () => {
 	const app = demino();
-	app.get("/a", withMeta({ perm: "a:read" }, () => "a"));
+	app.get(
+		"/a",
+		withMeta({ perm: "a:read" }, () => "a"),
+	);
 
 	const rows = app.routes();
 	// GET registration auto-adds HEAD -> both present, both carry the meta
@@ -58,7 +67,10 @@ test("routes(): auto-HEAD is reported (inherits GET registration) ", () => {
 
 test("routes(): ALL-router routes are reported under ALL", () => {
 	const app = demino();
-	app.all("/x", withMeta({ perm: "x" }, () => "x"));
+	app.all(
+		"/x",
+		withMeta({ perm: "x" }, () => "x"),
+	);
 
 	const rows = app.routes();
 	assert.deepEqual(row(rows, "ALL", "/x").meta, { perm: "x" });
@@ -66,7 +78,10 @@ test("routes(): ALL-router routes are reported under ALL", () => {
 
 test("routes(): catch-all routes are present", () => {
 	const app = demino();
-	app.get("/files/*", withMeta({ public: true }, () => "f"));
+	app.get(
+		"/files/*",
+		withMeta({ public: true }, () => "f"),
+	);
 
 	const rows = app.routes();
 	const hit = rows.find((r) => r.route === "/files/*" && r.method === "GET");
@@ -76,7 +91,10 @@ test("routes(): catch-all routes are present", () => {
 
 test("routes(): meta entries are frozen", () => {
 	const app = demino();
-	app.get("/a", withMeta({ perm: "a" }, () => "a"));
+	app.get(
+		"/a",
+		withMeta({ perm: "a" }, () => "a"),
+	);
 
 	const r = row(app.routes(), "GET", "/a");
 	assert.ok(Object.isFrozen(r.meta), "routes() meta must be frozen");
@@ -84,15 +102,24 @@ test("routes(): meta entries are frozen", () => {
 
 test("routes(): reflects re-registration (last registration wins)", () => {
 	const app = demino();
-	app.get("/a", withMeta({ perm: "old" }, () => "a"));
-	app.get("/a", withMeta({ perm: "new" }, () => "a2"));
+	app.get(
+		"/a",
+		withMeta({ perm: "old" }, () => "a"),
+	);
+	app.get(
+		"/a",
+		withMeta({ perm: "new" }, () => "a2"),
+	);
 
 	assert.deepEqual(row(app.routes(), "GET", "/a").meta, { perm: "new" });
 });
 
 test("routes(): mount path is reflected in reported routes", () => {
 	const app = demino("/api");
-	app.get("/users", withMeta({ perm: "users:read" }, () => "u"));
+	app.get(
+		"/users",
+		withMeta({ perm: "users:read" }, () => "u"),
+	);
 
 	assert.deepEqual(row(app.routes(), "GET", "/api/users").meta, {
 		perm: "users:read",
@@ -109,8 +136,14 @@ test("routes(): A/B invariant — routes() meta equals per-request ctx.routeMeta
 	app.use((_r, _i, ctx: DeminoContext) => {
 		seen[`${ctx.route}`] = ctx.routeMeta;
 	});
-	app.get("/a", withMeta({ perm: "a:read" }, () => "a"));
-	app.get("/b/[id]", withMeta({ perm: "b:read" }, () => "b"));
+	app.get(
+		"/a",
+		withMeta({ perm: "a:read" }, () => "a"),
+	);
+	app.get(
+		"/b/[id]",
+		withMeta({ perm: "b:read" }, () => "b"),
+	);
 	app.get("/c", () => "c");
 
 	const rows = app.routes();

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { type AddressInfo, createConnection, createServer, type Socket } from "node:net";
 import {
-	demino,
 	type DeminoLogger,
 	type DeminoServeInfo,
 	type DeminoUpgradeWebSocketOptions,
+	demino,
 } from "../../src/demino.ts";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests, startTestServer } from "../_utils.ts";
@@ -192,14 +192,16 @@ runTestServerTests([
 		name: "proxy websocket: propagates close code + reason in both directions",
 		fn: async ({ app, base }) => {
 			// one close-capture per upstream connection, in accept order
-			const upstreamCloses: PromiseWithResolvers<
-				{ code: number; reason: string }
-			>[] = [];
+			const upstreamCloses: PromiseWithResolvers<{
+				code: number;
+				reason: string;
+			}>[] = [];
 
 			const upstream = await startTestServer((req, info) => {
-				const captured = Promise.withResolvers<
-					{ code: number; reason: string }
-				>();
+				const captured = Promise.withResolvers<{
+					code: number;
+					reason: string;
+				}>();
 				upstreamCloses.push(captured);
 				const { socket, response } = upgradeWebSocket(req, info);
 				socket.onmessage = (e) => {
@@ -314,10 +316,7 @@ runTestServerTests([
 			});
 
 			try {
-				app.get(
-					"/ws-off",
-					proxy(`${upstream.base}/`, { webSockets: false }),
-				);
+				app.get("/ws-off", proxy(`${upstream.base}/`, { webSockets: false }));
 				const raw = await rawUpgradeRequest(srv.port, "/ws-off");
 				// proxied as a plain GET (upgrade header stripped), upstream status relayed
 				assert.match(raw, /^HTTP\/1\.1 426/);
@@ -328,8 +327,7 @@ runTestServerTests([
 		},
 	},
 	{
-		name:
-			"proxy websocket: no upgradeWebSocket capability -> HTTP fall-through, one warning",
+		name: "proxy websocket: no upgradeWebSocket capability -> HTTP fall-through, one warning",
 		raw: true,
 		fn: async () => {
 			const upstreamSeen: (string | null)[] = [];
@@ -353,7 +351,7 @@ runTestServerTests([
 			// A harness that omits `upgradeWebSocket` - what the app sees when it is
 			// handed to the runtime's own server with no adapter in between.
 			const srv = await startTestServer((req, info) =>
-				app(req, { remoteAddr: info?.remoteAddr })
+				app(req, { remoteAddr: info?.remoteAddr }),
 			);
 			try {
 				for (const path of ["/ws-a", "/ws-b", "/ws-a"]) {

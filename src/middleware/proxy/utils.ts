@@ -86,9 +86,7 @@ export function isPrivateHost(hostname: string): boolean {
 	const ipv4Candidate = _embeddedIPv4(lowerHost) ?? hostname;
 
 	// Check for private IP ranges
-	const ipv4Match = ipv4Candidate.match(
-		/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
-	);
+	const ipv4Match = ipv4Candidate.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
 	if (ipv4Match) {
 		const [, a, b] = ipv4Match.map(Number);
 		// 0.0.0.0 (unspecified — resolves to localhost on Linux)
@@ -140,10 +138,7 @@ export function isPrivateHost(hostname: string): boolean {
  * isHostAllowed("anything.com");                               // true (no whitelist)
  * ```
  */
-export function isHostAllowed(
-	hostname: string,
-	allowedHosts?: string[],
-): boolean {
+export function isHostAllowed(hostname: string, allowedHosts?: string[]): boolean {
 	if (!allowedHosts || allowedHosts.length === 0) return true;
 
 	// Hostnames are case-insensitive (RFC 4343). `URL.hostname` is already

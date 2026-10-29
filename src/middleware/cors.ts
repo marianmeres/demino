@@ -23,9 +23,9 @@ export interface CorsOptions {
 		| string
 		| string[]
 		| ((
-			origin: string,
-			headers: Headers,
-		) => string | string[] | Promise<string | string[]>);
+				origin: string,
+				headers: Headers,
+		  ) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Allowed request headers.
@@ -35,9 +35,9 @@ export interface CorsOptions {
 		| string
 		| string[]
 		| ((
-			origin: string,
-			headers: Headers,
-		) => string | string[] | Promise<string | string[]>);
+				origin: string,
+				headers: Headers,
+		  ) => string | string[] | Promise<string | string[]>);
 
 	/**
 	 * Whether to allow credentials (cookies, authorization headers).
@@ -61,9 +61,7 @@ export interface CorsOptions {
 	 * Maximum age (in seconds) for preflight cache.
 	 * @default 86400 (24 hours)
 	 */
-	maxAge:
-		| number
-		| ((origin: string, headers: Headers) => number | Promise<number>);
+	maxAge: number | ((origin: string, headers: Headers) => number | Promise<number>);
 }
 
 /**

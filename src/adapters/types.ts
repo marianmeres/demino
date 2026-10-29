@@ -108,10 +108,11 @@ export type ServeFn = (
  */
 export function toUrl(addr: DeminoListenAddr): string {
 	const { hostname, port } = addr;
-	const host = hostname === "0.0.0.0" || hostname === "::"
-		? "localhost"
-		: hostname.includes(":")
-		? `[${hostname}]`
-		: hostname;
+	const host =
+		hostname === "0.0.0.0" || hostname === "::"
+			? "localhost"
+			: hostname.includes(":")
+				? `[${hostname}]`
+				: hostname;
 	return `http://${host}:${port}/`;
 }

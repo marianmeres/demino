@@ -176,7 +176,7 @@ export function myUtil(input: string): string {
 
 - [ ] Only this file says the runtime's name (portability guard b)
 - [ ] `tests/adapters/[name].test.ts` covers: defaults, `port: 0`, `url`, `remoteAddr` →
-      `ctx.ip`, a WebSocket echo, `signal` vs `shutdown()`, port in use
+  `ctx.ip`, a WebSocket echo, `signal` vs `shutdown()`, port in use
 - [ ] Full suite green on that runtime through the harness
 
 ---
@@ -228,7 +228,8 @@ app.get("/assets/*", (req) =>
 		fsRoot: "./public/assets",
 		urlRoot: "assets",
 		headers: { "cache-control": "public, max-age=31536000, immutable" },
-	}));
+	}),
+);
 ```
 
 ### Checklist
@@ -309,8 +310,8 @@ await serve(app);
 - [ ] No directories starting with `_` or `.` (except `_middleware.ts`)
 - [ ] Using default router (file-based routing requires DeminoSimpleRouter)
 - [ ] Root dir exists — a missing root throws a plain `Error` with `code: "ENOENT"` and
-      `name: "NotFound"` by default (match on `code`); pass `ignoreMissingRootDir: true` only
-      for genuinely optional dirs
+  `name: "NotFound"` by default (match on `code`); pass `ignoreMissingRootDir: true` only
+  for genuinely optional dirs
 
 ---
 

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Demino, demino } from "../../src/demino.ts";
 import {
+	type AuthzDecl,
 	assertCovered,
 	authz,
-	type AuthzDecl,
 	createRouteResolver,
 	getSubject,
 	permissionMatrix,
@@ -39,7 +39,10 @@ const check = (subject: unknown, permission: string) =>
 test("authz: withPermission allows when check passes, 403 when it fails", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(
@@ -57,7 +60,10 @@ test("authz: withPermission allows when check passes, 403 when it fails", async 
 test("authz: 401 when permission required but no subject", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 401);
@@ -67,7 +73,10 @@ test("authz: 401 when permission required but no subject", async () => {
 test("authz: withPublic allows without subject", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/pub", withPublic(() => "pub"));
+	app.get(
+		"/pub",
+		withPublic(() => "pub"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/pub`), 200, "pub");
@@ -100,8 +109,14 @@ test("authz: denyByDefault=false lets undeclared routes through", async () => {
 test("authz: array permissions — every (default) vs some", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/every", withPermission(["a", "b"], () => "ok")); // default every
-	app.get("/some", withPermission(["a", "b"], () => "ok", { mode: "some" }));
+	app.get(
+		"/every",
+		withPermission(["a", "b"], () => "ok"),
+	); // default every
+	app.get(
+		"/some",
+		withPermission(["a", "b"], () => "ok", { mode: "some" }),
+	);
 
 	await withServer(app, async (base) => {
 		// every: needs both
@@ -114,10 +129,10 @@ test("authz: array permissions — every (default) vs some", async () => {
 });
 
 test("authz: empty permission array is rejected at declaration (fail-closed)", () => {
-	assert.throws(
-		() => withPermission([], () => "x"),
-		{ name: "TypeError", message: /must not be empty/ },
-	);
+	assert.throws(() => withPermission([], () => "x"), {
+		name: "TypeError",
+		message: /must not be empty/,
+	});
 });
 
 test("authz: empty permission via resolve denies (403, never fails open)", async () => {
@@ -127,7 +142,7 @@ test("authz: empty permission via resolve denies (403, never fails open)", async
 			resolveSubject,
 			check,
 			// a hand-built decl with an empty permission list must not fail open
-			resolve: () => ({ permission: [] } as AuthzDecl),
+			resolve: () => ({ permission: [] }) as AuthzDecl,
 		}),
 	);
 	app.get("/x", () => "ok"); // no static decl -> resolve supplies the (empty) perms
@@ -141,7 +156,10 @@ test("authz: empty permission via resolve denies (403, never fails open)", async
 test("authz: a non-preflight OPTIONS on a matched route is still gated", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.all("/admin", withPermission("admin:*", () => "secret"));
+	app.all(
+		"/admin",
+		withPermission("admin:*", () => "secret"),
+	);
 
 	await withServer(app, async (base) => {
 		// bare OPTIONS (NOT a preflight) matches the app.all route -> the gate runs
@@ -168,7 +186,10 @@ test("authz: OPTIONS is bypassed (preflight)", async () => {
 	app.use(authz({ resolveSubject, check }));
 	// OPTIONS has no real handler here; bypass means the gate doesn't 403/401 it.
 	// A bare OPTIONS with no route -> 404 (not 401/403), proving the gate let it pass.
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		const r = await fetch(`${base}/x`, { method: "OPTIONS" });
@@ -181,7 +202,10 @@ test("authz: OPTIONS is bypassed (preflight)", async () => {
 test("authz: auto-HEAD inherits the GET decl (200/403 mirrors GET)", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(
@@ -204,7 +228,10 @@ test("authz: composes with a pre-set subject (no resolveSubject)", async () => {
 		ctx.locals.subject = { id: "pre", perms: ["x:read"] };
 	});
 	app.use(authz({ check })); // no resolveSubject
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 200, "ok");
@@ -258,7 +285,10 @@ test("authz: static decl wins over resolver", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check, resolve }));
 	// static says permission required, resolver says public -> static must win
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 401); // needs subject -> static won
@@ -279,7 +309,10 @@ test("authz: async check (ownership via ctx) ", async () => {
 			},
 		}),
 	);
-	app.get("/things/[id]", withPermission("thing:read", () => "ok"));
+	app.get(
+		"/things/[id]",
+		withPermission("thing:read", () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		// owner matches param id
@@ -329,8 +362,14 @@ test("createRouteResolver: first match wins", () => {
 test("permissionMatrix: tags static/resolver/public/MISSING correctly", () => {
 	const resolve = createRouteResolver([["/api/**", { permission: "api:access" }]]);
 	const app = demino();
-	app.get("/x", withPermission("x:read", () => "ok"));
-	app.get("/pub", withPublic(() => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
+	app.get(
+		"/pub",
+		withPublic(() => "ok"),
+	);
 	app.get("/api/[id]", () => "ok"); // resolver
 	app.get("/orphan", () => "ok"); // MISSING
 
@@ -349,7 +388,10 @@ test("permissionMatrix: tags static/resolver/public/MISSING correctly", () => {
 
 test("assertCovered: throws listing MISSING routes, passes when all declared", () => {
 	const app = demino();
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 	app.get("/orphan", () => "ok");
 
 	let threw = false;
@@ -366,15 +408,24 @@ test("assertCovered: throws listing MISSING routes, passes when all declared", (
 
 	// now cover it -> no throw
 	const app2 = demino();
-	app2.get("/x", withPermission("x:read", () => "ok"));
-	app2.get("/pub", withPublic(() => "ok"));
+	app2.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
+	app2.get(
+		"/pub",
+		withPublic(() => "ok"),
+	);
 	assertCovered(app2); // should not throw
 });
 
 test("permissionMatrix: A/B — matrix permission equals what the gate enforces", async () => {
 	const app = demino();
 	app.use(authz({ resolveSubject, check }));
-	app.get("/x", withPermission("x:read", () => "ok"));
+	app.get(
+		"/x",
+		withPermission("x:read", () => "ok"),
+	);
 
 	const row = permissionMatrix(app).find(
 		(r) => r.route === "/x" && r.method === "GET",

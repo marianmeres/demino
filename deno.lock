@@ -241,6 +241,7 @@
     ],
     "packageJson": {
       "dependencies": [
+        "npm:@biomejs/biome@^2.6.3",
         "npm:@marianmeres/clog@^3.21.0",
         "npm:@marianmeres/http-utils@^2.12.0",
         "npm:@marianmeres/midware@^1.5.0",

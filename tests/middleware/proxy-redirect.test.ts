@@ -69,10 +69,7 @@ runTestServerTests([
 						headers: { location: `${base}/secret2` }, // same (allowed) host
 					}),
 			);
-			app.get(
-				"/x-ok",
-				proxy(`${base}/redir-ok`, { allowedHosts: ["localhost"] }),
-			);
+			app.get("/x-ok", proxy(`${base}/redir-ok`, { allowedHosts: ["localhost"] }));
 
 			// legitimate same-host redirect is still followed transparently
 			await assertResp(fetch(`${base}/x-ok`), 200, "OK-SECRET");

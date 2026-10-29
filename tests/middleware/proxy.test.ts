@@ -1,5 +1,5 @@
-import { sleep } from "@marianmeres/midware";
 import assert from "node:assert/strict";
+import { sleep } from "@marianmeres/midware";
 import { proxy } from "../../src/middleware/proxy/proxy.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -79,10 +79,7 @@ runTestServerTests([
 			);
 
 			// SSRF protection blocks 127.0.0.1
-			app.get(
-				"/ssrf-127",
-				proxy("http://127.0.0.1:8080/", { preventSSRF: true }),
-			);
+			app.get("/ssrf-127", proxy("http://127.0.0.1:8080/", { preventSSRF: true }));
 			await assertResp(
 				fetch(`${base}/ssrf-127`),
 				500,
@@ -90,10 +87,7 @@ runTestServerTests([
 			);
 
 			// SSRF protection blocks private IP ranges
-			app.get(
-				"/ssrf-private",
-				proxy("http://192.168.1.1/", { preventSSRF: true }),
-			);
+			app.get("/ssrf-private", proxy("http://192.168.1.1/", { preventSSRF: true }));
 			await assertResp(
 				fetch(`${base}/ssrf-private`),
 				500,
@@ -170,11 +164,7 @@ runTestServerTests([
 				}),
 			);
 
-			await assertResp(
-				fetch(`${base}/transform-headers`),
-				200,
-				"Bearer TOKEN123",
-			);
+			await assertResp(fetch(`${base}/transform-headers`), 200, "Bearer TOKEN123");
 		},
 	},
 	{

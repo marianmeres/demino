@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
 	type Demino,
-	demino,
 	type DeminoContext,
 	type DeminoHandler,
+	demino,
 	withMeta,
 } from "../src/demino.ts";
 import { deminoFileBased } from "../src/misc/file-based.ts";
@@ -36,7 +36,10 @@ test("routeMeta: global app.use middleware sees static handler meta", async () =
 	app.use((_r, _i, ctx: DeminoContext) => {
 		seen = ctx.routeMeta;
 	});
-	app.get("/x", withMeta({ permission: "x:read" }, () => "ok"));
+	app.get(
+		"/x",
+		withMeta({ permission: "x:read" }, () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 200, "ok");
@@ -84,7 +87,10 @@ test("routeMeta: is frozen and shared (===) across requests to same route", asyn
 	app.use((_r, _i, ctx) => {
 		seen.push(ctx.routeMeta);
 	});
-	app.get("/x", withMeta({ a: 1 }, () => "ok"));
+	app.get(
+		"/x",
+		withMeta({ a: 1 }, () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 200, "ok");
@@ -103,7 +109,10 @@ test("routeMeta: auto-HEAD inherits the GET handler's meta", async () => {
 	app.use((_r, _i, ctx) => {
 		seen = ctx.routeMeta;
 	});
-	app.get("/x", withMeta({ permission: "x:read" }, () => "ok"));
+	app.get(
+		"/x",
+		withMeta({ permission: "x:read" }, () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		// HEAD is auto-served from the GET handler -> must inherit its meta
@@ -119,8 +128,14 @@ test("routeMeta: distinct per (method, route)", async () => {
 	app.use((_r, _i, ctx) => {
 		seen[`${ctx.route}`] = ctx.routeMeta;
 	});
-	app.get("/a", withMeta({ perm: "a" }, () => "a"));
-	app.get("/b", withMeta({ perm: "b" }, () => "b"));
+	app.get(
+		"/a",
+		withMeta({ perm: "a" }, () => "a"),
+	);
+	app.get(
+		"/b",
+		withMeta({ perm: "b" }, () => "b"),
+	);
 	app.get("/c", () => "c");
 
 	await withServer(app, async (base) => {
@@ -142,7 +157,11 @@ test("routeMeta: handler is last positional arg (route-level mws don't shadow me
 		seen = ctx.routeMeta;
 	});
 	// meta lives on the final handler; the preceding mw must not affect resolution
-	app.get("/x", mw, withMeta({ permission: "x:read" }, () => "ok"));
+	app.get(
+		"/x",
+		mw,
+		withMeta({ permission: "x:read" }, () => "ok"),
+	);
 
 	await withServer(app, async (base) => {
 		await assertResp(fetch(`${base}/x`), 200, "ok");

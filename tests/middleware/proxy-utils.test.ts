@@ -108,8 +108,5 @@ test("isHostAllowed: wildcard subdomain", () => {
 	assert.equal(isHostAllowed("api.example.com", ["*.example.com"]), true);
 	assert.equal(isHostAllowed("example.com", ["*.example.com"]), true);
 	assert.equal(isHostAllowed("evil.com", ["*.example.com"]), false);
-	assert.equal(
-		isHostAllowed("api.evil-example.com", ["*.example.com"]),
-		false,
-	);
+	assert.equal(isHostAllowed("api.evil-example.com", ["*.example.com"]), false);
 });

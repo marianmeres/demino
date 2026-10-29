@@ -44,9 +44,10 @@ export function redirect(
 		// (e.g. "foo" -> "/base/foo") and to classify same- vs cross-origin. We
 		// never emit the resolved scheme/host for a same-origin target.
 		const target = new URL(url, ctx.url);
-		const location = target.origin === ctx.url.origin
-			? target.pathname + target.search + target.hash // relative: client keeps its scheme
-			: target.href; // external: absolute, unchanged
+		const location =
+			target.origin === ctx.url.origin
+				? target.pathname + target.search + target.hash // relative: client keeps its scheme
+				: target.href; // external: absolute, unchanged
 		return new Response(null, { status, headers: { location } });
 	};
 }

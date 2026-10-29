@@ -49,11 +49,11 @@ export const AUTHZ_META_KEY = "authz";
 export type AuthzDecl =
 	| { public: true }
 	| {
-		/** Opaque permission string(s) — meaning is entirely up to the app's `check`. */
-		permission: string | string[];
-		/** For multiple permissions: require all ("every", default) or any ("some"). */
-		mode?: "every" | "some";
-	};
+			/** Opaque permission string(s) — meaning is entirely up to the app's `check`. */
+			permission: string | string[];
+			/** For multiple permissions: require all ("every", default) or any ("some"). */
+			mode?: "every" | "some";
+	  };
 
 /** Options for the {@link authz} gate. */
 export interface AuthzOptions {
@@ -142,7 +142,8 @@ export function authz(options: AuthzOptions): DeminoHandler {
 		// carries Access-Control-Request-Method) so a bare OPTIONS to an
 		// app.all()/app.options() route can't slip past the gate unauthenticated.
 		if (
-			allowOptions && req.method === "OPTIONS" &&
+			allowOptions &&
+			req.method === "OPTIONS" &&
 			req.headers.has("access-control-request-method")
 		) {
 			return;
@@ -289,8 +290,8 @@ export function createRouteResolver(
 	const entries: Array<[string, AuthzDecl]> = Array.isArray(map)
 		? map
 		: Object.entries(map);
-	const compiled = entries.map(([pattern, decl]) =>
-		[patternToRegExp(pattern), decl] as const
+	const compiled = entries.map(
+		([pattern, decl]) => [patternToRegExp(pattern), decl] as const,
 	);
 	return (_method: string, route: string): AuthzDecl | null => {
 		for (const [re, decl] of compiled) {

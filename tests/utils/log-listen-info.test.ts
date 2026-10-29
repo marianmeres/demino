@@ -74,9 +74,11 @@ test("logListenInfo: all-interfaces output lists node:os addresses, no loopback/
 	}
 	// loopback and link-local never show up, whatever the machine has
 	assert.ok(
-		!lines.some((l) =>
-			l.includes("://127.") || l.includes("[::1]") ||
-			l.toLowerCase().includes("fe80:")
+		!lines.some(
+			(l) =>
+				l.includes("://127.") ||
+				l.includes("[::1]") ||
+				l.toLowerCase().includes("fe80:"),
 		),
 		`loopback/link-local leaked:\n${lines.join("\n")}`,
 	);
@@ -84,10 +86,13 @@ test("logListenInfo: all-interfaces output lists node:os addresses, no loopback/
 
 test("logListenInfo: json 'auto' follows process.stdout.isTTY", () => {
 	const lines: string[] = [];
-	logListenInfo({ hostname: "127.0.0.1", port: 8000 }, {
-		json: "auto",
-		write: (l) => lines.push(l),
-	});
+	logListenInfo(
+		{ hostname: "127.0.0.1", port: 8000 },
+		{
+			json: "auto",
+			write: (l) => lines.push(l),
+		},
+	);
 	if (process.stdout.isTTY) {
 		assert.ok(
 			lines.some((l) => l.includes("Demino listening")) &&
@@ -106,10 +111,13 @@ test("logListenInfo: json 'auto' follows process.stdout.isTTY", () => {
 
 test("logListenInfo: json mode emits a single parsable JSON line", () => {
 	const lines: string[] = [];
-	logListenInfo({ hostname: "0.0.0.0", port: 8000 }, {
-		json: true,
-		write: (l) => lines.push(l),
-	});
+	logListenInfo(
+		{ hostname: "0.0.0.0", port: 8000 },
+		{
+			json: true,
+			write: (l) => lines.push(l),
+		},
+	);
 
 	assert.equal(lines.length, 1, `expected exactly 1 line, got:\n${lines.join("\n")}`);
 
@@ -131,12 +139,15 @@ test("logListenInfo: json mode emits a single parsable JSON line", () => {
 
 test("logListenInfo: json mode brackets IPv6 and honors namespace + fields", () => {
 	const lines: string[] = [];
-	logListenInfo({ hostname: "::1", port: 9000 }, {
-		json: true,
-		namespace: "my-api",
-		fields: { service: "api", level: "debug" },
-		write: (l) => lines.push(l),
-	});
+	logListenInfo(
+		{ hostname: "::1", port: 9000 },
+		{
+			json: true,
+			namespace: "my-api",
+			fields: { service: "api", level: "debug" },
+			write: (l) => lines.push(l),
+		},
+	);
 
 	const parsed = JSON.parse(lines[0]);
 	assert.equal(parsed.url, "http://[::1]:9000/");
@@ -147,11 +158,7 @@ test("logListenInfo: json mode brackets IPv6 and honors namespace + fields", () 
 });
 
 test("logListenInfo: default (no options) stays human readable", () => {
-	const logs = captureLog(() =>
-		logListenInfo(
-			{ hostname: "127.0.0.1", port: 8000 },
-		)
-	);
+	const logs = captureLog(() => logListenInfo({ hostname: "127.0.0.1", port: 8000 }));
 	assert.ok(
 		logs.some((l) => l.includes("Demino listening")),
 		`expected the human output, got:\n${logs.join("\n")}`,

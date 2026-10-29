@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { demino, type DeminoLogger } from "../src/demino.ts";
+import { type DeminoLogger, demino } from "../src/demino.ts";
 import { startTestServer } from "./_utils.ts";
 
 test("a throwing custom error handler does not escape (falls back + still access-logs)", async () => {

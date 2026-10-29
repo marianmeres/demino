@@ -2,7 +2,7 @@
 
 This document explains the threat model behind Demino's
 [`trustProxy`](../API.md#deminooptions) option, `ctx.url`, and the gating of `ctx.ip`.
-It is background for *why* the API is shaped the way it is; for usage, see the
+It is background for _why_ the API is shaped the way it is; for usage, see the
 [README's "Behind a reverse proxy" section](../README.md) and
 [`API.md`](../API.md#deminooptions).
 
@@ -10,7 +10,7 @@ It is background for *why* the API is shaped the way it is; for usage, see the
 
 `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-For` are **unauthenticated,
 attacker-controllable request headers**. They are only meaningful when a trusted reverse
-proxy sets them *and* the origin cannot be reached without traversing that proxy. Demino
+proxy sets them _and_ the origin cannot be reached without traversing that proxy. Demino
 therefore ignores them by default and trusts them only under an explicit, scoped opt-in.
 
 ## The setup that creates the problem
@@ -24,7 +24,7 @@ client ──HTTPS:443──▶ proxy (terminates TLS) ──HTTP──▶ origi
         example.com                                     serve(app)
 ```
 
-At the origin, the native request has *lost* the client-facing context:
+At the origin, the native request has _lost_ the client-facing context:
 
 - `req.url` is `http://127.0.0.1:8888/…` — scheme is `http`, host is the internal bind
   address, not `https://example.com/…`.
@@ -32,12 +32,12 @@ At the origin, the native request has *lost* the client-facing context:
 
 To recover that context, the proxy re-attaches it as headers:
 
-| Header                | Carries                        | Example          |
-| --------------------- | ------------------------------ | ---------------- |
-| `X-Forwarded-Proto`   | client-facing scheme           | `https`          |
-| `X-Forwarded-Host`    | client-facing host[:port]      | `example.com`    |
-| `X-Forwarded-Port`    | client-facing port             | `443`            |
-| `X-Forwarded-For`     | client IP (and proxy chain)    | `203.0.113.7`    |
+| Header              | Carries                     | Example       |
+| ------------------- | --------------------------- | ------------- |
+| `X-Forwarded-Proto` | client-facing scheme        | `https`       |
+| `X-Forwarded-Host`  | client-facing host[:port]   | `example.com` |
+| `X-Forwarded-Port`  | client-facing port          | `443`         |
+| `X-Forwarded-For`   | client IP (and proxy chain) | `203.0.113.7` |
 
 The application reconstructs `https://example.com/…` and the real client IP from these.
 **That reconstruction is the attack surface.**
@@ -46,7 +46,7 @@ The application reconstructs `https://example.com/…` and the real client IP fr
 
 HTTP provides no authentication for these headers. They are ordinary request headers —
 identical in kind to `User-Agent` or `Accept`. Nothing in the protocol distinguishes a
-value written by *your* proxy from one written by *the client*. The only thing that makes
+value written by _your_ proxy from one written by _the client_. The only thing that makes
 them trustworthy in practice is a deployment guarantee:
 
 > **The origin is reachable only through the trusted proxy.**
@@ -58,7 +58,7 @@ on a public interface, a peer pod can reach it, an SSRF primitive elsewhere can 
 then any of those actors can forge the headers, and trusting them means **trusting
 attacker-controlled input to describe the request to itself.**
 
-This is why trust must be *opt-in* (`trustProxy`, default off): the framework cannot know
+This is why trust must be _opt-in_ (`trustProxy`, default off): the framework cannot know
 whether your origin is locked down, so it assumes the worst until told otherwise.
 
 ## The risk gradient
@@ -99,10 +99,10 @@ heuristics, and audit logs. Demino gates `ctx.ip` on the same `trustProxy` flag 
 
 ## How Demino applies the model
 
-| `trustProxy`            | `ctx.url` scheme | `ctx.url` host             | `ctx.ip`                         |
-| ----------------------- | ---------------- | -------------------------- | -------------------------------- |
-| unset / `false`         | from `req.url`   | from `req.url`             | direct socket peer               |
-| `true`                  | `X-Forwarded-Proto` | from `req.url` (host NOT reflected) | from forwarding headers |
+| `trustProxy`              | `ctx.url` scheme    | `ctx.url` host                                       | `ctx.ip`                |
+| ------------------------- | ------------------- | ---------------------------------------------------- | ----------------------- |
+| unset / `false`           | from `req.url`      | from `req.url`                                       | direct socket peer      |
+| `true`                    | `X-Forwarded-Proto` | from `req.url` (host NOT reflected)                  | from forwarding headers |
 | `{ allowedHosts: [...] }` | `X-Forwarded-Proto` | `X-Forwarded-Host` if allowlisted, else request host | from forwarding headers |
 
 When `trustProxy` is unset, `ctx.url === new URL(req.url)` and `ctx.ip` is the TCP peer —
@@ -126,7 +126,7 @@ its IP to evade or poison an IP-keyed rate limiter.
 
 > **With `trustProxy` on, `ctx.ip` is only as trustworthy as your proxy config.** Demino
 > reads the **left-most** `X-Forwarded-For` token, which is client-controlled if the proxy
-> *appends* (nginx's `$proxy_add_x_forwarded_for`) rather than *overwrites*
+> _appends_ (nginx's `$proxy_add_x_forwarded_for`) rather than _overwrites_
 > (`$remote_addr`). Treat `ctx.ip` as untrusted for security decisions (rate-limit keys,
 > authz, IP allowlists) unless your proxy overwrites the header — see the
 > [overwrite-not-append rule](#the-immediate-hop--overwrite-not-append-rule) below.
@@ -137,7 +137,7 @@ The general principle "validate untrusted input against what you expect" has two
 edges specific to URL/host handling. Both are handled in the implementation; they are
 documented here because they are easy to reintroduce.
 
-### 1. Validate *after* parsing, never the raw string
+### 1. Validate _after_ parsing, never the raw string
 
 It is tempting to allowlist-check the raw `X-Forwarded-Host` string and then hand it to a
 URL. **The string you validate must be the exact value you apply** — otherwise a
@@ -150,9 +150,9 @@ isHostAllowed(raw, ["*.example.com"])  →  true   // ".example.com" is a suffix
 new URL("http://" + raw).hostname      →  "evil.com"   // parser stops at '#'
 ```
 
-Validating the *raw* string accepts it (the string ends in `.example.com`); applying it
+Validating the _raw_ string accepts it (the string ends in `.example.com`); applying it
 yields the foreign host `evil.com`. The fix is to parse first, then validate the
-*normalized* `hostname`, and additionally reject any non-bare authority (smuggled
+_normalized_ `hostname`, and additionally reject any non-bare authority (smuggled
 userinfo/path/query/fragment) and empty-label hosts (`.example.com`, `a..example.com`).
 Parsing also folds case, so a mixed-case forwarded host still matches a lowercase
 allowlist. See `resolveForwardedAuthority()` in [`src/demino.ts`](../src/demino.ts).
@@ -162,12 +162,12 @@ allowlist. See `resolveForwardedAuthority()` in [`src/demino.ts`](../src/demino.
 The WHATWG `URL.port` setter **silently ignores** out-of-range values (`> 65535`) and
 accepts `0`. Since `ctx.url` starts life as the internal origin (`…:8888`), a digit-shape
 check alone (`/^\d+$/`) is not enough: a value like `99999` passes the regex, the setter
-no-ops, and the *internal* `:8888` survives into the absolute self-URL. Ports are therefore
+no-ops, and the _internal_ `:8888` survives into the absolute self-URL. Ports are therefore
 range-checked to `1..65535`; anything else clears the port so the protocol default applies.
 
 ## The "immediate-hop / overwrite-not-append" rule
 
-`X-Forwarded-*` headers can be comma-separated *lists* that grow as a request crosses
+`X-Forwarded-*` headers can be comma-separated _lists_ that grow as a request crosses
 multiple proxies (`client, proxy-a, proxy-b`). A client can **pre-seed** a value that an
 appending proxy then extends:
 
@@ -176,7 +176,7 @@ client sends:   X-Forwarded-For: 1.2.3.4         (a lie)
 nginx appends:  X-Forwarded-For: 1.2.3.4, <real-client-ip>
 ```
 
-You can only trust the portion *your* trusted proxy controls. Demino reads the **left-most
+You can only trust the portion _your_ trusted proxy controls. Demino reads the **left-most
 token** (immediate-hop semantics) and the security contract is therefore: **put a single
 trusted proxy in front, configured to OVERWRITE these headers** (nginx's
 `proxy_set_header X-Forwarded-Proto $scheme;` overwrites). Demino deliberately does **not**
@@ -193,6 +193,7 @@ To safely set `trustProxy: { allowedHosts: ["example.com", "*.example.com"] }`:
    addresses (e.g. Cloudflare IP ranges via a host firewall). This is the precondition
    that makes the headers trustworthy at all.
 2. **Configure the proxy to set (overwrite) the headers**, e.g. nginx:
+
    ```nginx
    proxy_set_header X-Forwarded-Proto $scheme;
    proxy_set_header X-Forwarded-Host  $host;

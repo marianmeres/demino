@@ -145,17 +145,19 @@ export function logListenInfo(
 			isUnspecified(hostname) ? "localhost" : fmtHost(hostname)
 		}:${port}/`;
 		const out = options?.write ?? console.log;
-		out(JSON.stringify({
-			timestamp: new Date().toISOString(),
-			level: "info",
-			logger: options?.namespace ?? "demino",
-			message: `Demino listening: ${url}`,
-			event: "server.listen",
-			hostname,
-			port,
-			url,
-			...options?.fields,
-		}));
+		out(
+			JSON.stringify({
+				timestamp: new Date().toISOString(),
+				level: "info",
+				logger: options?.namespace ?? "demino",
+				message: `Demino listening: ${url}`,
+				event: "server.listen",
+				hostname,
+				port,
+				url,
+				...options?.fields,
+			}),
+		);
 		return;
 	}
 
@@ -168,10 +170,7 @@ export function logListenInfo(
 
 	if (isUnspecified(hostname)) {
 		out("\n ✅ %cDemino listening:", "color:green;");
-		out(
-			`    ➜  Local:   %c${protocol}://localhost:${port}/`,
-			"color:cyan;",
-		);
+		out(`    ➜  Local:   %c${protocol}://localhost:${port}/`, "color:cyan;");
 
 		let interfaces: ReturnType<typeof networkInterfaces> = {};
 		try {
@@ -187,13 +186,14 @@ export function logListenInfo(
 				const isV4 = iface.family === "IPv4";
 				// Skip IPv6 link-local (`fe80::…`, needs a zone id to be usable) —
 				// only advertise routable IPv6 addresses.
-				const isV6 = iface.family === "IPv6" &&
+				const isV6 =
+					iface.family === "IPv6" &&
 					!iface.address.toLowerCase().startsWith("fe80:");
 				if (isV4 || isV6) {
 					out(
-						`    ➜  Network: %c${protocol}://${
-							fmtHost(iface.address)
-						}:${port}/`,
+						`    ➜  Network: %c${protocol}://${fmtHost(
+							iface.address,
+						)}:${port}/`,
 						"color:cyan;",
 					);
 				}

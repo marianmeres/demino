@@ -16,53 +16,30 @@ export const tools: McpToolDefinition[] = [
 			mountPath: z
 				.string()
 				.optional()
-				.describe(
-					'Base mount path (e.g., "/api"). Empty string for root',
-				),
+				.describe('Base mount path (e.g., "/api"). Empty string for root'),
 			routes: z
 				.array(
 					z.object({
 						method: z
-							.enum([
-								"get",
-								"post",
-								"put",
-								"patch",
-								"delete",
-								"all",
-							])
+							.enum(["get", "post", "put", "patch", "delete", "all"])
 							.describe("HTTP method"),
-						path: z
-							.string()
-							.describe('Route path (e.g., "/users/[id]")'),
+						path: z.string().describe('Route path (e.g., "/users/[id]")'),
 						description: z
 							.string()
 							.optional()
-							.describe(
-								"What this route does (becomes a comment)",
-							),
+							.describe("What this route does (becomes a comment)"),
 					}),
 				)
 				.optional()
 				.describe("Routes to generate"),
 			middleware: z
-				.array(
-					z.enum([
-						"cors",
-						"cookies",
-						"rateLimit",
-						"trailingSlash",
-						"etag",
-					]),
-				)
+				.array(z.enum(["cors", "cookies", "rateLimit", "trailingSlash", "etag"]))
 				.optional()
 				.describe("Built-in middleware to include"),
 			compose: z
 				.boolean()
 				.optional()
-				.describe(
-					"Generate deminoCompose() setup for multi-app composition",
-				),
+				.describe("Generate deminoCompose() setup for multi-app composition"),
 			fileBased: z
 				.boolean()
 				.optional()
@@ -82,8 +59,7 @@ export const tools: McpToolDefinition[] = [
 			const middleware = args.middleware as string[] | undefined;
 			const compose = args.compose as boolean | undefined;
 			const fileBased = args.fileBased as boolean | undefined;
-			const runtime = (args.runtime as "deno" | "node" | undefined) ??
-				"deno";
+			const runtime = (args.runtime as "deno" | "node" | undefined) ?? "deno";
 
 			// Deno resolves the package from JSR directly; Node through npm (bare
 			// specifier), so the prefix differs while the subpaths stay the same
@@ -125,9 +101,7 @@ export const tools: McpToolDefinition[] = [
 			if (compose) miscImports.push("deminoCompose");
 			if (fileBased) miscImports.push("deminoFileBased");
 			if (miscImports.length) {
-				imports.push(
-					`import { ${miscImports.join(", ")} } from "${pkg}/misc";`,
-				);
+				imports.push(`import { ${miscImports.join(", ")} } from "${pkg}/misc";`);
 			}
 
 			for (const route of routes || []) {
@@ -166,14 +140,8 @@ export const tools: McpToolDefinition[] = [
 			maxAge: z.number().optional().describe("Max age in seconds"),
 			path: z.string().optional().describe("Cookie path"),
 			domain: z.string().optional().describe("Cookie domain"),
-			secure: z
-				.boolean()
-				.optional()
-				.describe("Only send over HTTPS"),
-			httpOnly: z
-				.boolean()
-				.optional()
-				.describe("Prevent JavaScript access"),
+			secure: z.boolean().optional().describe("Only send over HTTPS"),
+			httpOnly: z.boolean().optional().describe("Prevent JavaScript access"),
 			sameSite: z
 				.enum(["Strict", "Lax", "None"])
 				.optional()
@@ -191,10 +159,7 @@ export const tools: McpToolDefinition[] = [
 				options.httpOnly = args.httpOnly as boolean;
 			}
 			if (args.sameSite != null) {
-				options.sameSite = args.sameSite as
-					| "Strict"
-					| "Lax"
-					| "None";
+				options.sameSite = args.sameSite as "Strict" | "Lax" | "None";
 			}
 			return serializeCookie(name, value, options);
 		},
@@ -206,9 +171,7 @@ export const tools: McpToolDefinition[] = [
 		params: {
 			cookieHeader: z
 				.string()
-				.describe(
-					'Raw Cookie header string (e.g., "foo=bar; baz=qux")',
-				),
+				.describe('Raw Cookie header string (e.g., "foo=bar; baz=qux")'),
 		},
 		handler: async (args: Record<string, unknown>) => {
 			return JSON.stringify(parseCookies(args.cookieHeader as string));
@@ -219,9 +182,7 @@ export const tools: McpToolDefinition[] = [
 		description:
 			"Check if a hostname or IP address is a private/internal address (SSRF protection). Detects localhost, private IPv4/IPv6 ranges.",
 		params: {
-			hostname: z
-				.string()
-				.describe("Hostname or IP address to check"),
+			hostname: z.string().describe("Hostname or IP address to check"),
 		},
 		handler: async (args: Record<string, unknown>) => {
 			const hostname = args.hostname as string;

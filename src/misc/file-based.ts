@@ -1,7 +1,6 @@
 import { readdirSync, type Stats, statSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { green } from "../utils/ansi.ts";
 import {
 	type Demino,
 	type DeminoHandler,
@@ -10,6 +9,7 @@ import {
 	type Logger,
 	supportedMethods,
 } from "../demino.ts";
+import { green } from "../utils/ansi.ts";
 
 /**
  * Configuration options for file-based routing.
@@ -261,9 +261,12 @@ export async function deminoFileBased(
 			(method: "ALL" | DeminoMethod) => {
 				if (handler[method]) {
 					// allow to set mws on the fn itself, eg: "GET.middlewares"
-					let selfMws: DeminoHandler[] = (handler[method] as DeminoHandler & {
-						middlewares?: DeminoHandler | DeminoHandler[];
-					})?.middlewares as DeminoHandler[] ?? [];
+					let selfMws: DeminoHandler[] =
+						((
+							handler[method] as DeminoHandler & {
+								middlewares?: DeminoHandler | DeminoHandler[];
+							}
+						)?.middlewares as DeminoHandler[]) ?? [];
 					if (!Array.isArray(selfMws)) selfMws = [selfMws];
 					defs.push([
 						route,
@@ -371,14 +374,12 @@ function _importRouteHandlers(
 	const out: Partial<Record<"ALL" | DeminoMethod, DeminoHandler>> = {};
 
 	let found = 0;
-	([...supportedMethods, "ALL"] as const).forEach(
-		(method: "ALL" | DeminoMethod) => {
-			if (typeof module[method] === "function") {
-				out[method] = module[method] as DeminoHandler;
-				found++;
-			}
-		},
-	);
+	([...supportedMethods, "ALL"] as const).forEach((method: "ALL" | DeminoMethod) => {
+		if (typeof module[method] === "function") {
+			out[method] = module[method] as DeminoHandler;
+			found++;
+		}
+	});
 
 	if (!found) {
 		throw new TypeError(

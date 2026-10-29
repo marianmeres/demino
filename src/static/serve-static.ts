@@ -209,10 +209,7 @@ export async function serveStatic(
 }
 
 /** `Range: bytes=<start>-<end>` (single range only), the same shape 1.x accepted. */
-function parseRange(
-	value: string,
-	size: number,
-): { start: number; end: number } | null {
+function parseRange(value: string, size: number): { start: number; end: number } | null {
 	const m = /bytes=(?<start>\d+)?-(?<end>\d+)?$/u.exec(value);
 	if (!m?.groups) return null;
 	const { start, end } = m.groups;

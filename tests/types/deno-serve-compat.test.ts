@@ -41,7 +41,8 @@ interface DenoServeStandIn {
 }
 
 /** Deno's real `typeof Deno` when the checker knows it, the stand-in otherwise. */
-type DenoGlobal = [Prop<typeof globalThis, "Deno">] extends [undefined] ? DenoServeStandIn
+type DenoGlobal = [Prop<typeof globalThis, "Deno">] extends [undefined]
+	? DenoServeStandIn
 	: Prop<typeof globalThis, "Deno">;
 
 /** The `Deno` global; only called inside `{ skip: !isDeno }` tests. */

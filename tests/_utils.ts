@@ -10,16 +10,16 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isPlainObject } from "../src/utils/is-plain-object.ts";
+import { createHttpApi } from "@marianmeres/http-utils";
+import type { ServeFn } from "../src/adapters/types.ts";
 import {
 	type Demino,
-	demino,
 	type DeminoAppLocals,
 	type DeminoOptions,
 	type DeminoServeHandler,
+	demino,
 } from "../src/demino.ts";
-import { createHttpApi } from "@marianmeres/http-utils";
-import type { ServeFn } from "../src/adapters/types.ts";
+import { isPlainObject } from "../src/utils/is-plain-object.ts";
 
 const hostname = "127.0.0.1";
 
@@ -29,8 +29,8 @@ export const isDeno: boolean = "Deno" in globalThis;
  * `true` under Node - or anything that reports a `process.versions.node`
  * (Deno aside); such a runtime gets the Node adapter, untested and unsupported.
  */
-export const isNode: boolean = !isDeno &&
-	typeof globalThis.process?.versions?.node === "string";
+export const isNode: boolean =
+	!isDeno && typeof globalThis.process?.versions?.node === "string";
 
 let servePromise: Promise<ServeFn> | undefined;
 
@@ -72,9 +72,7 @@ export interface TestServer {
  * Starts a test server for the given handler through the runtime adapter (the
  * harness is the adapter's first consumer), silently, on a free port.
  */
-export async function startTestServer(
-	handler: DeminoServeHandler,
-): Promise<TestServer> {
+export async function startTestServer(handler: DeminoServeHandler): Promise<TestServer> {
 	const serve = await pickServe();
 	// Closed through the abort signal, not `shutdown()`: tests may leave a request
 	// in flight on purpose (e.g. an upstream still sleeping after the proxy timed
@@ -132,11 +130,9 @@ export async function assertResp(
 			} else {
 				assert.ok(
 					!resp.headers.has(k),
-					`Expecting headers to NOT HAVE a "${k}" key, got: "${
-						resp.headers.get(
-							k,
-						)
-					}"`,
+					`Expecting headers to NOT HAVE a "${k}" key, got: "${resp.headers.get(
+						k,
+					)}"`,
 				);
 			}
 		} else {
@@ -185,22 +181,25 @@ export function runTestServerTests(
 		test(
 			name,
 			{ skip: ignore, only },
-			def.raw ? () => def.fn({} as unknown as TestServerTestOpts) : async () => {
-				let srv: Awaited<ReturnType<typeof startTestServer>> | null = null;
-				try {
-					const app = demino("", [], def.appOptions, def.appLocals);
-					app.logger(null);
-					srv = await startTestServer(app);
-					const api = createHttpApi(srv.base);
-					// deno-lint-ignore no-explicit-any
-					const opts = { srv, app, ...api, base: srv.base } as any;
-					await def.fn(opts as TestServerTestOpts);
-				} catch (e) {
-					throw e;
-				} finally {
-					await srv?.close();
-				}
-			},
+			def.raw
+				? () => def.fn({} as unknown as TestServerTestOpts)
+				: async () => {
+						let srv: Awaited<ReturnType<typeof startTestServer>> | null =
+							null;
+						try {
+							const app = demino("", [], def.appOptions, def.appLocals);
+							app.logger(null);
+							srv = await startTestServer(app);
+							const api = createHttpApi(srv.base);
+							// deno-lint-ignore no-explicit-any
+							const opts = { srv, app, ...api, base: srv.base } as any;
+							await def.fn(opts as TestServerTestOpts);
+						} catch (e) {
+							throw e;
+						} finally {
+							await srv?.close();
+						}
+					},
 		);
 	}
 }

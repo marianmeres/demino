@@ -9,9 +9,9 @@ import {
 import { sleep } from "@marianmeres/midware";
 import {
 	type Demino,
-	demino,
 	type DeminoHandler,
 	type DeminoLogger,
+	demino,
 	type Logger,
 } from "../src/demino.ts";
 import { assertResp, runTestServerTests, startTestServer } from "./_utils.ts";
@@ -33,8 +33,7 @@ const hello = (mountPath = "", midwares = [], options = {}) => {
 		.get("/4", () => "never used");
 
 	//
-	app
-		.post("/post", () => "post")
+	app.post("/post", () => "post")
 		.patch("/patch", () => "patch")
 		.put("/put", () => "put")
 		.delete("/delete", () => "delete");
@@ -67,12 +66,9 @@ test("hello world", async () => {
 		// awaited Response
 		await assertResp(fetch(`${srv.base}/2`), 200, /world/i);
 		// this is get only -> a wrong-method request is 405 (with Allow), not 404
-		await assertResp(
-			fetch(`${srv.base}/2`, { method: "POST" }),
-			405,
-			undefined,
-			{ Allow: /GET/ },
-		);
+		await assertResp(fetch(`${srv.base}/2`, { method: "POST" }), 405, undefined, {
+			Allow: /GET/,
+		});
 		// midware returns string
 		await assertResp(fetch(`${srv.base}/3`), 200, /world/i);
 		// midware returns awaited Response
@@ -96,11 +92,7 @@ test("mounted hello world", async () => {
 		srv = await startTestServer(app);
 
 		// route is on "all"
-		await assertResp(
-			fetch(`${srv.base}${mount}`, { method: "POST" }),
-			200,
-			/world/i,
-		);
+		await assertResp(fetch(`${srv.base}${mount}`, { method: "POST" }), 200, /world/i);
 		// awaited Response
 		await assertResp(fetch(`${srv.base}${mount}/2`), 200, /world/i);
 		// midware returns string
@@ -229,11 +221,7 @@ test("middlewares and various return types", async () => {
 		});
 
 		// no content empty body
-		await assertResp(
-			fetch(`${srv.base}/no-content`),
-			HTTP_STATUS.NO_CONTENT,
-			"",
-		);
+		await assertResp(fetch(`${srv.base}/no-content`), HTTP_STATUS.NO_CONTENT, "");
 
 		// mirror post data
 		const hey = { hey: "ho", lets: "go", rand: Math.random() };
@@ -326,8 +314,7 @@ test("global route middlewares", async () => {
 		srv = await startTestServer(app);
 
 		// lets register routes bellow server start (which must make no difference)
-		app
-			.use("/[id]", m3)
+		app.use("/[id]", m3)
 			.use(m2) // note, that this will take effect before m3
 			.get("/[id]", m4, (_r, _i, c) => c.params.id)
 			.post("/[id]", (_r, _i, c) => c.params.id);
@@ -391,11 +378,7 @@ test("custom error handler", async () => {
 		});
 
 		await assertResp(fetch(`${srv.base}/err`), 500, "Boo");
-		await assertResp(
-			fetch(`${srv.base}/secret`),
-			HTTP_STATUS.FORBIDDEN,
-			"Forbidden",
-		);
+		await assertResp(fetch(`${srv.base}/secret`), HTTP_STATUS.FORBIDDEN, "Forbidden");
 
 		// now register custom error handler which will talk always in json
 		app.error((_req, _info, ctx) => {
@@ -497,11 +480,7 @@ test("method catch-all resolves globally last", async () => {
 
 		// a "*" on GET must not turn an unmatched HEAD into 405
 		// (HEAD has no body, so pass `false` to skip the default 404 body match)
-		await assertResp(
-			fetch(`${srv.base}/whatever`, { method: "HEAD" }),
-			404,
-			false,
-		);
+		await assertResp(fetch(`${srv.base}/whatever`, { method: "HEAD" }), 404, false);
 	} catch (e) {
 		throw e;
 	} finally {
@@ -792,8 +771,7 @@ runTestServerTests([
 				debug: (...args: unknown[]) => _log.push(...args),
 			} as unknown as DeminoLogger;
 
-			app
-				.get("/hey", () => "ho")
+			app.get("/hey", () => "ho")
 				.use((_r, _i, c) => {
 					c.getLogger()?.debug?.("foo", "bar", "baz");
 				})

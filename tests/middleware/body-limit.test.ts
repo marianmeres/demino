@@ -53,8 +53,7 @@ runTestServerTests([
 		},
 	},
 	{
-		name:
-			"bodyLimit - chunked body without Content-Length is rejected by default (411)",
+		name: "bodyLimit - chunked body without Content-Length is rejected by default (411)",
 		fn: async ({ app, base }) => {
 			app.use(bodyLimit({ maxSize: 1024 }));
 			app.post("/", (req) => req.text());
@@ -87,8 +86,7 @@ runTestServerTests([
 		},
 	},
 	{
-		name:
-			"bodyLimit - multipart FormData upload within limit passes (stack-asset regression)",
+		name: "bodyLimit - multipart FormData upload within limit passes (stack-asset regression)",
 		fn: async ({ app, base }) => {
 			app.use(bodyLimit({ maxSize: 1024 * 1024 }));
 			app.post("/upload", async (req) => {
@@ -119,10 +117,7 @@ runTestServerTests([
 			const fd = new FormData();
 			fd.append("file", new Blob([encoder.encode("x".repeat(500))]), "big.txt");
 
-			await assertResp(
-				fetch(`${base}/upload`, { method: "POST", body: fd }),
-				413,
-			);
+			await assertResp(fetch(`${base}/upload`, { method: "POST", body: fd }), 413);
 		},
 	},
 ]);

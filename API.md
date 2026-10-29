@@ -146,17 +146,17 @@ app.all(route, ...handlers): Demino  // Matches all methods
 
 **Other Methods:**
 
-| Method                            | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| `use(...args)`                    | Register global or route-specific middlewares |
-| `error(handler)`                  | Set custom error handler                      |
+| Method                            | Description                                            |
+| --------------------------------- | ------------------------------------------------------ |
+| `use(...args)`                    | Register global or route-specific middlewares          |
+| `error(handler)`                  | Set custom error handler                               |
 | `static(route, fsRoot, options?)` | Serve static files (see [Static Files](#static-files)) |
-| `logger(logger)`                  | Set/unset application logger                  |
-| `mountPath()`                     | Get the mount path                            |
-| `info()`                          | Get debug info about routes                   |
-| `routes()`                        | Enumerate registered routes + meta (see below)|
-| `getOptions()`                    | Get constructor options                       |
-| `locals`                          | Application-wide locals object                |
+| `logger(logger)`                  | Set/unset application logger                           |
+| `mountPath()`                     | Get the mount path                                     |
+| `info()`                          | Get debug info about routes                            |
+| `routes()`                        | Enumerate registered routes + meta (see below)         |
+| `getOptions()`                    | Get constructor options                                |
+| `locals`                          | Application-wide locals object                         |
 
 **`routes(): DeminoRouteInfo[]`** — enumerates every registered `(method, route)`
 together with its static `meta`, mirroring the dispatcher match-set (the `ALL`
@@ -428,10 +428,7 @@ it can wrap inline at registration). The merged object is surfaced (frozen) as
 [`ctx.routeMeta`](#deminocontext) before any middleware runs.
 
 ```ts
-function withMeta<H extends DeminoHandler>(
-	meta: Record<string, unknown>,
-	handler: H,
-): H;
+function withMeta<H extends DeminoHandler>(meta: Record<string, unknown>, handler: H): H;
 ```
 
 **Parameters:**
@@ -497,9 +494,9 @@ Starting a server is the only runtime-specific step. Each adapter is a subpath e
 `ServeOptions` / `ServeHandle` / `ServeFn` are exported from the root and from every adapter
 subpath.
 
-| Subpath                    | Runtime | Server underneath                      | `info.upgradeWebSocket`                                                 |
-| -------------------------- | ------- | -------------------------------------- | ----------------------------------------------------------------------- |
-| `@marianmeres/demino/deno` | Deno    | the built-in HTTP server               | `Deno.upgradeWebSocket`                                                 |
+| Subpath                    | Runtime | Server underneath                      | `info.upgradeWebSocket`                                                  |
+| -------------------------- | ------- | -------------------------------------- | ------------------------------------------------------------------------ |
+| `@marianmeres/demino/deno` | Deno    | the built-in HTTP server               | `Deno.upgradeWebSocket`                                                  |
 | `@marianmeres/demino/node` | Node    | own bridge over `node:http` (HTTP/1.1) | via the optional `ws` package (absent if missing or `webSockets: false`) |
 
 ### serve()
@@ -601,7 +598,10 @@ The shared signature every adapter's `serve` is typed as — handy for picking a
 runtime.
 
 ```ts
-type ServeFn = (handler: DeminoServeHandler, options?: ServeOptions) => Promise<ServeHandle>;
+type ServeFn = (
+	handler: DeminoServeHandler,
+	options?: ServeOptions,
+) => Promise<ServeHandle>;
 ```
 
 ---
@@ -674,7 +674,8 @@ app.get("/public/*", (req) =>
 				? "public, max-age=31536000, immutable"
 				: "no-cache",
 		}),
-	}));
+	}),
+);
 ```
 
 ---
@@ -838,10 +839,12 @@ interface CorsOptions {
 app.use(cors());
 
 // Credentialed API: explicit allowlist required
-app.use(cors({
-	allowOrigin: ["https://app.example.com"],
-	allowCredentials: true,
-}));
+app.use(
+	cors({
+		allowOrigin: ["https://app.example.com"],
+		allowCredentials: true,
+	}),
+);
 
 app.options("*", cors()); // Handle preflight
 ```
@@ -899,10 +902,10 @@ interface RateLimitOptions {
 ```ts
 app.use(
 	"/api",
-	rateLimit(
-		(req) => req.headers.get("Authorization"),
-		{ maxSize: 100, refillSizePerSecond: 50 },
-	),
+	rateLimit((req) => req.headers.get("Authorization"), {
+		maxSize: 100,
+		refillSizePerSecond: 50,
+	}),
 );
 ```
 
@@ -913,10 +916,7 @@ app.use(
 Wraps a handler to add ETag support and 304 responses.
 
 ```ts
-function withETag(
-	handler: DeminoHandler,
-	options?: ETagOptions,
-): DeminoHandler;
+function withETag(handler: DeminoHandler, options?: ETagOptions): DeminoHandler;
 
 interface ETagOptions {
 	weak?: boolean; // generate W/"..." instead of "..." (default: false)
@@ -949,10 +949,7 @@ app.get(
 Creates a redirect middleware.
 
 ```ts
-function redirect(
-	url: string | URL,
-	status?: 301 | 302 | 303 | 307 | 308,
-): DeminoHandler;
+function redirect(url: string | URL, status?: 301 | 302 | 303 | 307 | 308): DeminoHandler;
 ```
 
 **Example:**
@@ -1135,16 +1132,24 @@ import { authz, withPermission, withPublic } from "@marianmeres/demino/middlewar
 
 const rbac = new Rbac(); // ...roles/groups/rules...
 
-app.use(authz({
-	resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
-	check: (subject, permission) => rbac.can(subject as any, permission),
-}));
+app.use(
+	authz({
+		resolveSubject: (req) => verifyJwt(req.headers.get("authorization")),
+		check: (subject, permission) => rbac.can(subject as any, permission),
+	}),
+);
 
-app.get("/health", withPublic(() => "ok"));
-app.get("/invoices/[id]", withPermission("invoice:read", (req, info, ctx) => {
-	// reached only if check() returned true
-	return { id: ctx.params.id };
-}));
+app.get(
+	"/health",
+	withPublic(() => "ok"),
+);
+app.get(
+	"/invoices/[id]",
+	withPermission("invoice:read", (req, info, ctx) => {
+		// reached only if check() returned true
+		return { id: ctx.params.id };
+	}),
+);
 ```
 
 > All `authz` symbols are exported from both `@marianmeres/demino` and
@@ -1201,7 +1206,10 @@ function withPublic<H extends DeminoHandler>(handler: H): H;
 **Example:**
 
 ```ts
-app.get("/health", withPublic(() => "ok"));
+app.get(
+	"/health",
+	withPublic(() => "ok"),
+);
 ```
 
 ---
@@ -1627,10 +1635,7 @@ Creates a `DeminoLogger` instance using `@marianmeres/clog`, with all standard l
 methods plus access log support.
 
 ```ts
-function createDeminoClog(
-	namespace?: string,
-	config?: ClogConfig,
-): DeminoLogger;
+function createDeminoClog(namespace?: string, config?: ClogConfig): DeminoLogger;
 ```
 
 **Parameters:**
@@ -1714,11 +1719,7 @@ function parseCookies(cookieHeader: string | null): Record<string, string>;
 Serializes a cookie with options.
 
 ```ts
-function serializeCookie(
-	name: string,
-	value: string,
-	options?: CookieOptions,
-): string;
+function serializeCookie(name: string, value: string, options?: CookieOptions): string;
 
 interface CookieOptions {
 	maxAge?: number;
@@ -1738,10 +1739,7 @@ interface CookieOptions {
 Promise-based delay utility.
 
 ```ts
-function sleep(
-	timeout: number,
-	__timeout_ref__?: { id: number },
-): Promise<void>;
+function sleep(timeout: number, __timeout_ref__?: { id: number }): Promise<void>;
 ```
 
 ---
@@ -1828,7 +1826,9 @@ const DEMINO_SORT = {
 **Example:**
 
 ```ts
-const mw: DeminoHandler = (req, info, ctx) => {/* ... */};
+const mw: DeminoHandler = (req, info, ctx) => {
+	/* ... */
+};
 mw.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE; // runs before normal mws
 app.use(mw);
 ```
