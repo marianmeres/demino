@@ -29,15 +29,11 @@
       "dist/**",
       "scripts/**",
       "tests/**",
+      "biome.json",
       "package.json",
       "pnpm-lock.yaml",
       "tsconfig.json",
       "tsconfig.build.json"
     ]
-  },
-  "fmt": {
-    "useTabs": true,
-    "lineWidth": 90,
-    "indentWidth": 4
   }
 }

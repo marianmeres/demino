@@ -73,6 +73,8 @@
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "test": "node --test \"tests/**/*.test.ts\"",
     "test:watch": "node --test --watch \"tests/**/*.test.ts\"",
     "test:deno": "deno test -A tests/",
@@ -103,6 +105,7 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
     "@types/node": "^24",
     "@types/ws": "^8.18",
     "typescript": "^7.0.2",
