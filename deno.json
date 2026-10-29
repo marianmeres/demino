@@ -1,6 +1,6 @@
 {
   "name": "@marianmeres/demino",
-  "version": "1.18.0",
+  "version": "2.0.0-rc.1",
   "exports": {
     ".": "./src/mod.ts",
     "./deno": "./src/deno.ts",
