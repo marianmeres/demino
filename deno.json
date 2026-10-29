@@ -19,7 +19,7 @@
     "dev": "deno run --watch ./src/mod.ts",
     "test": "deno test -A tests/",
     "test:watch": "deno test -A --watch tests/",
-    "typecheck": "npm run typecheck",
+    "typecheck": "pnpm run typecheck",
     "npm:build": "deno run -A scripts/build-npm.ts",
     "npm:smoke": "deno task npm:build && node scripts/smoke-npm.mjs",
     "npm:publish": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public",
