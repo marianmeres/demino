@@ -4,8 +4,8 @@
 [![JSR](https://jsr.io/badges/@marianmeres/demino)](https://jsr.io/@marianmeres/demino)
 [![License](https://img.shields.io/npm/l/@marianmeres/demino)](LICENSE)
 
-"Demino" (Deno minimal) - minimalistic web server framework built on web standards
-(`Request` in, `Response` out), running on **Deno and Node**, providing:
+Demino is a minimalistic web server framework built on web standards (`Request` in,
+`Response` out), running on **Deno and Node**, providing:
 
 - **routing**,
 - **middlewares support**,
@@ -1190,3 +1190,7 @@ built-in field. Filter on `event == "server.listen"` instead of matching the mes
 Unlike the human readable mode, JSON mode does not enumerate network interfaces -
 container local addresses are noise, and skipping it avoids the system-info permission some
 runtimes gate it behind (Deno's `--allow-sys`).
+
+## About the name
+
+The name originally stood for "Deno minimal" - it has since grown beyond Deno.
