@@ -1,6 +1,6 @@
 {
   "name": "@marianmeres/demino",
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0",
   "description": "Minimal web framework on web standards (Request in, Response out): routing, middleware, error handling, static files, HTTP + WebSocket proxying. Runs on Deno and Node.",
   "license": "MIT",
   "author": "Marian Meres",
