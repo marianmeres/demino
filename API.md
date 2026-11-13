@@ -9,6 +9,7 @@ Complete API documentation for `@marianmeres/demino`.
   - [Demino Interface](#demino-interface)
   - [DeminoContext](#deminocontext)
   - [DeminoHandler](#deminohandler)
+  - [DeminoResponseHook](#deminoresponsehook)
   - [DeminoServeInfo](#deminoserveinfo)
   - [DeminoServeHandler](#deminoservehandler)
   - [DeminoRouteInfo](#deminorouteinfo)
@@ -150,6 +151,7 @@ app.all(route, ...handlers): Demino  // Matches all methods
 | --------------------------------- | ------------------------------------------------------ |
 | `use(...args)`                    | Register global or route-specific middlewares          |
 | `error(handler)`                  | Set custom error handler                               |
+| `onResponse(hook)`                | Register a [response hook](#deminoresponsehook)        |
 | `static(route, fsRoot, options?)` | Serve static files (see [Static Files](#static-files)) |
 | `logger(logger)`                  | Set/unset application logger                           |
 | `mountPath()`                     | Get the mount path                                     |
@@ -186,7 +188,7 @@ interface DeminoContext {
 	params: Record<string, string>; // Route params (readonly)
 	locals: Record<string, any>; // Request-scoped data store
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta (frozen)
-	headers: Headers; // Response headers to set
+	headers: Headers; // Response headers, for the responses Demino builds
 	status: number; // Response status (default: 200)
 	route: string; // Matched route pattern
 	ip: string; // Client IP address
@@ -212,6 +214,12 @@ defaults to `{}`; cached per `(method, route)`. Auto-HEAD inherits the GET
 handler's meta. A generic primitive — useful for auth, rate-limit tiers, cache
 policy, audit tags, telemetry, OpenAPI, etc. Its read-side companion is
 [`app.routes()`](#demino-interface).
+
+**`headers`** — merged into the responses Demino builds: a response created from a returned
+value, and the default error response. **`status`** is the status of a response created from
+a returned value. A `Response` instance returned by a handler or by a custom error handler is
+sent as it is, with neither. For a header every response must carry, register a
+[response hook](#deminoresponsehook).
 
 **Example:**
 
@@ -244,7 +252,7 @@ type DeminoHandler = (
 
 - `undefined` → 204 No Content
 - Plain object/array/null/toJSON → JSON stringified
-- `Response` → Passed through directly
+- `Response` → Passed through directly (`ctx.headers` / `ctx.status` are not applied to it)
 - `Error` → Error response generated
 - Anything else → `toString()` as text/html
 
@@ -255,6 +263,78 @@ type DeminoHandler = (
   runs. Merge onto it with [`withMeta()`](#withmeta).
 - `handler.__midwarePreExecuteSortOrder?: number` — middleware execution order
   (ascending; lower runs first). See [`DEMINO_SORT`](#demino_sort).
+
+---
+
+### DeminoResponseHook
+
+App-level code that sees every response the app returns. Register one with
+`app.onResponse(hook)`, or with the `onResponse` [option](#deminooptions).
+
+```ts
+type DeminoResponseHook = (
+	req: Request,
+	info: DeminoServeInfo,
+	ctx: DeminoContext,
+	response: Response,
+) => Response | void | Promise<Response | void>;
+
+app.onResponse(hook): Demino
+```
+
+A middleware ends when it returns, and [`ctx.headers`](#deminocontext) only reach the
+responses Demino builds. A response hook runs after the response exists, whichever way it was
+produced:
+
+- a response built from a returned value,
+- a `Response` a handler returned (a stream, a `proxy()` or `app.static()` response, a
+  `redirect()`),
+- an error response, the default one or a custom error handler's `Response`,
+- the app's own `404` and `405` (with its `Allow` header).
+
+**Behavior:**
+
+- Hooks run in registration order, once per request, before the access log (the logged
+  status is the status served).
+- Return a `Response` to replace the one in hand, for the next hook and for the client.
+  Return nothing to keep it. A hook that replaces a response owns the old one's body: reuse
+  it or cancel it.
+- The response a hook receives always has mutable headers. A `fetch()` result or a
+  `Response.redirect()` has an immutable header list, so Demino hands the hook an equivalent
+  response (same status, headers and body stream). A response that is already mutable is
+  handed over as it is.
+- `ctx` is the request's own context: `ctx.error` is set on the error path, `ctx.route` and
+  `ctx.routeMeta` describe the match (empty for a `404` / `405`), `ctx.locals` carries what
+  the middlewares left.
+- Hooks are per app. Under [`deminoCompose()`](#deminocompose), an app's hooks run for the
+  requests that app answers and for no other.
+- Not run for a `101 Switching Protocols` (a WebSocket upgrade): that response is the
+  runtime's own and cannot be replaced.
+- A hook that throws fails the request the way a throwing middleware does: `ctx.error` is
+  set (the status of the thrown error is kept, `500` otherwise), the error handler builds
+  the response, and a `5xx` is error-logged. That error response is sent without running the
+  hooks again. To make a hook's effect optional, catch inside the hook.
+
+**Example:**
+
+```ts
+// nothing this API answers is cacheable unless a route says so
+api.onResponse((req, info, ctx, response) => {
+	if (!response.headers.has("cache-control")) {
+		response.headers.set("cache-control", "private, no-store");
+	}
+});
+
+// replace a response
+app.onResponse((req, info, ctx, response) => {
+	if (response.status === 404 && req.headers.get("accept")?.includes("text/html")) {
+		return new Response(notFoundPage, {
+			status: 404,
+			headers: { "content-type": "text/html; charset=utf-8" },
+		});
+	}
+});
+```
 
 ---
 
@@ -347,9 +427,13 @@ interface DeminoOptions {
 	verbose?: boolean; // Enable verbose logging
 	logger?: DeminoLogger | null; // Application logger
 	errorHandler?: DeminoHandler; // Custom error handler
+	onResponse?: DeminoResponseHook | DeminoResponseHook[]; // Response hook(s)
 	trustProxy?: boolean | { allowedHosts?: string[] }; // Proxy-aware ctx.url (default OFF)
 }
 ```
+
+**`onResponse`** — the same as calling `app.onResponse(hook)` for each hook, in order. See
+[`DeminoResponseHook`](#deminoresponsehook).
 
 **`trustProxy`** (default OFF) — controls how [`ctx.url`](#deminocontext) is built from
 reverse-proxy forwarding headers. Forwarded headers are client-spoofable unless the
@@ -1374,6 +1458,10 @@ function deminoCompose(
 
 The result is a [`DeminoServeHandler`](#deminoservehandler) like the apps themselves: pass it
 to a runtime adapter's [`serve()`](#serve).
+
+Each app keeps its own middlewares, error handler and
+[response hooks](#deminoresponsehook). The `notFoundHandler`'s response belongs to no app, so
+no hook sees it.
 
 **Example:**
 

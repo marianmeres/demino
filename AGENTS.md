@@ -136,6 +136,22 @@ type DeminoHandler = (
 ) => any | Promise<any>;
 ```
 
+### DeminoResponseHook (since 2.1.0)
+
+```ts
+type DeminoResponseHook = (
+	req: Request,
+	info: DeminoServeInfo,
+	ctx: DeminoContext,
+	response: Response,
+) => Response | void | Promise<Response | void>;
+
+app.onResponse(hook); // or DeminoOptions.onResponse: hook | hook[]
+```
+
+The response phase: app-level code that sees **every** response the app returns. See
+Special Behaviors #11 for the contract.
+
 ### DeminoServeInfo (what the adapter passes as `info`)
 
 ```ts
@@ -189,8 +205,8 @@ interface DeminoContext {
 	params: Record<string, string>; // Route params (frozen)
 	locals: Record<string, any>; // Request-scoped storage
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta, frozen (since 1.10.0)
-	headers: Headers; // Response headers
-	status: number; // Response status
+	headers: Headers; // Response headers - Demino-built responses only (not a returned Response)
+	status: number; // Response status - of a response built from a returned value
 	route: string; // Matched route pattern
 	ip: string; // Client IP (info.remoteAddr, or forwarding headers when trustProxy is on)
 	error: any; // Error ref (error handlers)
@@ -215,6 +231,7 @@ interface Demino {
   get/post/put/patch/delete/head/options/connect/trace/all: DeminoRouteHandler;
   use(...args): Demino;              // Register middleware
   error(handler): Demino;            // Set error handler
+  onResponse(hook): Demino;          // Register a response hook (sees every response)
   static(route, fsRoot, options?: DeminoStaticOptions): Demino;
   logger(logger): Demino;
   mountPath(): string;
@@ -246,6 +263,10 @@ Handler return values are auto-converted to Response:
 | `Response`         | Pass through              |
 | `Error`            | Error response            |
 | Other              | `toString()` as text/html |
+
+"Pass through" is literal: `ctx.headers` / `ctx.status` are **not** applied to a returned
+`Response` (nor to a custom error handler's `Response`). Only response hooks
+(`app.onResponse`) see those.
 
 ## Router Parameter Syntax
 
@@ -290,7 +311,9 @@ internal catch-all; the other built-in routers match `*` positionally and ignore
 3. Route-method middlewares (`app.get("/route", mw, handler)`)
 4. Final handler (last argument to route method)
 
-**Termination**: First non-undefined return stops chain.
+**Termination**: First non-undefined return stops chain. There is no `next()` and no post
+phase inside the chain; code that must run after the response exists is a response hook
+(`app.onResponse`, Special Behaviors #11).
 
 **Sort Order**: Use `__midwarePreExecuteSortOrder` property to control position
 (ascending; lower runs first). The exported `DEMINO_SORT` constant publishes the reference
@@ -465,6 +488,19 @@ lifecycle hook `pnpm publish` would run.
 10. **Adapter defaults mirror Deno**: `0.0.0.0:8000`, `onListen` prints the listen info,
     `signal` abort is forceful, `shutdown()` graceful (Node forces after 5 s), port in use
     rejects with `code: "EADDRINUSE"`.
+11. **Response hooks** (since 2.1.0, `app.onResponse(hook)` / `DeminoOptions.onResponse`):
+    run once per request at `_app`'s single exit, in registration order, before the access
+    log, for every response: built from a returned value, handler-returned `Response`
+    (static, proxy, redirect, streams), default error response, custom error handler's
+    `Response`, the app's own 404 / 405. A returned `Response` replaces the one in hand;
+    anything else keeps it. The hook's response always has mutable headers (an immutable one,
+    e.g. a `fetch()` result, is rebuilt via `withMutableHeaders()`; a mutable one is handed
+    over by identity). Per app (compose: not for another app's requests, not for the
+    `notFoundHandler`). Skipped for a `101` (the Node adapter recognises its upgrade response
+    by identity). **A hook that throws fails the request** like a throwing middleware
+    (`ctx.error` = HttpError with the throw as `.cause`, error handler runs, 5xx logged); that
+    error response is sent **without** re-running the hooks. No hooks registered = no extra
+    `await`, same path as before.
 
 ## Common Modifications
 
@@ -646,6 +682,17 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 2.1.0 (additive, no breaking change)
+
+- **Response hooks.** `app.onResponse(hook)` + `DeminoOptions.onResponse` + exported
+  `DeminoResponseHook` type: `(req, info, ctx, response) => Response | void`, run for every
+  response the app returns (see Special Behaviors #11). Closes the gap that `ctx.headers`
+  only reach Demino-built responses, so an app can now state "every response carries header
+  X". `_app` got a single exit (response phase → access log → return). `ctx.headers` itself
+  is unchanged: `cors()` / `cookies()` / `rateLimit()` still write there, so their headers
+  still miss a returned `Response` unless a hook copies them over. Tests in
+  `tests/response-hooks.test.ts`.
 
 ### 2.0.0
 

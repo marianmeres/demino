@@ -98,15 +98,23 @@ nowhere (not a supported runtime), no `@std/` / `jsr:` / `npm:` / `https:` speci
 6. **Handler Execution** → Final handler (last argument to route method)
 7. **Response Conversion** → Return value converted to `Response`
 8. **Error Handling** → If error thrown, error handler invoked
-9. **Access Logging** → `logger.access` invoked (default logger forwards to `console.log`
-   prefixed `[access]`; pass a custom logger or `null` to change/disable)
-10. **Write back** → the adapter writes the `Response` onto the runtime's connection (Node:
+9. **Response Hooks** (since 2.1.0) → `app.onResponse` hooks get the response, whichever of
+   the steps above produced it (a returned `Response`, an error response and the app's own
+   404 / 405 included); a hook may replace it. Skipped for a `101`, and when no hook is
+   registered
+10. **Access Logging** → `logger.access` invoked (default logger forwards to `console.log`
+    prefixed `[access]`; pass a custom logger or `null` to change/disable)
+11. **Write back** → the adapter writes the `Response` onto the runtime's connection (Node:
     streamed with backpressure, multi-`Set-Cookie` preserved)
+
+Steps 9-11 are the single exit of the app function: every request leaves through it once.
 
 ### Termination Rules
 
 - First non-undefined return from middleware stops chain
 - Error thrown anywhere triggers error handler
+- A response hook that throws also triggers the error handler; that error response is not
+  passed to the hooks again
 - HEAD requests auto-generated from GET handlers
 
 ## External Dependencies

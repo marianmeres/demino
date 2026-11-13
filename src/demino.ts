@@ -59,7 +59,13 @@ export interface DeminoContext {
 	params: Record<string, string>;
 	/** Userland read/write key-value map. */
 	locals: Record<string, unknown>;
-	/** Custom userland response (!) headers to be used in the final output. */
+	/**
+	 * Custom userland response (!) headers for the responses Demino builds: they are
+	 * merged into a response auto-created from a returned value and into the default
+	 * error response. A `Response` instance returned by a handler or by a custom error
+	 * handler is sent as it is, without them - use a response hook
+	 * ({@linkcode Demino.onResponse}) for a header every response must carry.
+	 */
 	headers: Headers;
 	/** The response status to be used in the final response if auto generating the response (default 200). */
 	status: number;
@@ -219,6 +225,38 @@ export function withMeta<H extends DeminoHandler>(
 }
 
 /**
+ * A response hook, registered with {@linkcode Demino.onResponse} (or the `onResponse`
+ * option). Runs once for every response the app returns, after the response exists and
+ * before it is access-logged and sent: a response built from a returned value, a
+ * `Response` a handler returned, the default error response, a custom error handler's
+ * `Response`, and the app's own `404` / `405`.
+ *
+ * Return a `Response` to replace the one in hand (for the next hook and for the client),
+ * or nothing to keep it. The response a hook receives always has mutable headers, so
+ * `response.headers.set(...)` works wherever the response came from.
+ *
+ * `ctx` is the request's own context: `ctx.error` is set on the error path, `ctx.route`
+ * and `ctx.routeMeta` say what matched (empty for a `404` / `405`).
+ *
+ * @example
+ * ```ts
+ * // nothing this app answers is cacheable unless a route says so
+ * app.onResponse((req, info, ctx, response) => {
+ *   if (!response.headers.has("cache-control")) {
+ *     response.headers.set("cache-control", "private, no-store");
+ *   }
+ * });
+ * ```
+ */
+export type DeminoResponseHook = (
+	req: Request,
+	info: DeminoServeInfo,
+	ctx: DeminoContext,
+	response: Response,
+	// biome-ignore lint/suspicious/noConfusingVoidType: a hook may return nothing, from an async function too, and `undefined` would reject a body with no `return`
+) => Response | void | Promise<Response | void>;
+
+/**
  * Function signature for route registration methods (get, post, etc).
  * @param route - The route pattern (e.g., "/users/[id]")
  * @param args - Middlewares and final handler (last argument is the handler)
@@ -297,6 +335,23 @@ export interface Demino {
 	trace: DeminoRouteHandler;
 	/** Fn to register custom error handler. */
 	error: (handler: DeminoHandler) => Demino;
+	/**
+	 * Registers a response hook ({@linkcode DeminoResponseHook}): app-level code that
+	 * sees every response this app returns, whichever way it was produced. Hooks run in
+	 * registration order, once per request, before the access log.
+	 *
+	 * Not run for a `101 Switching Protocols` (a WebSocket upgrade). A hook that throws
+	 * fails the request the way a throwing middleware does: the error takes the error
+	 * path, and that error response is sent without running the hooks again.
+	 *
+	 * @example
+	 * ```ts
+	 * app.onResponse((req, info, ctx, response) => {
+	 *   response.headers.set("x-frame-options", "DENY");
+	 * });
+	 * ```
+	 */
+	onResponse: (hook: DeminoResponseHook) => Demino;
 	/**
 	 * Fn to register "app global", or "route global" middlewares.
 	 *
@@ -570,6 +625,38 @@ const EMPTY_META: Readonly<Record<string, unknown>> = Object.freeze({});
 /** Shared stand-in for a missing second handler argument (see `DeminoServeInfo`). */
 const EMPTY_INFO: DeminoServeInfo = Object.freeze({});
 
+/** A header name no response carries (see `withMutableHeaders`). */
+const HEADERS_GUARD_PROBE = "x-demino-headers-guard-probe";
+
+/**
+ * Returns `response` when its headers can be changed, otherwise an equivalent one whose
+ * headers can (same status, headers and body stream). Response hooks get their response
+ * through this, so a hook can set a header without knowing where the response came from:
+ * the header list of a `fetch()` result or of a `Response.redirect()` is immutable.
+ *
+ * There is no accessor for that guard. Deleting a header the response does not carry
+ * changes nothing, and throws a `TypeError` on an immutable list (Fetch validates the
+ * guard before it looks the name up), which makes it a side-effect-free probe.
+ */
+function withMutableHeaders(response: Response): Response {
+	try {
+		response.headers.delete(HEADERS_GUARD_PROBE);
+		return response;
+	} catch {
+		try {
+			return new Response(response.body, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers,
+			});
+		} catch {
+			// Not rebuildable (a `Response.error()`, a body already read): hand it
+			// over as it is, and a hook that changes its headers throws.
+			return response;
+		}
+	}
+}
+
 /**
  * Builds the effective request URL surfaced as `ctx.url`, honoring reverse-proxy
  * forwarding headers when (and only when) `trustProxy` opts in. Private on purpose
@@ -772,6 +859,9 @@ export interface DeminoOptions {
 	logger?: DeminoLogger | undefined | null;
 	/** As a convenience shortcut, you can pass in custom error handler directly in options */
 	errorHandler?: DeminoHandler;
+	/** As a convenience shortcut, you can pass in response hook(s) directly in options
+	 * (the same as calling `app.onResponse(hook)` for each, in order). */
+	onResponse?: DeminoResponseHook | DeminoResponseHook[];
 	/**
 	 * Trust reverse-proxy forwarding headers when building {@link DeminoContext.url}.
 	 *
@@ -868,6 +958,7 @@ export function demino(
 	const _globalAppMws = Array.isArray(middleware) ? [...middleware] : [middleware];
 	const _globalRouteMws: Record<string, DeminoHandler[]> = {};
 	let _errorHandler: DeminoHandler;
+	const _responseHooks: DeminoResponseHook[] = [];
 
 	// Per-(method+route) cached Midware instance. The middleware stack only
 	// changes when `app.use(...)` is called, so we can build it lazily on the
@@ -1008,6 +1099,45 @@ export function demino(
 		return r;
 	};
 
+	// The response phase (see `DeminoResponseHook`). Called only when hooks exist.
+	const _runResponseHooks = async (
+		req: Request,
+		info: DeminoServeInfo,
+		context: DeminoContext,
+		response: Response,
+	): Promise<Response> => {
+		// A `101 Switching Protocols` is the runtime's own object: it cannot be
+		// rebuilt, the Node adapter recognises it by identity, and nothing a hook
+		// does to it reaches the wire.
+		if (response.status === HTTP_STATUS.INFO.SWITCHING_PROTOCOLS.CODE) {
+			return response;
+		}
+
+		let current = response;
+		try {
+			for (const hook of _responseHooks) {
+				current = withMutableHeaders(current);
+				const replacement = await hook(req, info, context, current);
+				if (replacement instanceof Response) current = replacement;
+			}
+			return current;
+		} catch (e: unknown) {
+			// A hook that throws fails the request, the way a throwing middleware
+			// does (same status normalization, the throw kept as `.cause`): a hook is
+			// where an app states what every response must carry, so serving the
+			// response without it would fail open. The response in hand is dropped
+			// and its body released. The error response is sent as it is - the hooks
+			// are not run for it, so a hook that always throws cannot loop.
+			Promise.resolve()
+				.then(() => current.body?.cancel())
+				.catch(() => {});
+			const err = e as Error & { status?: number };
+			const status = err?.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+			context.error = createHttpError(status, null, null, e);
+			return await _createErrorResponse(req, info, context);
+		}
+	};
+
 	const _accessLog = (data: {
 		req: Request;
 		status: number;
@@ -1041,6 +1171,9 @@ export function demino(
 		const ip = resolveClientIp(req, info, options?.trustProxy);
 		const start = Date.now();
 		let context = _createContext(start, {}, "", getLogger, appLocals, url, ip);
+		// Whatever answers the request - a handler, the error path, the app's own
+		// 404 / 405 - lands here, and leaves through the single exit at the bottom.
+		let response: Response;
 
 		// console.log("_app METHOD", method);
 
@@ -1186,11 +1319,7 @@ export function demino(
 					}
 
 					//
-					const status = (result as Response).status;
-					_accessLog({ req, status, start, ip: context.ip });
-
-					//
-					return result as Response;
+					response = result as Response;
 				} catch (e: unknown) {
 					// Normalize status + propagate. The single error-logging site is
 					// `_createErrorResponse` (gated at >= 500, with request context);
@@ -1223,10 +1352,21 @@ export function demino(
 			}
 		} catch (e: unknown) {
 			context.error = e as Error & { status?: number };
-			const resp = await _createErrorResponse(req, info, context);
-			_accessLog({ req, status: resp.status, start, ip: context.ip });
-			return resp;
+			response = await _createErrorResponse(req, info, context);
 		}
+
+		// The response phase. Outside the try/catch above on purpose: being the one
+		// exit, it runs the hooks exactly once per request, whichever path produced
+		// the response (and never on an error response a failed hook produced). An
+		// app with no hooks skips it altogether - no extra `await`, no allocation.
+		if (_responseHooks.length) {
+			response = await _runResponseHooks(req, info, context, response);
+		}
+
+		// after the hooks, so the logged status is the status served
+		_accessLog({ req, status: response.status, start, ip: context.ip });
+
+		return response;
 	};
 
 	//
@@ -1363,6 +1503,20 @@ export function demino(
 
 	if (options?.errorHandler) {
 		_app.error(options.errorHandler);
+	}
+
+	// response hooks (see `DeminoResponseHook`)
+	_app.onResponse = (hook: DeminoResponseHook) => {
+		// fail at registration (boot), not as a 500 on every request
+		if (!isFn(hook)) {
+			throw new TypeError(`Response hook must be a function (got: ${typeof hook})`);
+		}
+		_responseHooks.push(hook);
+		return _app;
+	};
+
+	for (const hook of [options?.onResponse ?? []].flat()) {
+		_app.onResponse(hook);
 	}
 
 	// un/re/set application logger

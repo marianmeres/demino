@@ -186,7 +186,9 @@ Unlike a bare server handler, the Demino route handlers are not required to retu
 The automatic content type headers above are only set if none exist.
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
-yourself.
+yourself. It is then sent as it is: `ctx.headers` and `ctx.status` are not applied to it.
+Code that must see every response, returned ones included, goes into a
+[response hook](#response-hooks).
 
 ```typescript
 // conveniently return plain object and have it be converted 
@@ -382,6 +384,36 @@ logger.error({
 `error` is stringified on purpose: a bare `Error` serializes to `{}` under JSON loggers,
 which would drop the very stack you're logging. To silence everything (including 5xx), use
 `app.logger(null)`.
+
+## Response hooks
+
+A middleware ends when it returns, and `ctx.headers` only reach the responses Demino builds
+itself. A response hook is app-level code that sees _every_ response the app returns: one
+built from a returned value, a `Response` a handler returned (a stream, a proxied or static
+file response, a redirect), an error response (the default one or your error handler's) and
+the app's own `404` / `405`.
+
+```typescript
+// nothing this app answers is cacheable unless a route says so
+app.onResponse((req, info, ctx, response) => {
+	if (!response.headers.has("cache-control")) {
+		response.headers.set("cache-control", "private, no-store");
+	}
+});
+```
+
+Hooks run in registration order, once per request, after the response exists and before the
+access log. Return a `Response` to replace the one in hand, or nothing to keep it. The
+response's headers are always mutable, wherever the response came from (a `fetch()` result
+included). `ctx` is the request's own context: `ctx.error` on the error path, `ctx.route` and
+`ctx.routeMeta` of the match. Hooks are per app (see
+[composition](#extra-apps-composition-route-groups)) and are skipped for a WebSocket upgrade.
+
+A hook that throws fails the request, like a throwing middleware: the error goes to the error
+handler, and that error response is sent without running the hooks again. If a hook's effect
+is optional, catch inside the hook.
+
+See [API.md](API.md#deminoresponsehook) for the details.
 
 ## Application log
 
