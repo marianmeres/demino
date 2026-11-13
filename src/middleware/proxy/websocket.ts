@@ -95,7 +95,7 @@ export async function proxyWebSocket(
 		.filter(Boolean);
 
 	const dialHeaders = new Headers(proxyHeaders);
-	WS_INTERNAL_HEADERS.forEach((h) => dialHeaders.delete(h));
+	for (const h of WS_INTERNAL_HEADERS) dialHeaders.delete(h);
 
 	const upstream = await dialUpstream(dialUrl, protocols, dialHeaders, options.timeout);
 
@@ -212,7 +212,7 @@ function pump(client: WebSocket, upstream: WebSocket): void {
 
 	client.onopen = () => {
 		clientOpen = true;
-		backlog.forEach((data) => forward(client, data));
+		for (const data of backlog) forward(client, data);
 		backlog.length = 0;
 	};
 	client.onmessage = (e) => forward(upstream, e.data);

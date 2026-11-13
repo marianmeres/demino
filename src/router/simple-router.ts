@@ -28,7 +28,7 @@ export class DeminoSimpleRouter extends DeminoRouter {
 
 	/** Should throw if route is not valid for this router.
 	 * It is used just as a friendly warning when registering routes. */
-	override assertIsValid(route: string): Error | void {
+	override assertIsValid(route: string): void {
 		if (
 			// the * wildcard is a SimpleRouter feature
 			!["", "*"].includes(route) &&

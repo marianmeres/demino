@@ -152,7 +152,7 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 		}
 
 		// origin
-		let origin;
+		let origin: string | null;
 		let originVaries = false;
 		if (typeof allowOrigin === "function") {
 			origin = await allowOrigin(requestOrigin, req.headers);
@@ -219,7 +219,7 @@ export function cors(options?: Partial<CorsOptions>): DeminoHandler {
 		ctx.headers.set("Access-Control-Allow-Headers", headers);
 
 		// preflight max age
-		let _maxAge;
+		let _maxAge: number;
 		if (typeof maxAge === "function") {
 			_maxAge = await maxAge(requestOrigin, req.headers);
 		} else {

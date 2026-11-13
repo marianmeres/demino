@@ -95,6 +95,13 @@ export async function startTestServer(handler: DeminoServeHandler): Promise<Test
 	};
 }
 
+/** A response header the test relies on: fails right there when it is missing. */
+export function header(resp: Response, name: string): string {
+	const value = resp.headers.get(name);
+	assert.ok(value !== null, `Expected a "${name}" response header`);
+	return value;
+}
+
 /** DRY */
 export async function assertResp(
 	resp: Response | Promise<Response>,
@@ -123,7 +130,7 @@ export async function assertResp(
 
 	Object.entries(headersCheck || {}).forEach(([k, v]) => {
 		if (v instanceof RegExp) {
-			assert.match(resp.headers.get(k)!, v);
+			assert.match(header(resp, k), v);
 		} else if (typeof v === "boolean") {
 			if (v) {
 				assert.ok(resp.headers.has(k), `Expecting headers to HAVE a "${k}" key`);
@@ -137,7 +144,7 @@ export async function assertResp(
 			}
 		} else {
 			assert.equal(
-				resp.headers.get(k)!,
+				resp.headers.get(k),
 				v,
 				`Expected: "${k}: ${v}", Actual: "${k}: ${resp.headers.get(k)}"`,
 			);
@@ -191,11 +198,16 @@ export function runTestServerTests(
 							app.logger(null);
 							srv = await startTestServer(app);
 							const api = createHttpApi(srv.base);
-							// deno-lint-ignore no-explicit-any
-							const opts = { srv, app, ...api, base: srv.base } as any;
-							await def.fn(opts as TestServerTestOpts);
-						} catch (e) {
-							throw e;
+							// `HttpApi` binds its methods onto the instance, so the spread
+							// carries them at runtime; the type of a spread class instance
+							// has no methods, hence the cast.
+							const opts = {
+								srv,
+								app,
+								...api,
+								base: srv.base,
+							} as unknown as TestServerTestOpts;
+							await def.fn(opts);
 						} finally {
 							await srv?.close();
 						}

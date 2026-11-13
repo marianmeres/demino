@@ -86,7 +86,7 @@ test("routes(): catch-all routes are present", () => {
 	const rows = app.routes();
 	const hit = rows.find((r) => r.route === "/files/*" && r.method === "GET");
 	assert.ok(hit, "catch-all route should be enumerated");
-	assert.deepEqual(hit!.meta, { public: true });
+	assert.deepEqual(hit.meta, { public: true });
 });
 
 test("routes(): meta entries are frozen", () => {

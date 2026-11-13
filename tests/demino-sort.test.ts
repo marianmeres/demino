@@ -54,7 +54,7 @@ test("sort order does not leak across routes when a handler fn is reused (regres
 	// (Infinity) reorders /page's chain, and the outcome depends on which route
 	// is hit first.
 	const shared: DeminoHandler = (_r, _i, ctx) => {
-		(ctx.locals.o ??= [] as string[]) as string[];
+		ctx.locals.o ??= [];
 		(ctx.locals.o as string[]).push("shared");
 	};
 	const late: DeminoHandler = (_r, _i, ctx) => {

@@ -76,8 +76,6 @@ test("composition", async () => {
 		await assertResp(fetch(`${base}/files/foo/bar/baz.txt`), 200, /baz/);
 		await assertResp(fetch(`${base}/blog/files/foo/bar/baz.txt`), 200);
 		await assertResp(fetch(`${base}/blog/special/files/foo/bar/baz.txt`), 200);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}

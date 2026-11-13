@@ -152,7 +152,7 @@ export function isHostAllowed(hostname: string, allowedHosts?: string[]): boolea
 		// Wildcard subdomain match (e.g., "*.example.com")
 		if (allowed.startsWith("*.")) {
 			const domain = allowed.slice(2);
-			return host === domain || host.endsWith("." + domain);
+			return host === domain || host.endsWith(`.${domain}`);
 		}
 		return false;
 	});

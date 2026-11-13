@@ -47,8 +47,6 @@ test("no route is not found", async () => {
 	try {
 		srv = await startTestServer(demino());
 		await assertResp(fetch(`${srv.base}`), 404);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -73,8 +71,6 @@ test("hello world", async () => {
 		await assertResp(fetch(`${srv.base}/3`), 200, /world/i);
 		// midware returns awaited Response
 		await assertResp(fetch(`${srv.base}/4`), 200, /world/i);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -135,8 +131,6 @@ test("mounted hello world", async () => {
 
 		// case sensitivity check
 		await assertResp(fetch(`${srv.base}${mount}/PoSt`), 404);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -156,13 +150,13 @@ test("middlewares and various return types", async () => {
 	// using misc (and sometimes stupid) strategies to return value
 	app.use(async (_req, _info, context) => {
 		// return nothing, just set context, the get handler returns
-		if (context.params.id == "foo") {
+		if (context.params.id === "foo") {
 			context.locals.some = await Promise.resolve("bar");
 		} // return JSON serializable object ASAP (final handler will not be invoked)
-		else if (context.params.id == "bar") {
+		else if (context.params.id === "bar") {
 			return { toJSON: () => ({ baz: "bat" }) };
 		} // return plain string ASAP (final handler will not be invoked)
-		else if (context.params.id == "hey") {
+		else if (context.params.id === "hey") {
 			return { toString: () => "ho" };
 		} // not found (intentionally not throwing, just returning, which must also work)
 		else if (context.params.id) {
@@ -237,8 +231,6 @@ test("middlewares and various return types", async () => {
 		});
 
 		//
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -270,8 +262,6 @@ test("middlewares sort order", async () => {
 	try {
 		srv = await startTestServer(app);
 		await assertResp(fetch(`${srv.base}`), 200, /2,1,3/i);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -330,8 +320,6 @@ test("global route middlewares", async () => {
 		log = [];
 		await assertResp(fetch(`${srv.base}/foo`, { method: "POST" }), 200, "foo");
 		assert.deepEqual(log, [1, 2, 3]);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -351,8 +339,6 @@ test("error handler", async () => {
 	try {
 		srv = await startTestServer(app);
 		await assertResp(fetch(`${srv.base}/foo`), 500, /bar/i); // not 12345
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -406,8 +392,6 @@ test("custom error handler", async () => {
 			ok: false,
 			message: "Boo",
 		});
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -423,8 +407,6 @@ test("custom error handler via options", async () => {
 	try {
 		srv = await startTestServer(app);
 		await assertResp(fetch(`${srv.base}/foo`), 404, { error: "Not Found" });
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -447,8 +429,6 @@ test("catch all fallback route", async () => {
 			200,
 			/hey/i,
 		);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -481,8 +461,6 @@ test("method catch-all resolves globally last", async () => {
 		// a "*" on GET must not turn an unmatched HEAD into 405
 		// (HEAD has no body, so pass `false` to skip the default 404 body match)
 		await assertResp(fetch(`${srv.base}/whatever`, { method: "HEAD" }), 404, false);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -508,8 +486,6 @@ test("same route different method", async () => {
 				method,
 			);
 		}
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -530,8 +506,6 @@ test("default router vs trailing slashes", async () => {
 		// it may be considered both as a feature or as a bug... if not desired, use
 		// the shipped trailingSlash middleware
 		await assertResp(fetch(`${srv.base}/foo///`), 200, { name: "foo" });
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -543,18 +517,16 @@ test("first route match wins", async () => {
 	const app = demino();
 
 	app.get("/a/static", (_r, _i, _c) => "a/static");
-	app.get("/a/[name]", (_r, _i, c) => "a/name: " + c.params.name);
+	app.get("/a/[name]", (_r, _i, c) => `a/name: ${c.params.name}`);
 
 	// parametrized will always win as "static" is validly resolved as param
-	app.get("/b/[name]", (_r, _i, c) => "b/name: " + c.params.name);
+	app.get("/b/[name]", (_r, _i, c) => `b/name: ${c.params.name}`);
 	app.get("/b/static", (_r, _i, _c) => "b/static"); // never reached
 
 	try {
 		srv = await startTestServer(app);
 		await assertResp(fetch(`${srv.base}/a/static`), 200, "a/static");
 		await assertResp(fetch(`${srv.base}/b/static`), 200, "b/name: static");
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -603,8 +575,6 @@ test("access log", async () => {
 			"PUT /b 418",
 			"GET /foo/bar?baz=bat 404",
 		]);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
@@ -613,20 +583,27 @@ test("access log", async () => {
 // Captures the `error` and `access` log channels into arrays (mirrors the
 // `access log` test above; NOT usable via `runTestServerTests`, which force-calls
 // `app.logger(null)`).
+type LoggedError = {
+	status: number;
+	method: string;
+	url: string;
+	ip: string;
+	error: string;
+};
+type LoggedAccess = { req: Request; status: number };
+
 function capturingLogger(): {
 	logger: DeminoLogger;
-	errors: { status: number; method: string; url: string; ip: string; error: string }[];
-	access: { req: Request; status: number }[];
+	errors: LoggedError[];
+	access: LoggedAccess[];
 } {
-	// deno-lint-ignore no-explicit-any
-	const errors: any[] = [];
-	// deno-lint-ignore no-explicit-any
-	const access: any[] = [];
+	const errors: LoggedError[] = [];
+	const access: LoggedAccess[] = [];
 	return {
 		logger: {
 			...({} as unknown as Logger),
-			error: (v: unknown) => errors.push(v),
-			access: (d: unknown) => access.push(d),
+			error: (v: LoggedError) => errors.push(v),
+			access: (d: LoggedAccess) => access.push(d),
 		},
 		errors,
 		access,

@@ -271,9 +271,11 @@ test("portability guard: scans src/ (sanity)", () => {
 
 test("portability guard: scanner strips comments, keeps/blanks literals, survives regexes", () => {
 	const src = [
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: fixture, source text holding a template literal
 		"const a = `${route}/*`; // trailing Deno.cwd()",
 		'const b = "http://x//y"; /* Deno.cwd() */ const c = Deno.cwd();',
 		"const d = /\"[/*]'/g.test(x) ? w / 2 : z / 3;",
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: fixture, source text holding a nested template literal
 		"const e = `outer ${`inner ${1 + 1}`} Bun.x`;",
 		'import { z } from "jsr:@scope/pkg";',
 	].join("\n");
@@ -321,7 +323,7 @@ test("portability guard (a): no Deno/Bun globals outside src/adapters/", () => {
 	assert.deepEqual(
 		violations,
 		[],
-		"runtime globals outside src/adapters/:\n" + violations.join("\n"),
+		`runtime globals outside src/adapters/:\n${violations.join("\n")}`,
 	);
 });
 
@@ -337,7 +339,7 @@ test("portability guard (b): each runtime global is named by its own adapter onl
 	assert.deepEqual(
 		violations,
 		[],
-		"runtime names outside their adapter:\n" + violations.join("\n"),
+		`runtime names outside their adapter:\n${violations.join("\n")}`,
 	);
 });
 
@@ -356,7 +358,7 @@ test("portability guard (c): no @std/, jsr:, npm: or https: imports in src/", ()
 	assert.deepEqual(
 		violations,
 		[],
-		"non-portable import specifiers:\n" + violations.join("\n"),
+		`non-portable import specifiers:\n${violations.join("\n")}`,
 	);
 });
 
@@ -373,6 +375,6 @@ test("portability guard (d): erasable-only syntax (no enum, namespace, parameter
 	assert.deepEqual(
 		violations,
 		[],
-		"non-erasable TypeScript syntax:\n" + violations.join("\n"),
+		`non-erasable TypeScript syntax:\n${violations.join("\n")}`,
 	);
 });

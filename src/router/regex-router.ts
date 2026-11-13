@@ -48,7 +48,7 @@ export class DeminoRegexRouter extends DeminoRouter {
 	}
 
 	/** Any string is a valid route for this router */
-	override assertIsValid(route: string): Error | void {
+	override assertIsValid(route: string): void {
 		if (typeof route !== "string") {
 			throw new TypeError(`Route must be a string`);
 		}

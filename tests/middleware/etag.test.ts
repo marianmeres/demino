@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { withETag } from "../../src/middleware/etag.ts";
-import { runTestServerTests } from "../_utils.ts";
+import { header, runTestServerTests } from "../_utils.ts";
 
 runTestServerTests([
 	{
@@ -13,8 +13,7 @@ runTestServerTests([
 
 			const g = await fetch(`${base}/d`);
 			await g.text();
-			const gEtag = g.headers.get("etag");
-			assert.equal(typeof gEtag, "string");
+			const gEtag = header(g, "etag");
 
 			const h = await fetch(`${base}/d`, { method: "HEAD" });
 			await h.text();
@@ -24,7 +23,7 @@ runTestServerTests([
 			// a conditional HEAD carrying the GET validator must 304
 			const cond = await fetch(`${base}/d`, {
 				method: "HEAD",
-				headers: { "if-none-match": gEtag! },
+				headers: { "if-none-match": gEtag },
 			});
 			await cond.text();
 			assert.equal(cond.status, 304);
@@ -40,7 +39,7 @@ runTestServerTests([
 
 			const g = await fetch(`${base}/d`);
 			await g.text();
-			const strong = g.headers.get("etag")!; // e.g. "\"abc\""
+			const strong = header(g, "etag"); // e.g. "\"abc\""
 
 			// sending the WEAK variant of the same tag must still 304 the strong one
 			const r = await fetch(`${base}/d`, {
@@ -64,7 +63,7 @@ runTestServerTests([
 
 			const g = await fetch(`${base}/v`);
 			await g.text();
-			const etag = g.headers.get("etag")!;
+			const etag = header(g, "etag");
 
 			const c = await fetch(`${base}/v`, { headers: { "if-none-match": etag } });
 			await c.text();
@@ -86,16 +85,15 @@ runTestServerTests([
 			// First request - should get 200 with ETag
 			const res1 = await fetch(`${base}/data`);
 			assert.equal(res1.status, 200);
-			const etag = res1.headers.get("etag");
-			assert.equal(typeof etag, "string");
-			assert.equal(etag?.startsWith('"'), true); // Strong ETag
-			assert.equal(etag?.endsWith('"'), true);
+			const etag = header(res1, "etag");
+			assert.equal(etag.startsWith('"'), true); // Strong ETag
+			assert.equal(etag.endsWith('"'), true);
 			const body1 = await res1.json();
 			assert.deepEqual(body1, { message: "hello world" });
 
 			// Second request with If-None-Match - should get 304
 			const res2 = await fetch(`${base}/data`, {
-				headers: { "If-None-Match": etag! },
+				headers: { "If-None-Match": etag },
 			});
 			assert.equal(res2.status, 304);
 			assert.equal(res2.headers.get("etag"), etag);
@@ -200,7 +198,7 @@ runTestServerTests([
 			// Get the actual ETag
 			const res1 = await fetch(`${base}/data`);
 			await res1.text(); // Consume body
-			const etag = res1.headers.get("etag")!;
+			const etag = header(res1, "etag");
 
 			// Request with multiple ETags
 			const res2 = await fetch(`${base}/data`, {

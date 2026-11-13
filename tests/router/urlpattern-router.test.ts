@@ -31,8 +31,6 @@ test("urlpattern router", async () => {
 		});
 		await assertResp(fetch(`${base}/asdf`), 404);
 		await assertResp(fetch(`${base}/foo/baz`), 200, "/foo/:bar");
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}

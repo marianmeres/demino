@@ -321,7 +321,8 @@ test("node adapter: streams a > 1 MiB request body to a slow consumer (backpress
 
 	let chunks = 0;
 	const srv = await serve(async (req) => {
-		const reader = req.body!.getReader();
+		assert.ok(req.body, "the request carries a body");
+		const reader = req.body.getReader();
 		const parts: Uint8Array[] = [];
 		let total = 0;
 		for (;;) {
@@ -498,7 +499,8 @@ test("node adapter: a client that disconnects cancels the response stream and fi
 	try {
 		const ac = new AbortController();
 		const resp = await fetch(srv.url, { signal: ac.signal });
-		const reader = resp.body!.getReader();
+		assert.ok(resp.body, "the response carries a body");
+		const reader = resp.body.getReader();
 		const first = await reader.read();
 		assert.equal(first.done, false);
 		ac.abort();
@@ -578,7 +580,8 @@ test("node adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 	const app = demino();
 	app.logger(null);
 	app.get("/echo", (req, info) => {
-		const { socket, response } = info.upgradeWebSocket!(req, { protocol: "echo.v1" });
+		assert.ok(info.upgradeWebSocket, "the adapter provides the capability");
+		const { socket, response } = info.upgradeWebSocket(req, { protocol: "echo.v1" });
 		status101 = response.status;
 		socket.binaryType = "arraybuffer";
 		// Deno semantics: `open` fires after the 101 has been returned
@@ -605,10 +608,12 @@ test("node adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 			if (w) w(e.data);
 			else inbox.push(e.data);
 		};
-		const next = (): Promise<string | ArrayBuffer> =>
-			inbox.length
-				? Promise.resolve(inbox.shift()!)
+		const next = (): Promise<string | ArrayBuffer> => {
+			const queued = inbox.shift();
+			return queued !== undefined
+				? Promise.resolve(queued)
 				: new Promise((r) => waiters.push(r));
+		};
 
 		await timed(opened.promise, 3000, "client open");
 		assert.equal(ws.protocol, "echo.v1");
@@ -643,7 +648,8 @@ test("node adapter: frames sent before the handler returns are not lost, server 
 	const app = demino();
 	app.logger(null);
 	app.get("/slow", async (req, info) => {
-		const { socket, response } = info.upgradeWebSocket!(req);
+		assert.ok(info.upgradeWebSocket, "the adapter provides the capability");
+		const { socket, response } = info.upgradeWebSocket(req);
 		await sleep(50);
 		socket.onmessage = (e) => {
 			got.resolve(String(e.data));
@@ -701,7 +707,9 @@ test("node adapter: upgradeWebSocket on a plain request throws a TypeError (Deno
 	let error: unknown;
 	const srv = await serve((req, info) => {
 		try {
-			info!.upgradeWebSocket!(req);
+			// present on a plain request too: it is the call that must throw
+			assert.ok(info?.upgradeWebSocket, "the adapter provides the capability");
+			info.upgradeWebSocket(req);
 		} catch (e) {
 			error = e;
 		}
@@ -774,7 +782,8 @@ test("node adapter: shutdown() closes WebSockets with 1001 and resolves promptly
 	const app = demino();
 	app.logger(null);
 	app.get("/ws", (req, info) => {
-		const { socket, response } = info.upgradeWebSocket!(req);
+		assert.ok(info.upgradeWebSocket, "the adapter provides the capability");
+		const { socket, response } = info.upgradeWebSocket(req);
 		socket.onmessage = () => {};
 		return response;
 	});

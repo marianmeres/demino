@@ -100,7 +100,8 @@ test("deno adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 	const app = demino();
 	app.logger(null);
 	app.get("/echo", (req, info) => {
-		const { socket, response } = info.upgradeWebSocket!(req, { protocol: "echo.v1" });
+		assert.ok(info.upgradeWebSocket, "the adapter provides the capability");
+		const { socket, response } = info.upgradeWebSocket(req, { protocol: "echo.v1" });
 		socket.binaryType = "arraybuffer";
 		socket.onmessage = (e) => socket.send(e.data);
 		socket.onclose = (e) => serverClosed.resolve({ code: e.code, reason: e.reason });
@@ -125,10 +126,12 @@ test("deno adapter: info.upgradeWebSocket performs an echo upgrade with a subpro
 			if (w) w(e.data);
 			else inbox.push(e.data);
 		};
-		const next = (): Promise<string | ArrayBuffer> =>
-			inbox.length
-				? Promise.resolve(inbox.shift()!)
+		const next = (): Promise<string | ArrayBuffer> => {
+			const queued = inbox.shift();
+			return queued !== undefined
+				? Promise.resolve(queued)
 				: new Promise((r) => waiters.push(r));
+		};
 
 		await opened.promise;
 		assert.equal(ws.protocol, "echo.v1");

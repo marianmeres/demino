@@ -130,7 +130,7 @@ test("logListenInfo: json mode emits a single parsable JSON line", () => {
 	// the unspecified address is advertised as localhost (same as the human output)
 	assert.equal(parsed.url, "http://localhost:8000/");
 	assert.ok(
-		!isNaN(Date.parse(parsed.timestamp)),
+		!Number.isNaN(Date.parse(parsed.timestamp)),
 		`invalid timestamp: ${parsed.timestamp}`,
 	);
 	// no ansi/%c noise in structured output

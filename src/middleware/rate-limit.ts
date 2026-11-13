@@ -130,7 +130,7 @@ export function rateLimit(
 			let counter = 0;
 			for (const [id, row] of clients.entries()) {
 				if (
-					(new Date().valueOf() - row.lastAccess.valueOf()) / 1_000 >=
+					(Date.now() - row.lastAccess.valueOf()) / 1_000 >=
 					// calculate threshold automatically (anything older will be fully refilled anyway)
 					maxSize / refillSizePerSecond
 				) {
@@ -152,14 +152,15 @@ export function rateLimit(
 		if (!clientId) return;
 
 		// initialize on the first request
-		if (!clients.has(clientId)) {
-			clients.set(clientId, {
+		let entry = clients.get(clientId);
+		if (!entry) {
+			entry = {
 				bucket: new TokenBucket(maxSize, refillSizePerSecond),
 				lastAccess: new Date(),
-			});
+			};
+			clients.set(clientId, entry);
 		}
 
-		const entry = clients.get(clientId)!;
 		// keep lastAccess fresh so the cleanup pass doesn't evict an active client
 		// (evicting an active client would discard their bucket and let the next
 		// request start at full capacity, defeating the rate limit).

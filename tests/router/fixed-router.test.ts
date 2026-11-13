@@ -23,8 +23,6 @@ test("fixed router", async () => {
 		await assertResp(fetch(`${srv.base}/foo`), 200, "foo");
 		await assertResp(fetch(`${srv.base}/foo/`), 200, "foo/");
 		await assertResp(fetch(`${srv.base}/asdf`), 404);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}

@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { type ServeStaticOptions, serveStatic } from "../../src/mod.ts";
-import { assertResp, runTestServerTests } from "../_utils.ts";
+import { assertResp, header, runTestServerTests } from "../_utils.ts";
 
 const fsRoot = fileURLToPath(new URL("../static", import.meta.url));
 
@@ -143,7 +143,7 @@ runTestServerTests([
 			const get = await assertResp(fetch(`${base}/files/foo.txt`), 200, "foo");
 			await assertResp(
 				fetch(`${base}/files/foo.txt`, {
-					headers: { "if-none-match": get.headers.get("etag")! },
+					headers: { "if-none-match": header(get, "etag") },
 				}),
 				304,
 				false,
@@ -192,7 +192,7 @@ test("static matrix: /a//b → 301 with a relative Location", async () => {
 		const { res, text } = await drain(call(path));
 		assert.equal(res.status, 301, path);
 		assert.equal(res.headers.get("location"), location, path);
-		assert.ok(!res.headers.get("location")!.startsWith("http"), "must be relative");
+		assert.ok(!header(res, "location").startsWith("http"), "must be relative");
 		assert.equal(text, "");
 	}
 });
@@ -247,7 +247,7 @@ test("static matrix: traversal → 404 and never reads outside fsRoot", async ()
 		status = res.status;
 		assert.ok(status !== 200, `must not serve ${path}`);
 		if (status !== 301) break;
-		path = res.headers.get("location")!;
+		path = header(res, "location");
 		assert.ok(path.startsWith("/"), "relative Location");
 	}
 	assert.equal(status, 404);
@@ -280,7 +280,7 @@ test("static matrix: index.html on a directory, showIndex: false → 404", async
 
 test("static matrix: If-None-Match → 304 without body (weak comparison)", async () => {
 	const { res: first } = await drain(call("/files/foo.txt"));
-	const etag = first.headers.get("etag")!;
+	const etag = header(first, "etag");
 	assert.match(etag, /^W\/"[0-9a-f]+-[0-9a-f]+"$/);
 
 	for (const value of [etag, etag.slice(2), `"nope", ${etag}`, "*"]) {
@@ -308,7 +308,7 @@ test("static matrix: If-None-Match → 304 without body (weak comparison)", asyn
 
 test("static matrix: If-Modified-Since → 304", async () => {
 	const { res: first } = await drain(call("/files/foo.txt"));
-	const lastModified = first.headers.get("last-modified")!;
+	const lastModified = header(first, "last-modified");
 	assert.ok(!Number.isNaN(Date.parse(lastModified)));
 
 	const { res, text } = await drain(

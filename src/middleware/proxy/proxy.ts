@@ -214,7 +214,9 @@ export function proxy(
 		removeResponseHeaders = [],
 	} = options ?? {};
 
-	if (isNaN(timeout) || timeout < 0) {
+	// `Number()` first, as the global `isNaN` did: an untyped caller's non-numeric
+	// value is refused here instead of reaching `setTimeout`
+	if (Number.isNaN(Number(timeout)) || timeout < 0) {
 		throw new TypeError(`Invalid timeout value '${timeout}'`);
 	}
 	if (!Number.isInteger(maxRedirects) || maxRedirects < 0) {
@@ -302,9 +304,9 @@ export function proxy(
 		if (origin) proxyHeaders.set("origin", origin);
 
 		// Remove standard problematic headers
-		[...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders].forEach((name) =>
-			proxyHeaders.delete(name),
-		);
+		for (const name of [...PROXY_REQUEST_REMOVE_HEADERS, ...removeRequestHeaders]) {
+			proxyHeaders.delete(name);
+		}
 
 		// X-Forwarded-* headers. Derive scheme/host/port from `ctx.url`
 		// (proxy-aware) rather than the raw `url` so that when THIS app is
@@ -389,9 +391,12 @@ export function proxy(
 				// Response handed back to the client.
 				const finalizeResponse = async (resp: Response): Promise<Response> => {
 					let respHeaders = new Headers(resp.headers);
-					[...PROXY_RESPONSE_REMOVE_HEADERS, ...removeResponseHeaders].forEach(
-						(name) => respHeaders.delete(name),
-					);
+					for (const name of [
+						...PROXY_RESPONSE_REMOVE_HEADERS,
+						...removeResponseHeaders,
+					]) {
+						respHeaders.delete(name);
+					}
 
 					// Apply response header transformation if provided
 					if (transformResponseHeaders) {
@@ -441,11 +446,8 @@ export function proxy(
 
 					const location = resp.headers.get("location");
 					const isRedirect =
-						resp.status >= 300 &&
-						resp.status < 400 &&
-						resp.status !== 304 &&
-						!!location;
-					if (!isRedirect) return await finalizeResponse(resp);
+						resp.status >= 300 && resp.status < 400 && resp.status !== 304;
+					if (!isRedirect || !location) return await finalizeResponse(resp);
 
 					if (hop >= maxRedirects) {
 						await resp.body?.cancel();
@@ -454,7 +456,7 @@ export function proxy(
 						);
 					}
 
-					const nextUrl = new URL(location!, currentUrl);
+					const nextUrl = new URL(location, currentUrl);
 					// Re-apply the FULL target policy to the redirect destination.
 					assertTargetAllowed(nextUrl, url);
 
@@ -481,9 +483,13 @@ export function proxy(
 					nextHeaders.set("host", nextUrl.host);
 					if (switchToGet) {
 						hopMethod = "GET";
-						["content-length", "content-type", "transfer-encoding"].forEach(
-							(h) => nextHeaders.delete(h),
-						);
+						for (const h of [
+							"content-length",
+							"content-type",
+							"transfer-encoding",
+						]) {
+							nextHeaders.delete(h);
+						}
 					}
 					hopBody = undefined;
 					currentUrl = nextUrl;

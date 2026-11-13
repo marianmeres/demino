@@ -238,7 +238,7 @@ runTestServerTests([
 					timeout: 100, // Fast timeout to trigger error quickly
 					onError: (error) => {
 						return new Response(
-							JSON.stringify({ error: "Custom error: " + error.message }),
+							JSON.stringify({ error: `Custom error: ${error.message}` }),
 							{
 								status: 502,
 								headers: { "content-type": "application/json" },

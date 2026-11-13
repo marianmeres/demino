@@ -61,10 +61,8 @@ export function deminoCompose(
 	notFoundHandler?: DeminoServeHandler,
 ): DeminoServeHandler {
 	// in case of the same mountPaths, the later wins
-	const mounts = apps.reduce(
-		(m, a) => ({ ...m, [a.mountPath() || "/"]: a }),
-		{} as Record<string, Demino>,
-	);
+	const mounts: Record<string, Demino> = {};
+	for (const app of apps) mounts[app.mountPath() || "/"] = app;
 	// console.log(Object.keys(mounts));
 
 	notFoundHandler ??= () => new Response("Not Found", { status: 404 });

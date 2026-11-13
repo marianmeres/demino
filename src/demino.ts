@@ -14,13 +14,13 @@ import { isValidDate } from "./utils/is-valid-date.ts";
  * Read more at: https://github.com/marianmeres/clog
  */
 export interface Logger {
-	// deno-lint-ignore no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: must stay console compatible (see above)
 	debug: (...args: any[]) => any;
-	// deno-lint-ignore no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: must stay console compatible (see above)
 	log: (...args: any[]) => any;
-	// deno-lint-ignore no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: must stay console compatible (see above)
 	warn: (...args: any[]) => any;
-	// deno-lint-ignore no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: must stay console compatible (see above)
 	error: (...args: any[]) => any;
 }
 
@@ -989,10 +989,9 @@ export function demino(
 			: () => new DeminoSimpleRouter();
 
 	// prepare routers for each method individually
-	const _routers = ["ALL", ...supportedMethods].reduce(
-		(m, k) => ({ ...m, [k]: _routerFactory() }),
-		{} as Record<"ALL" | DeminoMethod, DeminoRouter>,
-	);
+	const _routers = Object.fromEntries(
+		["ALL", ...supportedMethods].map((k) => [k, _routerFactory()]),
+	) as Record<"ALL" | DeminoMethod, DeminoRouter>;
 
 	// see `app.info`
 	const _localMwsCounts: Record<

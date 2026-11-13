@@ -34,7 +34,8 @@ export class DeminoFixedRouter extends DeminoRouter {
 		const params = {};
 
 		//
-		return this.#routes.has(pathname) ? this.#routes.get(pathname)!(params) : null;
+		const callback = this.#routes.get(pathname);
+		return callback ? callback(params) : null;
 	}
 
 	/** Returns all registered route pattern strings. */

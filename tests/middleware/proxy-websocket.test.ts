@@ -43,7 +43,8 @@ function createWsClient(
 	};
 
 	const nextMessage = (): Promise<string | ArrayBuffer> => {
-		if (inbox.length) return Promise.resolve(inbox.shift()!);
+		const queued = inbox.shift();
+		if (queued !== undefined) return Promise.resolve(queued);
 		return new Promise((resolve) => waiters.push(resolve));
 	};
 
@@ -141,7 +142,7 @@ runTestServerTests([
 				);
 
 				const { ws, opened, closed, nextMessage } = createWsClient(
-					base.replace(/^http/, "ws") + "/ws/room?x=1",
+					`${base.replace(/^http/, "ws")}/ws/room?x=1`,
 					{
 						protocols: ["chat.v1", "chat.v2"],
 						headers: { cookie: "session=abc" },
@@ -164,18 +165,22 @@ runTestServerTests([
 				assert.deepEqual([...new Uint8Array(bin)], [1, 2, 3]);
 
 				// path + query forwarded (wildcard target)
-				const upstreamUrl = new URL(seen.url!);
+				assert.ok(seen.url && seen.headers, "the upstream saw the request");
+				const upstreamUrl = new URL(seen.url);
 				assert.equal(upstreamUrl.pathname, "/ws/room");
 				assert.equal(upstreamUrl.search, "?x=1");
 
 				// headers forwarded: cookies, custom injected, loop guard, x-forwarded-*
-				assert.equal(seen.headers!.get("cookie"), "session=abc");
-				assert.equal(seen.headers!.get("x-injected"), "yes");
-				assert.equal(seen.headers!.get("x-demino-proxy-hops"), "1");
-				assert.equal(seen.headers!.get("x-forwarded-proto"), "http");
-				assert.equal(seen.headers!.get("x-forwarded-host"), new URL(base).host);
+				assert.equal(seen.headers.get("cookie"), "session=abc");
+				assert.equal(seen.headers.get("x-injected"), "yes");
+				assert.equal(seen.headers.get("x-demino-proxy-hops"), "1");
+				assert.equal(seen.headers.get("x-forwarded-proto"), "http");
+				assert.equal(seen.headers.get("x-forwarded-host"), new URL(base).host);
 				// offered subprotocols reached the upstream via the dial, not raw header copy
-				assert.match(seen.headers!.get("sec-websocket-protocol")!, /chat\.v2/);
+				assert.match(
+					seen.headers.get("sec-websocket-protocol") ?? "",
+					/chat\.v2/,
+				);
 
 				ws.close();
 				await closed;
@@ -214,7 +219,7 @@ runTestServerTests([
 
 			try {
 				app.get("/ws", proxy(`${upstream.base}/`));
-				const wsUrl = base.replace(/^http/, "ws") + "/ws";
+				const wsUrl = `${base.replace(/^http/, "ws")}/ws`;
 
 				// upstream-initiated close -> client sees code + reason
 				const a = createWsClient(wsUrl);
@@ -299,7 +304,7 @@ runTestServerTests([
 					/^HTTP\/1\.1 504/,
 				);
 			} finally {
-				held.forEach((s) => s.destroy());
+				for (const s of held) s.destroy();
 				await new Promise<void>((resolve) => {
 					silent.close(() => resolve());
 				});

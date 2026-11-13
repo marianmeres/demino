@@ -274,11 +274,7 @@ test("manifest-sync: barrel shims re-export exactly their directory barrel", () 
 
 test("manifest-sync: publish:next sends npm the next dist-tag, publish:all does not", () => {
 	const scripts = pkg.scripts ?? {};
-	assert.equal(
-		scripts["publish"],
-		undefined,
-		'no "publish" script (npm lifecycle hook)',
-	);
+	assert.equal(scripts.publish, undefined, 'no "publish" script (npm lifecycle hook)');
 	assert.match(
 		scripts["publish:next"] ?? "",
 		/^pnpm publish --tag next\b.* && pnpm run publish:jsr$/,

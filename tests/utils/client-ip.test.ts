@@ -27,7 +27,9 @@ test("client-ip: each supported header alone resolves", () => {
 
 test("client-ip: precedence — removing the top header hands over to the next", () => {
 	const init: Record<string, string> = {};
-	ORDER.forEach((name, i) => (init[name] = `10.0.0.${i + 1}`));
+	ORDER.forEach((name, i) => {
+		init[name] = `10.0.0.${i + 1}`;
+	});
 	for (let i = 0; i < ORDER.length; i++) {
 		const headers = h(init);
 		for (let j = 0; j < i; j++) headers.delete(ORDER[j]);

@@ -1,7 +1,7 @@
 import type { DeminoContext, DeminoServeInfo } from "../../../../../src/demino.ts";
 
 export function GET(_r: Request, _i: DeminoServeInfo, c: DeminoContext) {
-	return "c/d|" + (c.locals.mw as string[]).join();
+	return `c/d|${(c.locals.mw as string[]).join()}`;
 }
 
 GET.middlewares = (_r: Request, _i: DeminoServeInfo, c: DeminoContext) => {

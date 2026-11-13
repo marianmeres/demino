@@ -302,9 +302,8 @@ test("authz: async check (ownership via ctx) ", async () => {
 			resolveSubject,
 			// async: pretend to load a resource and check ownership
 			check: async (subject, _permission, ctx) => {
-				const res = (ctx.locals.resource ??= await Promise.resolve({
-					owner: ctx.params.id,
-				})) as { owner: string };
+				ctx.locals.resource ??= await Promise.resolve({ owner: ctx.params.id });
+				const res = ctx.locals.resource as { owner: string };
 				return res.owner === (subject as { id: string }).id;
 			},
 		}),
@@ -374,8 +373,11 @@ test("permissionMatrix: tags static/resolver/public/MISSING correctly", () => {
 	app.get("/orphan", () => "ok"); // MISSING
 
 	const rows = permissionMatrix(app, { resolve });
-	const get = (route: string) =>
-		rows.find((r) => r.route === route && r.method === "GET")!;
+	const get = (route: string) => {
+		const row = rows.find((r) => r.route === route && r.method === "GET");
+		assert.ok(row, `no GET row for ${route}`);
+		return row;
+	};
 
 	assert.equal(get("/x").declaration, "permission");
 	assert.equal(get("/x").permission, "x:read");
@@ -427,9 +429,8 @@ test("permissionMatrix: A/B — matrix permission equals what the gate enforces"
 		withPermission("x:read", () => "ok"),
 	);
 
-	const row = permissionMatrix(app).find(
-		(r) => r.route === "/x" && r.method === "GET",
-	)!;
+	const row = permissionMatrix(app).find((r) => r.route === "/x" && r.method === "GET");
+	assert.ok(row, "no GET row for /x");
 	assert.equal(row.permission, "x:read");
 
 	await withServer(app, async (base) => {

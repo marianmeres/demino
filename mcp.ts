@@ -113,12 +113,12 @@ export const tools: McpToolDefinition[] = [
 
 			const mp = mountPath ? `"${mountPath}"` : "";
 			let code = `${imports.join("\n")}\n\nconst app = demino(${mp});\n\n`;
-			if (mwSetup.length) code += mwSetup.join("\n") + "\n\n";
+			if (mwSetup.length) code += `${mwSetup.join("\n")}\n\n`;
 			if (fileBased) {
 				code += 'await deminoFileBased(app, "./routes");\n\n';
 			}
 			if (routeLines.length) {
-				code += routeLines.join("\n\n") + "\n\n";
+				code += `${routeLines.join("\n\n")}\n\n`;
 			}
 
 			if (compose) {

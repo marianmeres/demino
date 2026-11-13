@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { demino } from "../../src/demino.ts";
+import { stripVTControlCharacters } from "node:util";
+import { type DeminoLogger, demino } from "../../src/demino.ts";
 import { deminoFileBased, routesCompare } from "../../src/misc/file-based.ts";
 import { assertResp, runTestServerTests } from "../_utils.ts";
 
@@ -105,8 +106,7 @@ runTestServerTests([
 			const app = demino();
 			app.logger(null);
 			const debug: string[] = [];
-			// deno-lint-ignore no-explicit-any
-			const logger: any = {
+			const logger: DeminoLogger = {
 				debug: (...a: unknown[]) => debug.push(a.join(" ")),
 				log() {},
 				warn() {},
@@ -115,9 +115,8 @@ runTestServerTests([
 			await deminoFileBased(app, root2, { verbose: true, logger });
 
 			// the file lines are the ones carrying a fixture path (strip ANSI first)
-			// deno-lint-ignore no-control-regex
 			const files = debug
-				.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""))
+				.map((l) => stripVTControlCharacters(l))
 				.filter((l) => l.includes("_root2/"));
 			const expected = [
 				"tests/fixtures/_root2/_middleware.ts",
@@ -138,8 +137,7 @@ runTestServerTests([
 			const app = demino();
 			app.logger(null);
 			const warnings: string[] = [];
-			// deno-lint-ignore no-explicit-any
-			const logger: any = {
+			const logger: DeminoLogger = {
 				debug() {},
 				log() {},
 				error() {},
@@ -190,7 +188,7 @@ test("deminoFileBased: a trailing slash in rootDir still registers routes", asyn
 	// exactly like the no-trailing-slash form.
 	const app = demino();
 	app.logger(null);
-	await deminoFileBased(app, root1 + "/", { verbose: false });
+	await deminoFileBased(app, `${root1}/`, { verbose: false });
 
 	const routes = app.routes().map((r) => r.route);
 	assert.ok(routes.length > 0, "expected routes to be registered");

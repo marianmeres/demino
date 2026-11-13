@@ -35,8 +35,6 @@ test("express like router", async () => {
 		await assertResp(fetch(`${srv.base}/user/bar`), 404);
 		await assertResp(fetch(`${srv.base}/user/bar/section`), 404);
 		await assertResp(fetch(`${srv.base}/asdf`), 404);
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}

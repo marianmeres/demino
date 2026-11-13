@@ -34,8 +34,6 @@ test("regex router", async () => {
 		await assertResp(fetch(`${srv.base}`), 200, "home");
 		await assertResp(fetch(`${srv.base}/foo`), 200, "foo");
 		await assertResp(fetch(`${srv.base}/asdf`), 200, "any");
-	} catch (e) {
-		throw e;
 	} finally {
 		await srv?.close();
 	}
