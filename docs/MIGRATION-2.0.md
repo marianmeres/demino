@@ -136,9 +136,10 @@ app.static("/files", dir, { enableCors: true, quiet: true });
 app.static("/files", dir, { headers: { "access-control-allow-origin": "*" } });
 ```
 
-Not `cors()`: a middleware's `ctx.headers` never reach a `Response` the handler returns, and
-the static handler returns one, so `app.use("/files/*", cors())` leaves static responses
-without the header (as it did in 1.x).
+On 2.0.x, not `cors()`: a middleware's `ctx.headers` did not reach a `Response` the handler
+returns, and the static handler returns one, so `app.use("/files/*", cors())` left static
+responses without the header (as it did in 1.x). Since 2.1.0 `ctx.headers` reach every
+response, and `cors()` in front of a static mount works.
 
 ```ts
 // 1.x: a wrapper around serveDir that re-built the Response to add Cache-Control

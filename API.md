@@ -188,7 +188,7 @@ interface DeminoContext {
 	params: Record<string, string>; // Route params (readonly)
 	locals: Record<string, any>; // Request-scoped data store
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta (frozen)
-	headers: Headers; // Response headers, for the responses Demino builds
+	headers: Headers; // Response headers (reach every response)
 	status: number; // Response status (default: 200)
 	route: string; // Matched route pattern
 	ip: string; // Client IP address
@@ -215,11 +215,22 @@ handler's meta. A generic primitive — useful for auth, rate-limit tiers, cache
 policy, audit tags, telemetry, OpenAPI, etc. Its read-side companion is
 [`app.routes()`](#demino-interface).
 
-**`headers`** — merged into the responses Demino builds: a response created from a returned
-value, and the default error response. **`status`** is the status of a response created from
-a returned value. A `Response` instance returned by a handler or by a custom error handler is
-sent as it is, with neither. For a header every response must carry, register a
-[response hook](#deminoresponsehook).
+**`headers`** — reach every response: one created from a returned value, an error response,
+and (since 2.1.0) a `Response` instance returned by a handler or by a custom error handler.
+A returned `Response` keeps its own headers:
+
+- a header is added only when the response does not carry it,
+- `Set-Cookie`: every cookie the response lacks is appended,
+- `Vary`: the tokens the response lacks are added,
+- on the error path a `content-type` set here is dropped (it described the body the handler
+  planned).
+
+A returned `Response` with a body gets the headers added to the object itself (one with an
+immutable header list, such as a `fetch()` result, is rebuilt). One with no body is copied
+first, so an instance shared between requests is never written to. A `101` is left alone.
+
+**`status`** — the status of a response created from a returned value. A returned `Response`
+keeps its own.
 
 **Example:**
 
@@ -252,7 +263,8 @@ type DeminoHandler = (
 
 - `undefined` → 204 No Content
 - Plain object/array/null/toJSON → JSON stringified
-- `Response` → Passed through directly (`ctx.headers` / `ctx.status` are not applied to it)
+- `Response` → Sent as returned (body, status, own headers), plus the
+  [`ctx.headers`](#deminocontext) it does not carry
 - `Error` → Error response generated
 - Anything else → `toString()` as text/html
 
@@ -282,8 +294,8 @@ type DeminoResponseHook = (
 app.onResponse(hook): Demino
 ```
 
-A middleware ends when it returns, and [`ctx.headers`](#deminocontext) only reach the
-responses Demino builds. A response hook runs after the response exists, whichever way it was
+A middleware ends when it returns: it can set [`ctx.headers`](#deminocontext), but it never
+sees the response. A response hook runs after the response exists, whichever way it was
 produced:
 
 - a response built from a returned value,
@@ -299,6 +311,8 @@ produced:
 - Return a `Response` to replace the one in hand, for the next hook and for the client.
   Return nothing to keep it. A hook that replaces a response owns the old one's body: reuse
   it or cancel it.
+- The response in hand carries the `ctx.headers` already. A replacement is sent as the hook
+  made it, so build it from the one in hand (`new Response(body, response)`) to keep them.
 - The response a hook receives always has mutable headers. A `fetch()` result or a
   `Response.redirect()` has an immutable header list, so Demino hands the hook an equivalent
   response (same status, headers and body stream). A response that is already mutable is
@@ -422,8 +436,8 @@ Configuration options for creating a Demino app.
 ```ts
 interface DeminoOptions {
 	routerFactory?: () => DeminoRouter; // Custom router factory
-	noXPoweredBy?: boolean; // Disable X-Powered-By header
-	noXResponseTime?: boolean; // Disable X-Response-Time header
+	noXPoweredBy?: boolean; // Disable X-Powered-By header (set on every response)
+	noXResponseTime?: boolean; // Disable X-Response-Time header (set on every response)
 	verbose?: boolean; // Enable verbose logging
 	logger?: DeminoLogger | null; // Application logger
 	errorHandler?: DeminoHandler; // Custom error handler
@@ -886,7 +900,9 @@ app.get("^/(?<year>\\d{4})$", handler);
 
 ### cors()
 
-Creates CORS middleware.
+Creates CORS middleware. It writes to [`ctx.headers`](#deminocontext), which reach every
+response, so it also covers routes that return a `Response` (`app.static()`, `proxy()`,
+streams).
 
 ```ts
 function cors(options?: Partial<CorsOptions>): DeminoHandler;

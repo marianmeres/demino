@@ -5,13 +5,13 @@
 Demino includes several built-in middleware factories. Each returns a `DeminoHandler` that
 can be registered via `app.use()` or as route-specific middleware.
 
-A middleware shapes the response through `ctx.headers` (and `ctx.status`), and those apply
-only to the responses Demino builds (from a returned value; the headers also go into the
-default error response). A
-`Response` returned by a handler or by a custom error handler is sent without them, which is
-why `cors()` does not cover `app.static()` and `setCookie()` does not survive `redirect()`.
-Code that must see every response is a response hook (`app.onResponse`, since 2.1.0), not a
-middleware.
+A middleware shapes the response through `ctx.headers`, and those reach every response:
+one built from a returned value, an error response, and (since 2.1.0) a `Response` returned
+by a handler or by a custom error handler. The returned response's own headers win;
+`set-cookie` and `vary` are merged. So `cors()` covers `app.static()` and `proxy()`, and a
+`setCookie()` survives `redirect()`. `ctx.status` applies only to a response built from a
+returned value. Code that must see the response itself is a response hook
+(`app.onResponse`, since 2.1.0), not a middleware.
 
 ## Key Files
 

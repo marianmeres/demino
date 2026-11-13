@@ -205,7 +205,7 @@ interface DeminoContext {
 	params: Record<string, string>; // Route params (frozen)
 	locals: Record<string, any>; // Request-scoped storage
 	routeMeta: Readonly<Record<string, unknown>>; // Static handler meta, frozen (since 1.10.0)
-	headers: Headers; // Response headers - Demino-built responses only (not a returned Response)
+	headers: Headers; // Response headers - reach EVERY response (since 2.1.0 a returned Response too)
 	status: number; // Response status - of a response built from a returned value
 	route: string; // Matched route pattern
 	ip: string; // Client IP (info.remoteAddr, or forwarding headers when trustProxy is on)
@@ -264,9 +264,9 @@ Handler return values are auto-converted to Response:
 | `Error`            | Error response            |
 | Other              | `toString()` as text/html |
 
-"Pass through" is literal: `ctx.headers` / `ctx.status` are **not** applied to a returned
-`Response` (nor to a custom error handler's `Response`). Only response hooks
-(`app.onResponse`) see those.
+"Pass through" covers body, status and the response's own headers. `ctx.headers` are added
+to a returned `Response` where it does not carry them (since 2.1.0, Special Behaviors #12);
+`ctx.status` is not applied to it.
 
 ## Router Parameter Syntax
 
@@ -500,7 +500,21 @@ lifecycle hook `pnpm publish` would run.
     by identity). **A hook that throws fails the request** like a throwing middleware
     (`ctx.error` = HttpError with the throw as `.cause`, error handler runs, 5xx logged); that
     error response is sent **without** re-running the hooks. No hooks registered = no extra
-    `await`, same path as before.
+    `await`, same path as before. The response in hand already carries `ctx.headers` (#12); a
+    hook's replacement is NOT merged again (sent as the hook made it).
+12. **`ctx.headers` reach every response** (since 2.1.0): a `Response` returned by a handler
+    or by a custom error handler gets them through `withContextHeaders()` (private, in
+    `demino.ts`), where the response is produced, before the response hooks. The response's
+    own headers win (added only if absent); `set-cookie` is appended minus exact duplicates,
+    `vary` is merged by token - which keeps the merge idempotent for a response already built
+    from `ctx.headers` (`createResponseFrom(req, body, ctx.headers)`, `withETag`). The headers
+    are added in place when the response has a body (rebuilt if its header list is
+    immutable); a **bodiless** response is always copied, because such an instance can be
+    shared across requests and must not collect one request's cookies. `101` untouched.
+    Error path: `content-type` is deleted from `ctx.headers` before either branch. The
+    x-headers (`X-Powered-By`, `X-Response-Time`) are written to `ctx.headers` for every
+    result, so they are on every response too (`noXPoweredBy` / `noXResponseTime` opt out).
+    `ctx.status` is still not applied to a returned `Response`.
 
 ## Common Modifications
 
@@ -559,8 +573,8 @@ on bad percent-encoding, 301 (relative `Location`) to the normalised path / trai
 form, 404 outside root / dot-segments / missing, weak `ETag` `W/"<size>-<mtime>"` +
 `Last-Modified` + 304, single `Range` → 206/416, content types via `mrmime`
 (`application/octet-stream` fallback, `; charset=utf-8` on text-like). Non-ENOENT fs errors
-are thrown (reach the error handler). CORS is not a static option, and `cors()` cannot add
-it (a handler-returned `Response` never gets `ctx.headers`) — use
+are thrown (reach the error handler). CORS is not a static option: put `cors()` in front
+(since 2.1.0 `ctx.headers` reach the file responses), or set a fixed header with
 `headers: { "access-control-allow-origin": "*" }`.
 
 ## Rate Limiting
@@ -683,16 +697,16 @@ const app2 = demino("", [], {
 
 ## Recent Additions
 
-### 2.1.0 (additive, no breaking change)
+### 2.1.0 (one addition, one behavior change)
 
 - **Response hooks.** `app.onResponse(hook)` + `DeminoOptions.onResponse` + exported
   `DeminoResponseHook` type: `(req, info, ctx, response) => Response | void`, run for every
-  response the app returns (see Special Behaviors #11). Closes the gap that `ctx.headers`
-  only reach Demino-built responses, so an app can now state "every response carries header
-  X". `_app` got a single exit (response phase → access log → return). `ctx.headers` itself
-  is unchanged: `cors()` / `cookies()` / `rateLimit()` still write there, so their headers
-  still miss a returned `Response` unless a hook copies them over. Tests in
-  `tests/response-hooks.test.ts`.
+  response the app returns (see Special Behaviors #11). A middleware can set `ctx.headers`
+  but never sees the response; a hook does, so an app can state "every response carries
+  header X unless it already has one" or replace a response. `_app` got a single exit
+  (response phase → access log → return). Tests in `tests/response-hooks.test.ts`.
+- **`ctx.headers` reach every response** (behavior change, see _Recent Breaking Changes_ and
+  Special Behaviors #12). Tests in `tests/context-headers.test.ts`.
 
 ### 2.0.0
 
@@ -793,6 +807,19 @@ const app2 = demino("", [], {
 - `DEMINO_SORT` (`PRE`/`DEFAULT`/`HANDLER`): publishes middleware sort-order points
 
 ## Recent Breaking Changes
+
+### 2.1.0 (behavior change, no API change)
+
+- **`ctx.headers` are applied to a returned `Response`** (handler-returned and custom error
+  handler's), where it does not carry the header already; `set-cookie` and `vary` are
+  merged. Before, such a response was sent without them. Consequences: `cors()` covers
+  `app.static()` / `proxy()` / streams, a `cookies()` cookie survives `redirect()`,
+  `Retry-After` (`rateLimit()`) and `Allow` (405) reach a custom error handler's `Response`.
+  A returned `Response` with a body is modified in place; a bodiless one is copied.
+- **`X-Powered-By` / `X-Response-Time` are on every response**, not only on the ones Demino
+  builds (unless the response carries its own; `noXPoweredBy` / `noXResponseTime` opt out).
+- **Action:** a test asserting that a returned `Response` lacks those headers must be updated;
+  a handler that relied on `ctx.headers` being dropped must stop setting them.
 
 ### 2.0.0
 

@@ -96,7 +96,8 @@ nowhere (not a supported runtime), no `@std/` / `jsr:` / `npm:` / `https:` speci
    - Route-global middlewares (`app.use("/route", mw)`)
    - Route-method middlewares (`app.get("/route", mw, handler)`)
 6. **Handler Execution** → Final handler (last argument to route method)
-7. **Response Conversion** → Return value converted to `Response`
+7. **Response Conversion** → Return value converted to `Response`; a returned `Response`
+   is kept, and gets the `ctx.headers` it does not carry (since 2.1.0)
 8. **Error Handling** → If error thrown, error handler invoked
 9. **Response Hooks** (since 2.1.0) → `app.onResponse` hooks get the response, whichever of
    the steps above produced it (a returned `Response`, an error response and the app's own

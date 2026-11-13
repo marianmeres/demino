@@ -186,9 +186,8 @@ Unlike a bare server handler, the Demino route handlers are not required to retu
 The automatic content type headers above are only set if none exist.
 
 You can safely bypass this opinionated behavior by returning the `Response` instance
-yourself. It is then sent as it is: `ctx.headers` and `ctx.status` are not applied to it.
-Code that must see every response, returned ones included, goes into a
-[response hook](#response-hooks).
+yourself. Its body, its status and its own headers are sent as they are. The headers set on
+`ctx.headers` are added to it where it does not carry them already (see [Context](#context)).
 
 ```typescript
 // conveniently return plain object and have it be converted 
@@ -240,8 +239,9 @@ It consists of:
 
 - `params` - the readonly router parsed params,
 - `locals` - plain object, where each middleware can write and read arbitrary data.
-- `status` - HTTP status number to be optionally used in the final response,
-- `headers` - any headers to be optionally used in the final response,
+- `status` - HTTP status number to be optionally used in the final response (a returned
+  `Response` instance keeps its own),
+- `headers` - headers for the final response, whichever way it is produced (see below),
 - `error` - to be used in a custom error handler.
 - `route` - currently matched route definition
 - `routeMeta` - static metadata declared on the matched route handler (see below)
@@ -266,6 +266,31 @@ app.use(async (req: Request, info: DeminoServeInfo, ctx: DeminoContext) => {
 // ...and route handler acting as a pure renderer. This handler will not
 // be reached if the article is not found
 app.get("/[articleId]", (req, info, ctx) => render(ctx.locals.article));
+```
+
+### Response headers (`ctx.headers`)
+
+`ctx.headers` reach every response: one created from a returned value, an error response, and
+a `Response` instance returned by a handler or by a custom error handler. That is how
+`cors()`, `cookies()` or `rateLimit()` work on any route, whatever it returns - a static
+file, a proxied response, a stream, a redirect.
+
+A returned `Response` keeps its own headers: a header from `ctx.headers` is added only when
+the response does not carry it. Two headers are merged instead: every `Set-Cookie` the
+response lacks is appended, and `Vary` gains the tokens it lacks. On the error path a
+`content-type` set on `ctx.headers` is dropped, because it described the body the handler
+planned.
+
+```typescript
+app.use((req, info, ctx) => {
+	ctx.headers.set("cache-control", "no-store");
+});
+
+// cache-control: no-store
+app.get("/a", () => new Response("a"));
+
+// cache-control: max-age=60 (the response's own wins)
+app.get("/b", () => new Response("b", { headers: { "cache-control": "max-age=60" } }));
 ```
 
 ### Static route metadata (`ctx.routeMeta` / `withMeta`)
@@ -387,8 +412,8 @@ which would drop the very stack you're logging. To silence everything (including
 
 ## Response hooks
 
-A middleware ends when it returns, and `ctx.headers` only reach the responses Demino builds
-itself. A response hook is app-level code that sees _every_ response the app returns: one
+A middleware ends when it returns: it can set `ctx.headers`, but it never sees the response.
+A response hook is app-level code that sees _every_ response the app returns: one
 built from a returned value, a `Response` a handler returned (a stream, a proxied or static
 file response, a redirect), an error response (the default one or your error handler's) and
 the app's own `404` / `405`.
@@ -404,8 +429,10 @@ app.onResponse((req, info, ctx, response) => {
 
 Hooks run in registration order, once per request, after the response exists and before the
 access log. Return a `Response` to replace the one in hand, or nothing to keep it. The
-response's headers are always mutable, wherever the response came from (a `fetch()` result
-included). `ctx` is the request's own context: `ctx.error` on the error path, `ctx.route` and
+response in hand carries the `ctx.headers` already, and its headers are always mutable,
+wherever the response came from (a `fetch()` result included). A replacement is sent as the
+hook made it: build it from the one in hand (`new Response(body, response)`) to keep the
+headers. `ctx` is the request's own context: `ctx.error` on the error path, `ctx.route` and
 `ctx.routeMeta` of the match. Hooks are per app (see
 [composition](#extra-apps-composition-route-groups)) and are skipped for a WebSocket upgrade.
 
@@ -510,9 +537,9 @@ What you get: `GET`/`HEAD` only (anything else is a 405 with `Allow`), content t
 301 redirects to the normalised path (`/a//b` → `/a/b`, a directory without a trailing slash →
 with it, a file with one → without), and 404 for anything outside the root, dot-segments (unless
 `showDotfiles`) and missing files. Filesystem errors other than "not found" are thrown, so they
-reach your error handler. The route must not contain dynamic segments. For CORS, set the header
-through `headers` (`{ "access-control-allow-origin": "*" }`): `cors()` cannot add it, because a
-middleware's `ctx.headers` never reach a `Response` the handler returns.
+reach your error handler. The route must not contain dynamic segments. For CORS, put the
+`cors()` middleware in front (`app.use(cors())`), or set a fixed header through `headers`
+(`{ "access-control-allow-origin": "*" }`).
 
 `serveStatic` is also usable on its own, under any route of yours:
 
@@ -1034,6 +1061,29 @@ Named events can be sent using the `event:` field:
 ```typescript
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
+
+## Behavior changes (2.1.0)
+
+### `ctx.headers` reach a returned `Response`
+
+Before 2.1.0, a `Response` instance returned by a handler or by a custom error handler was
+sent without the headers set on `ctx.headers`. Now they are added to it, where the response
+does not carry them already (`Set-Cookie` and `Vary` are merged) - see
+[Response headers](#response-headers-ctxheaders). What changes in practice:
+
+- `cors()` covers `app.static()`, `proxy()` and any route returning a `Response`,
+- a cookie set through `cookies()` survives a `redirect()`,
+- `Retry-After` (from `rateLimit()`) and `Allow` (on a `405`) reach a custom error handler's
+  `Response`.
+
+A returned `Response` that has a body gets the headers added to the object itself. One with
+no body is copied first, so an instance shared between requests is never written to.
+
+### `X-Powered-By` and `X-Response-Time` are on every response
+
+They were set only on the responses Demino created. Now a returned `Response` gets them too
+(static files, proxied responses, redirects), unless it carries its own. The `noXPoweredBy`
+and `noXResponseTime` options turn them off as before.
 
 ## Breaking changes (2.0.0)
 

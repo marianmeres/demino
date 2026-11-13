@@ -60,14 +60,18 @@ export interface DeminoContext {
 	/** Userland read/write key-value map. */
 	locals: Record<string, unknown>;
 	/**
-	 * Custom userland response (!) headers for the responses Demino builds: they are
-	 * merged into a response auto-created from a returned value and into the default
-	 * error response. A `Response` instance returned by a handler or by a custom error
-	 * handler is sent as it is, without them - use a response hook
-	 * ({@linkcode Demino.onResponse}) for a header every response must carry.
+	 * Custom userland response (!) headers. They reach every response: one auto-created
+	 * from a returned value, the error response, and (since 2.1.0) a `Response` instance
+	 * returned by a handler or by a custom error handler.
+	 *
+	 * A returned `Response` keeps its own headers: an entry from here is added only when
+	 * the response does not carry that header, except `set-cookie` (every cookie it
+	 * lacks is appended) and `vary` (the tokens it lacks are added). On the error path a
+	 * `content-type` set here is dropped - it described the body the handler planned.
 	 */
 	headers: Headers;
-	/** The response status to be used in the final response if auto generating the response (default 200). */
+	/** The response status to be used in the final response if auto generating the response
+	 * (default 200). A returned `Response` instance keeps its own status. */
 	status: number;
 	/** Internal: timestamp of the incoming request. */
 	__start: Date;
@@ -658,6 +662,91 @@ function withMutableHeaders(response: Response): Response {
 }
 
 /**
+ * `Vary` as it should read once the tokens of `incoming` are in, or `null` when it
+ * already covers them (a `*` covers everything).
+ */
+function mergeVary(own: string | null, incoming: string): string | null {
+	const tokens = (value: string) =>
+		value
+			.split(",")
+			.map((t) => t.trim())
+			.filter(Boolean);
+	const merged = tokens(own ?? "");
+	const seen = new Set(merged.map((t) => t.toLowerCase()));
+	if (seen.has("*")) return null;
+
+	let added = false;
+	for (const token of tokens(incoming)) {
+		if (token === "*") return "*";
+		if (seen.has(token.toLowerCase())) continue;
+		seen.add(token.toLowerCase());
+		merged.push(token);
+		added = true;
+	}
+	return added ? merged.join(", ") : null;
+}
+
+/**
+ * Applies `ctx.headers` to a `Response` Demino did not build - one a handler or a custom
+ * error handler returned - so that what was put there (CORS, cookies, `Retry-After`,
+ * `Allow`, the x-headers) reaches every response, not only the auto-created ones.
+ *
+ * The response's own headers win: an entry is added only when the response does not
+ * carry that header. The two list-valued ones are merged instead: every `set-cookie` the
+ * response lacks is appended, and `vary` gains the tokens it lacks. That also makes the
+ * merge idempotent, which a response already built from `ctx.headers` needs
+ * (`createResponseFrom(req, body, ctx.headers)` in a wrapper, `withETag`).
+ *
+ * The headers are added to the returned object itself, except where that is not safe. A
+ * response with no body is copied first: such an instance can be shared across requests
+ * (a module-level `new Response(null, { status: 204 })`), and it must not collect one
+ * request's cookies for the next. One with an immutable header list is rebuilt (see
+ * `withMutableHeaders`). A `101` is the runtime's own and is left alone.
+ */
+function withContextHeaders(response: Response, headers: Headers): Response {
+	if (response.status === HTTP_STATUS.INFO.SWITCHING_PROTOCOLS.CODE) return response;
+
+	// what is there to add?
+	const own = response.headers;
+	const ownCookies = new Set(own.getSetCookie());
+	const cookies = headers.getSetCookie().filter((cookie) => !ownCookies.has(cookie));
+	const ctxVary = headers.get("vary");
+	const vary = ctxVary === null ? null : mergeVary(own.get("vary"), ctxVary);
+	const missing: [string, string][] = [];
+	headers.forEach((value, name) => {
+		// (iteration yields lowercase names)
+		if (name === "set-cookie" || name === "vary") return;
+		if (!own.has(name)) missing.push([name, value]);
+	});
+	if (!cookies.length && !missing.length && vary === null) return response;
+
+	let target: Response;
+	if (response.body === null) {
+		try {
+			target = new Response(null, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: own,
+			});
+		} catch {
+			// a `Response.error()` (status 0) cannot be copied: sent as it is
+			return response;
+		}
+	} else {
+		target = withMutableHeaders(response);
+	}
+
+	try {
+		for (const [name, value] of missing) target.headers.set(name, value);
+		for (const cookie of cookies) target.headers.append("set-cookie", cookie);
+		if (vary !== null) target.headers.set("vary", vary);
+	} catch {
+		// immutable and not rebuildable (see `withMutableHeaders`): sent as it is
+	}
+	return target;
+}
+
+/**
  * Builds the effective request URL surfaced as `ctx.url`, honoring reverse-proxy
  * forwarding headers when (and only when) `trustProxy` opts in. Private on purpose
  * — not exported. See {@link DeminoOptions.trustProxy} for the security model.
@@ -844,13 +933,13 @@ function _createContext(
 export interface DeminoOptions {
 	/** Function to return custom DeminoRouter instance. */
 	routerFactory?: () => DeminoRouter;
-	/** If truthy will not set `x-powered-by` header signature.
-	 * Relevant only when auto-creating the Response (that is when middlewares
-	 * chain returns anything other than Response instance). */
+	/** If truthy will not set `x-powered-by` header signature. Otherwise it is on every
+	 * response that does not carry one already (since 2.1.0 also on a returned
+	 * `Response` instance). */
 	noXPoweredBy?: boolean;
-	/** If truthy will not set `x-response-time` header value.
-	 * Relevant only when auto-creating the Response (that is when middlewares
-	 * chain returns anything other than Response instance). */
+	/** If truthy will not set `x-response-time` header value. Otherwise it is on every
+	 * response that does not carry one already (since 2.1.0 also on a returned
+	 * `Response` instance). */
 	noXResponseTime?: boolean;
 	/** Will log some more details. (via DeminoLogger) */
 	verbose?: boolean;
@@ -1057,13 +1146,17 @@ export function demino(
 			handlerResult = undefined;
 		}
 
+		// What `ctx.headers` holds goes to the error response either way (`Allow`,
+		// `Retry-After`, CORS, cookies, the x-headers) - except a content-type: it was
+		// set for the body the handler planned, not for the error's (the factory below
+		// sets the proper one, a returned `Response` keeps its own).
+		_maybeSetXHeaders(context);
+		context.headers.delete("content-type");
+
 		let r: Response;
 		if (handlerResult instanceof Response) {
-			r = handlerResult;
+			r = withContextHeaders(handlerResult, context.headers);
 		} else {
-			_maybeSetXHeaders(context);
-			// make sure to reset any content-type we might have (the factory below will set the proper one)
-			context.headers.delete("content-type");
 			r = createResponseFrom(
 				req,
 				handlerResult || getErrorMessage(context.error),
@@ -1295,25 +1388,25 @@ export function demino(
 					// instance directly (unlike with a bare serve handler)
 					let result = await midware.execute([req, info, context]);
 
-					//
-					const headers = context?.headers || new Headers();
-
-					// maybe some x-headers (this will work only if the result is not a Response instance)
-					if (!(result instanceof Response)) {
-						_maybeSetXHeaders(context);
-					}
+					// the x-headers go to `ctx.headers`, like everything else meant
+					// for the response - and `ctx.headers` reach every response
+					_maybeSetXHeaders(context);
 
 					// middleware returned error instead of throwing? Not a best practice, but possible...
 					if (result instanceof Error) {
 						context.error = result;
 						result = await _createErrorResponse(req, info, context);
-					} // we need Response instance eventually...
-					else if (!(result instanceof Response)) {
+					} // a Response is sent as returned (its body, its status, its own
+					// headers), plus whatever `ctx.headers` holds that it does not carry
+					else if (result instanceof Response) {
+						result = withContextHeaders(result, context.headers);
+					} // anything else: we need Response instance eventually...
+					else {
 						result = createResponseFrom(
 							req,
 							result,
-							headers,
-							context?.status,
+							context.headers,
+							context.status,
 						);
 					}
 

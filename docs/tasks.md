@@ -235,8 +235,8 @@ app.get("/assets/*", (req) =>
 ### Checklist
 
 - [ ] `route` has no dynamic segments (`[x]`, `:x`)
-- [ ] CORS, if needed, via `headers: { "access-control-allow-origin": … }` — `cors()` does not
-  reach a handler-returned `Response`
+- [ ] CORS, if needed, via `cors()` in front of the mount (since 2.1.0 `ctx.headers` reach the
+  file responses) or a fixed `headers: { "access-control-allow-origin": … }`
 - [ ] Non-"not found" fs errors reach the app's error handler (they are thrown)
 
 ---
