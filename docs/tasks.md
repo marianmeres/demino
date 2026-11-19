@@ -176,7 +176,7 @@ export function myUtil(input: string): string {
 
 - [ ] Only this file says the runtime's name (portability guard b)
 - [ ] `tests/adapters/[name].test.ts` covers: defaults, `port: 0`, `url`, `remoteAddr` →
-  `ctx.ip`, a WebSocket echo, `signal` vs `shutdown()`, port in use
+      `ctx.ip`, a WebSocket echo, `signal` vs `shutdown()`, port in use
 - [ ] Full suite green on that runtime through the harness
 
 ---
@@ -236,7 +236,7 @@ app.get("/assets/*", (req) =>
 
 - [ ] `route` has no dynamic segments (`[x]`, `:x`)
 - [ ] CORS, if needed, via `cors()` in front of the mount (since 2.1.0 `ctx.headers` reach the
-  file responses) or a fixed `headers: { "access-control-allow-origin": … }`
+      file responses) or a fixed `headers: { "access-control-allow-origin": … }`
 - [ ] Non-"not found" fs errors reach the app's error handler (they are thrown)
 
 ---
@@ -310,8 +310,8 @@ await serve(app);
 - [ ] No directories starting with `_` or `.` (except `_middleware.ts`)
 - [ ] Using default router (file-based routing requires DeminoSimpleRouter)
 - [ ] Root dir exists — a missing root throws a plain `Error` with `code: "ENOENT"` and
-  `name: "NotFound"` by default (match on `code`); pass `ignoreMissingRootDir: true` only
-  for genuinely optional dirs
+      `name: "NotFound"` by default (match on `code`); pass `ignoreMissingRootDir: true` only
+      for genuinely optional dirs
 
 ---
 

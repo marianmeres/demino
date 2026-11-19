@@ -90,10 +90,10 @@
     "rpm": "pnpm run release minor -y && pnpm run publish:all"
   },
   "dependencies": {
-    "@marianmeres/clog": "^3.21.0",
+    "@marianmeres/clog": "^3.23.1",
     "@marianmeres/http-utils": "^2.12.0",
     "@marianmeres/midware": "^1.5.0",
-    "@marianmeres/simple-router": "^3.4.0",
+    "@marianmeres/simple-router": "^3.5.0",
     "mrmime": "^2.0.1"
   },
   "peerDependencies": {
@@ -105,9 +105,9 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.3",
-    "@types/node": "^24",
-    "@types/ws": "^8.18",
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^24.19.2",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2",
     "ws": "^8.18"
   }
