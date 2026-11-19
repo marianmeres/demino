@@ -1224,6 +1224,10 @@ interface AuthzOptions {
 6. Run `check` for each permission with `every` (default) or `some`.
 7. All required pass → allow; otherwise → deny (403).
 
+**Ownership / ABAC** stays in your `check` (load the resource from `ctx` and decide, e.g.
+via an rbac rule). There is no built-in resource loader — keep coarse permission at the
+gate and row-level scoping in the data layer; re-check ownership in write transactions.
+
 **Example:**
 
 ```ts
