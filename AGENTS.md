@@ -383,8 +383,10 @@ app.get("/data", validateMw, handler); // Method-specific
 ### Custom Error Handler
 
 ```ts
+import { getErrorMessage } from "@marianmeres/http-utils";
+
 app.error((req, info, ctx) => {
-	return { error: ctx.error.message };
+	return { error: getErrorMessage(ctx.error) }; // see "Error Handling" below
 });
 ```
 
@@ -546,17 +548,22 @@ publishes).
 ## Error Handling
 
 ```ts
-// Throw HTTP errors
-import { createHttpError, HTTP_ERROR } from "@marianmeres/http-utils";
+// Throw HTTP errors (any thrown error with a numeric `status` works; none = 500)
+import { createHttpError, getErrorMessage, HTTP_ERROR } from "@marianmeres/http-utils";
 throw createHttpError(404);
 throw new HTTP_ERROR.NotFound();
 
 // Custom handler
 app.error((req, info, ctx) => {
-	ctx.status = ctx.error?.status || 500;
-	return { error: ctx.error.message };
+	return { error: getErrorMessage(ctx.error) };
 });
 ```
+
+Inside the error handler `ctx.error` is always an `HttpError` carrying the `status`; whatever
+was thrown is its `.cause`. So `ctx.error.message` is only the status text (`"Not Found"`,
+`"Internal Server Error"`) and the thrown message is read with `getErrorMessage(ctx.error)`
+(what the tests do). The response status is always `ctx.error.status`: `ctx.status` set in the
+error handler is ignored, and only a returned `Response` sends a different one.
 
 ## Static Files
 
@@ -905,6 +912,9 @@ For deeper context, consult:
 - [Conventions](./docs/conventions.md) — Code style, portability rule, testing
 - [Tasks](./docs/tasks.md) — Step-by-step procedures (running on each runtime, adding an
   adapter / dependency / middleware, verifying a change)
+- [Changelog](./CHANGELOG.md) — consumer-facing: the behavior and breaking changes per
+  release (they lived in README.md until 2.1.0). A release that changes behavior or breaks
+  something gets an entry there, not in the README
 - [Migrating to 2.0](./docs/MIGRATION-2.0.md) — consumer-facing: every observable 2.0.0 change
   with before/after snippets and the `sed` recipe
 - [Reverse proxies and `X-Forwarded-*` spoofing](./docs/reverse-proxy-and-forwarded-headers.md)

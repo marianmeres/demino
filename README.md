@@ -56,59 +56,66 @@ On Deno the adapter is optional: a Demino app is a plain `(req, info) => Respons
 `Deno.serve(app)` keeps working as it always did (see [Runtimes](#runtimes) for what the adapter
 adds).
 
-## Runtimes
+## Table of Contents
 
-The core of Demino is runtime-agnostic (web standards plus the `node:*` subset). Starting a
-server is the only runtime-specific step, and it is one import away:
+- [The app](#the-app)
+- [Mount path](#mount-path)
+- [Routing](#routing)
+- [Middlewares and route handlers](#middlewares-and-route-handlers)
+- [Context](#context)
+- [Application Locals](#application-locals)
+- [Error handling](#error-handling)
+- [Response hooks](#response-hooks)
+- [Application log](#application-log)
+- [Serving static files](#serving-static-files)
+- [Runtimes](#runtimes)
+- [Testing](#testing)
+- [Extras](#extras)
+  - [Behind a reverse proxy](#extra-behind-a-reverse-proxy-trustproxy-ctxurl)
+  - [Bundled middlewares](#extra-bundled-middlewares): [authz](#authorization-authz),
+    [CORS](#cors), [trailing slash](#trailing-slash), [proxy](#proxy),
+    [redirect](#redirect), [rate limit](#ratelimit), [body limit](#bodylimit),
+    [cookies](#cookies), [ETag](#etag)
+  - [URL Pattern router](#extra-url-pattern-router)
+  - [Directory based routing](#extra-directory-based-routing)
+  - [Apps composition (Route groups)](#extra-apps-composition-route-groups)
+  - [Server-Sent Events (SSE)](#extra-server-sent-events-sse)
+  - [Listen info logging](#extra-listen-info-logging)
+- [Upgrading](#upgrading)
 
-| Runtime | Import                     | Server underneath                      |
-| ------- | -------------------------- | -------------------------------------- |
-| Deno    | `@marianmeres/demino/deno` | the built-in HTTP server               |
-| Node    | `@marianmeres/demino/node` | own bridge over `node:http` (HTTP/1.1) |
+## The app
 
-Every adapter exports the same `serve(handler, options?)`, resolves with the same `ServeHandle`,
-and defaults to `0.0.0.0:8000` with the listen info printed (pass `onListen: () => {}` to
-silence it):
+The `demino` function creates the app. It takes up to four arguments, all of them optional:
 
 ```ts
-import { demino } from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/node";
-
-const app = demino();
-app.get("/", () => "Hello");
-
-const server = await serve(app, {
-	port: 3000, // 0 picks a free port
-	hostname: "127.0.0.1",
-	onListen: ({ hostname, port }) => console.log(`listening on ${hostname}:${port}`),
-});
-
-server.url; // "http://127.0.0.1:3000/"
-await server.shutdown(); // graceful; Node force-closes after 5 s
+const app = demino(mountPath, middleware, options, appLocals);
 ```
 
-`ServeOptions`: `port`, `hostname`, `signal` (aborting closes the server and every connection
-at once), `onListen`, `onError` (for the adapter's own failures - a Demino app never throws) and,
-on Node only, `webSockets` (default `true`; lazily imports `ws`). `ServeHandle`: `hostname`,
-`port`, `url`, `finished`, `shutdown()`, `ref()`, `unref()`. See
-[API.md](API.md#runtime-adapters).
+- `mountPath` - the route prefix (see [Mount path](#mount-path) below), an empty string by
+  default,
+- `middleware` - a middleware (or an array of them) to run on every request, the same as
+  calling `app.use(...)` later,
+- `options` - the `DeminoOptions` (listed below),
+- `appLocals` - the initial [application locals](#application-locals).
 
-What the adapter puts on the handler's `info` argument (a `DeminoServeInfo`):
+So the `demino("", [], { ... })` you will see in the examples is just an app with no mount
+path, no middlewares and some options.
 
-- `remoteAddr` - the socket peer (`{ hostname, port, transport }`); what `ctx.ip` reports when
-  `trustProxy` is off,
-- `upgradeWebSocket(req, { protocol? })` - the WebSocket upgrade capability, with the same
-  `{ socket, response }` shape on every runtime (Node: through the optional `ws`). The
-  [proxy](#proxy) middleware needs it for WebSocket tunneling,
-- `raw` - the runtime's own per-request object, untyped.
+The options are:
 
-**Without an adapter.** On Deno, `Deno.serve(app)` works unchanged: `info` then carries
-`remoteAddr` only, so everything except WebSocket tunneling behaves the same. On Node there is
-no web-standard server to hand the app to, so the adapter is the way.
+- `logger` - the [application logger](#application-log), or `null` to turn the logging off,
+- `errorHandler` - a custom [error handler](#error-handling), the same as `app.error(...)`,
+- `onResponse` - one or more [response hooks](#response-hooks), the same as
+  `app.onResponse(...)`,
+- `routerFactory` - a function returning a custom router instance (eg the
+  [URL Pattern router](#extra-url-pattern-router)),
+- `trustProxy` - whether to trust the `X-Forwarded-*` headers, off by default (see
+  [Behind a reverse proxy](#extra-behind-a-reverse-proxy-trustproxy-ctxurl)),
+- `noXPoweredBy`, `noXResponseTime` - do not send the `X-Powered-By` and `X-Response-Time`
+  headers (both are sent by default),
+- `verbose` - log every route as it is registered.
 
-**Bun is not a supported runtime.** A Demino app is a web-standard handler, so
-`Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket tunneling
-are not available there, and nothing is tested on Bun.
+See [API.md](API.md#deminooptions) for the details.
 
 ## Mount path
 
@@ -132,6 +139,16 @@ const api = demino("/api");
 api.get("/users/[userId]", (req, info, ctx) => Users.find(ctx.params.userId));
 ```
 
+Routes are registered through the method named functions: `app.get`, `app.post`, `app.put`,
+`app.patch`, `app.delete`, `app.options` (and the less common `app.connect` and `app.trace`),
+or through `app.all` for any method. A few things are handled for you:
+
+- every `GET` (and `all`) route answers the `HEAD` requests as well, with the same headers
+  and no body (the "auto-HEAD"),
+- a request to an existing route with a method it does not serve gets
+  `405 Method Not Allowed` with the `Allow` header,
+- anything else unmatched gets `404 Not Found`.
+
 Demino also comes with
 [URL Pattern](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) based
 router. Read more about it below.
@@ -144,21 +161,32 @@ catch-all never shadows a more specific route, regardless of the HTTP method it 
 registered on:
 
 ```typescript
+import { createHttpError } from "@marianmeres/http-utils";
+
 app.get("/", () => "home");
 app.all("/files/*", () => "static");
 app.get("*", () => {
 	throw createHttpError(404);
-}); // legacy fallback
+}); // your own "not found" fallback
 
 // GET /files/logo.png -> "static"  (the .all() route wins over the GET catch-all)
 // GET /              -> "home"
 // GET /anything-else -> 404        (the catch-all fires only here)
 ```
 
-> **Note (1.8.8):** Earlier versions let a method-specific catch-all (e.g. `app.get("*")`)
-> shadow `app.all("/files/*")` and similar literal routes. Catch-alls are now consistently
-> last. A `*` registered on any single method no longer turns an otherwise-unmatched
-> `HEAD` request into a `405`.
+### Route introspection (`app.routes()`)
+
+`app.routes()` enumerates every registered `(method, route, meta)` — mirroring the
+dispatcher match-set (ALL router, catch-alls, auto-HEAD). It is the read-side companion to
+[`routeMeta`](#static-route-metadata-ctxroutemeta--withmeta) (described below), intended for
+build-time introspection and audits (permission coverage, OpenAPI/sitemap generation,
+cache-policy checks):
+
+```typescript
+for (const { method, route, meta } of app.routes()) {
+	// e.g. assert every route declares a permission, or build a permission matrix
+}
+```
 
 ## Middlewares and route handlers
 
@@ -178,8 +206,8 @@ Unlike a bare server handler, the Demino route handlers are not required to retu
 
 - if the final returned value is `undefined` (no middleware returned a defined value),
   empty `204 No Content` response will be created,
-- if any returned value is a plain object (or `null`, or `toJSON` aware) it will be
-  `JSON.stringify`-ed and served as `application/json` content type,
+- if any returned value is a plain object or array (or `null`, or `toJSON` aware) it will
+  be `JSON.stringify`-ed and served as `application/json` content type,
 - if any middleware threw (or returned) an `Error`, error response is generated,
 - everything else is cast to string and served as `text/html`.
 
@@ -216,7 +244,7 @@ function handler(req: Request, info: DeminoServeInfo, context: DeminoContext): a
 `DeminoServeInfo` is the portable version of a runtime's own "serve handler info":
 `remoteAddr`, the optional `upgradeWebSocket` capability and the untyped `raw` runtime object -
 see [Runtimes](#runtimes). All of its fields are optional (the app can also be called directly,
-e.g. in tests, with no `info` at all).
+with no `info` at all - see [Testing](#testing)).
 
 Middlewares can be registered as:
 
@@ -228,6 +256,23 @@ Middlewares can be registered as:
 
 ```typescript
 app.use(someGlobal).use("/secret", authCheck).get("/secret", readSecret, handler);
+```
+
+### Middleware ordering (`DEMINO_SORT`)
+
+Middleware order is controlled by `handler.__midwarePreExecuteSortOrder` (ascending; lower
+runs first). The exported `DEMINO_SORT` constant publishes the reference points Demino
+assigns by default — `PRE` (100), `DEFAULT` (1000), `HANDLER` (Infinity) — so a middleware
+can position itself ahead of the normal chain deterministically:
+
+```typescript
+import { DEMINO_SORT } from "@marianmeres/demino";
+
+const gate: DeminoHandler = (req, info, ctx) => {
+	/* runs first */
+};
+gate.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE;
+app.use(gate);
 ```
 
 ## Context
@@ -245,6 +290,10 @@ It consists of:
 - `error` - to be used in a custom error handler.
 - `route` - currently matched route definition
 - `routeMeta` - static metadata declared on the matched route handler (see below)
+- `url` - the request `URL`, which is the one the client used when `trustProxy` is on (see
+  [Behind a reverse proxy](#extra-behind-a-reverse-proxy-trustproxy-ctxurl))
+- `ip` - the client IP address (the socket peer, unless `trustProxy` is on)
+- `appLocals` - the [application locals](#application-locals) shared by all requests
 - `getLogger` - function to get the logger instance (if any) initially provided via
   `DeminoOptions` or later via `app.logger(...)` api
 
@@ -324,36 +373,6 @@ app.get(
 You can also set `handler.meta = {...}` directly; `withMeta` just merges and returns the
 same handler for ergonomic inline use.
 
-### Route introspection (`app.routes()`)
-
-`app.routes()` enumerates every registered `(method, route, meta)` — mirroring the
-dispatcher match-set (ALL router, catch-alls, auto-HEAD). It is the read-side companion to
-`routeMeta`, intended for build-time introspection and audits (permission coverage,
-OpenAPI/sitemap generation, cache-policy checks):
-
-```typescript
-for (const { method, route, meta } of app.routes()) {
-	// e.g. assert every route declares a permission, or build a permission matrix
-}
-```
-
-### Middleware ordering (`DEMINO_SORT`)
-
-Middleware order is controlled by `handler.__midwarePreExecuteSortOrder` (ascending; lower
-runs first). The exported `DEMINO_SORT` constant publishes the reference points Demino
-assigns by default — `PRE` (100), `DEFAULT` (1000), `HANDLER` (Infinity) — so a middleware
-can position itself ahead of the normal chain deterministically:
-
-```typescript
-import { DEMINO_SORT } from "@marianmeres/demino";
-
-const gate: DeminoHandler = (req, info, ctx) => {
-	/* runs first */
-};
-gate.__midwarePreExecuteSortOrder = DEMINO_SORT.PRE;
-app.use(gate);
-```
-
 ## Application Locals
 
 Unlike `ctx.locals` which is request-scoped, `app.locals` provides application-wide shared
@@ -379,16 +398,42 @@ This ensures handlers always reference the same object.
 
 ## Error handling
 
-Errors are caught and passed to the error handler. The built-in error handler can be
-replaced via the `app.error` method (eg `app.error(myErrorHandler)`):
+Errors are caught and passed to the error handler. So to end a request with an HTTP error,
+just throw one:
 
 ```typescript
-// example: customized json response error handler
-app.error((req, info, ctx) => {
-	ctx.status = ctx.error?.status || 500;
-	return { ok: false, message: ctx.error.message };
+import { createHttpError } from "@marianmeres/http-utils";
+
+app.get("/articles/[id]", async (req, info, ctx) => {
+	const article = await Article.find(ctx.params.id);
+	if (!article) throw createHttpError(404, "Article not found");
+	return article;
 });
 ```
+
+The response status is read from the error's `status` property, and an error without it is a
+`500`. So `createHttpError` is a convenience, not a requirement - any error of yours with a
+`status` works the same. It comes from
+[`@marianmeres/http-utils`](https://github.com/marianmeres/http-utils), the package Demino
+itself uses (add it to your dependencies to import it). The app's own `404` and `405` go
+through the error handler as well.
+
+The built-in error handler responds with the error message as the body. It can be replaced
+via the `app.error` method (eg `app.error(myErrorHandler)`):
+
+```typescript
+import { getErrorMessage } from "@marianmeres/http-utils";
+
+// example: customized json response error handler
+app.error((req, info, ctx) => {
+	return { ok: false, message: getErrorMessage(ctx.error) };
+});
+```
+
+In the error handler, `ctx.error` carries the `status`, and what was actually thrown is its
+`cause`. That is why the message is read with `getErrorMessage` - the bare
+`ctx.error.message` is only the status text (eg `Not Found`). The response status is always
+the error's one. To send a different one, return a `Response` instance.
 
 By default, **server faults** (status `>= 500`) are logged via the application's
 `logger.error(...)`. **Client errors** (`4xx`, including `404`s — and including a `*`
@@ -483,11 +528,6 @@ const app = demino("", [], {
 });
 ```
 
-> **Note (1.7.0):** Prior versions cast `console` directly to `DeminoLogger` even though
-> `console.access` doesn't exist, so access logs were silently dropped unless a custom
-> logger was supplied. The default adapter introduced in 1.7.0 wires `access` to
-> `console.log` so the default behavior matches the type.
-
 For convenience, this package provides the `createDeminoClog` helper that creates a
 complete logger with access logging using
 [`@marianmeres/clog`](https://jsr.io/@marianmeres/clog):
@@ -553,6 +593,85 @@ app.get("/public/*", (req) =>
 
 See [API.md](API.md#static-files) for the exact behaviour and all options.
 
+## Runtimes
+
+The core of Demino is runtime-agnostic (web standards plus the `node:*` subset). Starting a
+server is the only runtime-specific step, and it is one import away:
+
+| Runtime | Import                     | Server underneath                      |
+| ------- | -------------------------- | -------------------------------------- |
+| Deno    | `@marianmeres/demino/deno` | the built-in HTTP server               |
+| Node    | `@marianmeres/demino/node` | own bridge over `node:http` (HTTP/1.1) |
+
+Every adapter exports the same `serve(handler, options?)`, resolves with the same `ServeHandle`,
+and defaults to `0.0.0.0:8000` with the listen info printed (pass `onListen: () => {}` to
+silence it):
+
+```ts
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/node";
+
+const app = demino();
+app.get("/", () => "Hello");
+
+const server = await serve(app, {
+	port: 3000, // 0 picks a free port
+	hostname: "127.0.0.1",
+	onListen: ({ hostname, port }) => console.log(`listening on ${hostname}:${port}`),
+});
+
+server.url; // "http://127.0.0.1:3000/"
+await server.shutdown(); // graceful; Node force-closes after 5 s
+```
+
+`ServeOptions`: `port`, `hostname`, `signal` (aborting closes the server and every connection
+at once), `onListen`, `onError` (for the adapter's own failures - a Demino app never throws) and,
+on Node only, `webSockets` (default `true`; lazily imports `ws`). `ServeHandle`: `hostname`,
+`port`, `url`, `finished`, `shutdown()`, `ref()`, `unref()`. See
+[API.md](API.md#runtime-adapters).
+
+What the adapter puts on the handler's `info` argument (a `DeminoServeInfo`):
+
+- `remoteAddr` - the socket peer (`{ hostname, port, transport }`); what `ctx.ip` reports when
+  `trustProxy` is off,
+- `upgradeWebSocket(req, { protocol? })` - the WebSocket upgrade capability, with the same
+  `{ socket, response }` shape on every runtime (Node: through the optional `ws`). The
+  [proxy](#proxy) middleware needs it for WebSocket tunneling,
+- `raw` - the runtime's own per-request object, untyped.
+
+**Without an adapter.** On Deno, `Deno.serve(app)` works unchanged: `info` then carries
+`remoteAddr` only, so everything except WebSocket tunneling behaves the same. On Node there is
+no web-standard server to hand the app to, so the adapter is the way.
+
+**Bun is not a supported runtime.** A Demino app is a web-standard handler, so
+`Bun.serve({ fetch: app })` serves plain HTTP; `ctx.ip` from the socket and WebSocket tunneling
+are not available there, and nothing is tested on Bun.
+
+## Testing
+
+A Demino app is just a function. Give it a `Request` and you get the `Response` back - no
+server, no port and no runtime adapter needed:
+
+```ts
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { demino } from "@marianmeres/demino";
+
+// `logger: null` keeps the access log out of the test output
+const app = demino("", [], { logger: null });
+app.get("/hello/[name]", (req, info, ctx) => ({ hello: ctx.params.name }));
+
+test("says hello", async () => {
+	const res = await app(new Request("http://localhost/hello/world"));
+	assert.equal(res.status, 200);
+	assert.deepEqual(await res.json(), { hello: "world" });
+});
+```
+
+What is missing is only what the adapter provides: `ctx.ip` is an empty string and there is
+no WebSocket upgrade. To test those, start a real server on a free port
+(`serve(app, { port: 0 })`, see [Runtimes](#runtimes)).
+
 ## Extras
 
 All features described below are extensions to the base framework. Some batteries _are_
@@ -588,15 +707,12 @@ app.get("/", (req, info, ctx) => {
 });
 ```
 
-Forwarded headers are **client-spoofable** unless the origin is locked to the proxy, so
-this is OFF by default. `X-Forwarded-Proto` is low-risk (an `http|https` enum) and
-trusted whenever the flag is on; `X-Forwarded-Host` is high-risk (a forged host enables
-cache poisoning / link hijack / open redirect) and is reflected only when it matches
-`allowedHosts` (validated **after** URL parsing, so terminator tricks like
-`evil.com#.example.com` can't smuggle a host past the allowlist). The same flag gates
-`ctx.ip`: off → the direct socket peer (`X-Forwarded-For` ignored); on → resolved from
-the forwarding headers. `ctx.ip` was previously ungated — see
-[Breaking changes](#breaking-changes-1150).
+The forwarded headers can be forged by any client which reaches the app without going
+through the proxy, so this is off by default. Turn it on only when the proxy is the only way
+in. And even then, a forwarded host is used only if it matches the `allowedHosts`.
+
+The same flag gates `ctx.ip`. When off, it is the direct socket peer (and `X-Forwarded-For`
+is ignored). When on, it is resolved from the forwarding headers.
 
 For the full threat model (why these headers are spoofable, the per-header risk
 gradient, and the operator preconditions for safely enabling `trustProxy`), see
@@ -604,13 +720,20 @@ gradient, and the operator preconditions for safely enabling `trustProxy`), see
 
 ## Extra: Bundled middlewares
 
+All of them are exported from the main entry point (and from
+`@marianmeres/demino/middleware` as well), so the examples below assume an import like:
+
+```ts
+import { cookies, cors, proxy, rateLimit } from "@marianmeres/demino";
+```
+
 ### Authorization (`authz`)
 
-A generic, **policy-free** authorization gate built on the route-metadata primitive.
-Demino stays agnostic: it never knows what a permission _means_ — a route declares an
-opaque permission with `withPermission(...)` (or `withPublic(...)`), and you supply a
-`check(subject, permission, ctx) => boolean` that decides. Wire `@marianmeres/rbac` (or
-anything) inside `check`; Demino takes no dependency on it.
+An authorization gate built on the
+[route metadata](#static-route-metadata-ctxroutemeta--withmeta). A route declares the
+permission it needs with `withPermission(...)` (or `withPublic(...)`), and you supply the
+`check(subject, permission, ctx)` function which decides. Demino never knows what a
+permission means, so wire `@marianmeres/rbac` (or anything else) inside the `check`.
 
 ```typescript
 import { authz, withPermission, withPublic } from "@marianmeres/demino";
@@ -639,45 +762,32 @@ app.get(
 );
 ```
 
-Behavior: `OPTIONS` is bypassed; **deny-by-default** (a route with no declaration is 403 —
-set `denyByDefault: false` for incremental adoption); a route needing a permission with no
-subject is 401; `withPermission([...], h, { mode })` requires `every` (default) or `some`.
-Auto-HEAD inherits the GET handler's declaration. The gate runs in normal registration
-order — register it early (right after any subject-resolving middleware).
+What the gate does:
 
-**Ownership / ABAC** stays in your `check` (load the resource from `ctx` and decide, e.g.
-via an rbac rule). There is no built-in resource loader — keep coarse permission at the
-gate and row-level scoping in the data layer; re-check ownership in write transactions.
+- a route with no declaration is denied with `403` (set `denyByDefault: false` to adopt it
+  step by step),
+- a route which needs a permission while there is no subject is a `401`,
+- with more permissions (`withPermission([...], handler, { mode })`) either `every` one
+  (default) or `some` must pass,
+- the `OPTIONS` requests are let through.
 
-**Route-pattern fallback** — for routes without a static declaration, supply a
-`(method, route) => decl` resolver. `createRouteResolver` builds one from a pattern map
-(`*` = one segment, `**` = the rest):
+Register it early, right after any middleware which resolves the subject. The subject can be
+read anywhere downstream with `getSubject<MyUser>(ctx)`. The ownership checks (is this _my_
+invoice?) are up to your `check`, or to the data layer.
 
-```typescript
-import { authz, createRouteResolver } from "@marianmeres/demino";
-
-const resolve = createRouteResolver([
-	["/health", { public: true }],
-	["/api/**", { permission: "api:access" }],
-]);
-app.use(authz({ resolveSubject, check, resolve })); // static decls still win
-```
-
-**Build-time coverage (the fail-closed guarantee)** — a runtime gate cannot protect
-404/405 or static catch-alls, so the real guarantee is a build-time audit over
-`app.routes()`. `permissionMatrix(app)` returns every `(method, route)` with its
-declaration (`permission` | `public` | `MISSING`) and `source` (`static` | `resolver`);
-`assertCovered(app)` throws if any route is undeclared — run it in CI:
+A runtime gate cannot protect a `404`, a `405` or a static catch-all, so the real guarantee
+is a build-time one: `assertCovered(app)` throws if any registered route is left without a
+declaration. Run it in your tests:
 
 ```typescript
-import { assertCovered, permissionMatrix } from "@marianmeres/demino";
+import { assertCovered } from "@marianmeres/demino";
 
-test("no unguarded routes", () => assertCovered(app, { resolve })); // node:test, any runner
-// or inspect/print the full matrix:
-console.table(permissionMatrix(app, { resolve }));
+test("no unguarded routes", () => assertCovered(app));
 ```
 
-Read the typed subject anywhere downstream with `getSubject<MyUser>(ctx)`.
+There is also a route-pattern fallback for the routes you cannot decorate
+(`createRouteResolver`) and a full report of what is declared where (`permissionMatrix`). See
+[API.md](API.md#authz) for all of it.
 
 ### CORS
 
@@ -689,12 +799,6 @@ Defaults: `allowOrigin: "*"`, `allowCredentials: false`. The CORS spec forbids c
 `cors({ allowOrigin: "*", allowCredentials: true })` throws at construction time. To allow
 credentials, provide an explicit `allowOrigin` allowlist (string, string[], or function
 that returns the matched origin).
-
-> **BREAKING (1.7.0):** `allowCredentials` defaulted to `true` in 1.6.x, and the wildcard
->
-> - credentials combination was silently "fixed" by echoing back the request `Origin`
->   header — which effectively allowed credentialed requests from any origin. See
->   [BC notes](#breaking-changes-170) below.
 
 Basic example
 
@@ -744,7 +848,7 @@ preserves the query string. See
 Proxies requests to a different server with comprehensive features including SSRF
 protection, host whitelisting, header/body transformation, and custom error handling.
 Target can be specified as a URL string (absolute or relative) or a function. WebSocket
-upgrade requests are transparently tunneled to the upstream (since 1.17.0, see below).
+upgrade requests are transparently tunneled to the upstream (see below).
 
 Basic usage:
 
@@ -761,11 +865,10 @@ app.get(
 
 Advanced features include:
 
-- SSRF protection (blocks private IPs, localhost, `0.0.0.0`, IPv4-mapped IPv6 in dotted
-  and hex form, NAT64, CGNAT 100.64.0.0/10, and link-local — see caveat below)
-- Redirect re-validation: upstream redirects are followed manually and **every hop** is
-  re-checked against the SSRF / `allowedHosts` policy (a permitted upstream cannot 3xx the
-  proxy into an internal host); bounded by `maxRedirects` (default 5)
+- SSRF protection (opt-in via `preventSSRF`, blocks localhost, private and link-local
+  addresses - see the caveat below)
+- Upstream redirects are followed by the proxy itself and every hop is checked again, so an
+  allowed upstream cannot redirect the proxy to an internal host (`maxRedirects`, default 5)
 - Host whitelisting with wildcard support
 - Request/response header transformation
 - Response body transformation
@@ -773,23 +876,19 @@ Advanced features include:
 - Custom error handling
 - Transparent WebSocket proxying (on by default; `webSockets: false` to disable)
 
-> **WebSockets** (since 1.17.0): a well-formed WebSocket upgrade request is tunneled to
-> the upstream (`http(s)` targets are dialed as `ws(s)`). The upstream is dialed FIRST —
-> the full target policy (self-proxy / SSRF / `allowedHosts`) applies, request headers
-> (cookies, authorization, custom `headers`, `transformRequestHeaders`, `X-Forwarded-*`,
-> hop-counter loop guard) are forwarded, and subprotocols are negotiated end-to-end — and
-> the client is upgraded only after the upstream handshake succeeds, so a failed dial
-> surfaces as a regular HTTP error (502 unreachable, 504 handshake timeout, `onError`).
-> Close code + reason propagate in both directions. `timeout` bounds only the upstream
-> handshake, never the tunnel lifetime. Not applied to tunnels: `maxRedirects`, `cache`,
-> and the response transforms.
+> **WebSockets:** a WebSocket upgrade request is tunneled to the upstream (`http(s)` targets
+> are dialed as `ws(s)`), under the same target policy and with the same forwarded headers as
+> any other request. The upstream is dialed first and the client is upgraded only after that
+> handshake succeeds, so a failed dial is a regular HTTP error (`502`, `504`) and not a
+> dropped socket. The `timeout` limits the handshake only, never the life of the tunnel. The
+> tunneling needs the runtime adapter's `serve()` (see [Runtimes](#runtimes)).
 
 > **SSRF caveat:** `preventSSRF` is a string-only check on the target hostname. It does
 > NOT resolve DNS, so it cannot block a public hostname that resolves (or is rebound) to a
 > private IP. If you need protection against DNS rebinding attacks, resolve the hostname
 > yourself (e.g. via `node:dns`) and re-check each resulting address.
 
-See [proxy.ts](src/middleware/proxy/proxy.ts) for full API documentation and examples.
+See [API.md](API.md#proxy) for all the options and details.
 
 ### Redirect
 
@@ -926,6 +1025,8 @@ Demino comes with
 implementation that can be activated via the `routerFactory` factory setting.
 
 ```ts
+import { demino, DeminoUrlPatternRouter } from "@marianmeres/demino";
+
 const app = demino("", [], { routerFactory: () => new DeminoUrlPatternRouter() });
 app.get("/", () => "home");
 app.get("/user/:foo/section/:bar", (r, i, ctx) => ctx.params);
@@ -1025,7 +1126,7 @@ a `ReadableStream` body.
 
 ```typescript
 app.get("/events", (req) => {
-	let intervalId: number;
+	let intervalId: ReturnType<typeof setInterval>;
 
 	const stream = new ReadableStream({
 		start(controller) {
@@ -1061,179 +1162,6 @@ Named events can be sent using the `event:` field:
 ```typescript
 controller.enqueue(`event: user-joined\ndata: ${JSON.stringify(user)}\n\n`);
 ```
-
-## Behavior changes (2.1.0)
-
-### `ctx.headers` reach a returned `Response`
-
-Before 2.1.0, a `Response` instance returned by a handler or by a custom error handler was
-sent without the headers set on `ctx.headers`. Now they are added to it, where the response
-does not carry them already (`Set-Cookie` and `Vary` are merged) - see
-[Response headers](#response-headers-ctxheaders). What changes in practice:
-
-- `cors()` covers `app.static()`, `proxy()` and any route returning a `Response`,
-- a cookie set through `cookies()` survives a `redirect()`,
-- `Retry-After` (from `rateLimit()`) and `Allow` (on a `405`) reach a custom error handler's
-  `Response`.
-
-A returned `Response` that has a body gets the headers added to the object itself. One with
-no body is copied first, so an instance shared between requests is never written to.
-
-### `X-Powered-By` and `X-Response-Time` are on every response
-
-They were set only on the responses Demino created. Now a returned `Response` gets them too
-(static files, proxied responses, redirects), unless it carries its own. The `noXPoweredBy`
-and `noXResponseTime` options turn them off as before.
-
-## Breaking changes (2.0.0)
-
-Demino 2.0 decouples the core from Deno: web standards plus `node:*` inside, runtime
-adapters (`@marianmeres/demino/deno`, `/node`) to start the server, published to JSR
-**and** npm. Routing, middlewares, context, error handling and composition are untouched. The
-complete list with before/after snippets is in
-[docs/MIGRATION-2.0.md](docs/MIGRATION-2.0.md); for a typical Deno app the migration is one
-`sed` and a look at your `app.static` options.
-
-### `Deno.ServeHandlerInfo` → `DeminoServeInfo`
-
-The handler's second argument is typed `DeminoServeInfo` (`remoteAddr?`,
-`upgradeWebSocket?`, `raw?`) - type-only, Deno's own info object satisfies it. Rename the
-annotations and add the import where a file now names the type (or drop the annotations,
-inline handlers are inferred):
-
-```sh
-# macOS (BSD sed); on Linux use `sed -i` without the ''
-grep -rl --include='*.ts' --exclude-dir=node_modules 'Deno\.ServeHandlerInfo' src | xargs sed -i '' 's/Deno\.ServeHandlerInfo/DeminoServeInfo/g'
-```
-
-### `Demino` no longer extends `Deno.ServeHandler`
-
-Structural compatibility with `Deno.serve`'s TCP handler is kept, so `Deno.serve(app)`
-compiles and runs; `info` then carries `remoteAddr` only. A parameter typed as the bare
-`Deno.ServeHandler` (which also admits Unix and Vsock addresses) no longer accepts an app -
-narrow it to `Deno.ServeHandler<Deno.NetAddr>`. Prefer `serve()` from an adapter
-([Runtimes](#runtimes)) for WebSocket tunneling through `proxy()`.
-
-### `app.static` options are `DeminoStaticOptions`
-
-Own `serveStatic()` on `node:fs` replaces `@std/http`'s `serveDir`. Kept: `showIndex`,
-`showDotfiles`; `headers` is now `HeadersInit` or a per-request function; `etagAlgorithm`
-became `etag: boolean`. Removed: `enableCors` (set `access-control-allow-origin` through
-`headers`), `quiet`, `showDirListing`. `ETag` values change once; static 301s send a relative
-`Location`. See [Serving static files](#serving-static-files).
-
-### Smaller changes
-
-- `deminoFileBased` with a missing root throws a plain `Error` with `code: "ENOENT"` and
-  `name: "NotFound"` (was `Deno.errors.NotFound`) - match on `code`.
-- `logListenInfo(addr)` takes `{ hostname, port }` (`DeminoListenAddr`, was `Deno.NetAddr`);
-  Deno's `onListen` argument still satisfies it.
-- Dependencies: `@std/*` and `request-ip` removed, `mrmime` added, `ws` an optional peer for
-  WebSocket upgrades on Node. The client-IP header precedence behind `trustProxy` is unchanged
-  (the never-matching RFC 7239 `Forwarded` aside) and exported as `getClientIpFromHeaders()`.
-- Exports: `.`, `./deno`, `./node`, `./middleware`, `./misc`, `./router`, `./utils`;
-  the npm package needs Node 22+.
-
-## Breaking changes (1.15.0)
-
-### `ctx.ip` is now gated by `trustProxy`
-
-`ctx.ip` previously trusted `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP`
-**unconditionally**, which is spoofable by any client that can reach the origin without
-going through the proxy. Now `ctx.ip` follows
-[`trustProxy`](#extra-behind-a-reverse-proxy-trustproxy-ctxurl): with it **off**
-(default) it is the direct socket peer and those headers are ignored; with it **on** it
-is resolved from them (unchanged from before). If your app sits behind a proxy and reads
-`ctx.ip` (or keys `rateLimit()` on it), set `trustProxy` to keep seeing the real client
-IP. This is the secure default and matches how `ctx.url` treats forwarded headers.
-
-> Same-origin `redirect()` / `trailingSlash()` `Location` headers are now **relative**
-> instead of absolute (functionally equivalent for clients). Only relevant if you assert
-> an exact absolute `Location` in tests.
-
-## Breaking changes (1.7.0)
-
-This release changes a handful of defaults and internal APIs to fix correctness and
-security issues. Most apps won't need any code changes — the affected areas are listed
-below in order of likely impact.
-
-### CORS — `allowCredentials` defaults to `false`
-
-`cors()` previously defaulted `allowCredentials: true` while also defaulting
-`allowOrigin: "*"`. The CORS spec forbids that combination, so the middleware silently
-rewrote the wildcard to the request's `Origin` header — effectively allowing credentialed
-requests from **any** origin out of the box.
-
-Now:
-
-- The default is `allowCredentials: false`.
-- Constructing `cors({ allowOrigin: "*", allowCredentials: true })` throws a `TypeError`.
-- If a dynamic `allowOrigin` function returns `"*"` while credentials are enabled, the
-  middleware refuses to set the headers (and logs a warning) instead of echoing back the
-  request origin.
-
-**Migration:** to allow credentials, pass an explicit allowlist:
-
-```ts
-// before (1.6.x — silently insecure)
-app.use(cors());
-
-// after (1.7.0)
-app.use(
-	cors({
-		allowOrigin: ["https://app.example.com", "https://admin.example.com"],
-		allowCredentials: true,
-	}),
-);
-```
-
-### Default logger now emits access logs
-
-Previously the default logger was `console as DeminoLogger`, but `console` has no `access`
-method, so access logs were silently swallowed unless you supplied a custom logger. The
-default adapter now wires `access` to `console.log` (prefixed with `[access]`).
-
-**Migration:** if you relied on the previous "silent default" behavior, set the logger to
-`null` (`app.logger(null)`) or supply a logger whose `access` method is a no-op.
-
-### `withTimeout()` passes an `AbortSignal` to the wrapped function
-
-`withTimeout(fn)` now invokes `fn(...args, signal)`, so functions can actually cancel
-their work on timeout instead of having it run to completion in the background. Functions
-that don't accept the extra argument simply ignore it, but TypeScript will surface the
-extra positional parameter — update signatures to `(...args, signal?: AbortSignal)` if the
-additional argument matters to your callers.
-
-### SSRF protection covers more cases
-
-`isPrivateHost()` (used by `proxy({ preventSSRF: true })`) now also detects:
-
-- `0.0.0.0` and `::` (unspecified addresses)
-- IPv4-mapped IPv6 (`::ffff:127.0.0.1`)
-- CGNAT range `100.64.0.0/10`
-- Bracketed IPv6 hostnames (`[::1]`)
-
-If you have tests that asserted `isPrivateHost("0.0.0.0") === false`, they now return
-`true`. There is no DNS resolution, so DNS-rebinding attacks are still possible — see the
-caveat in the Proxy section.
-
-### ETag middleware skips bodies larger than 1 MiB by default
-
-`withETag(handler)` used to buffer the entire response body to compute a SHA-1 hash with
-no size limit. It now defaults to `maxSizeBytes: 1_048_576` (1 MiB) and returns the
-response unchanged (no ETag, no 304 negotiation) when the body is larger.
-
-**Migration:** if you knowingly need ETags on larger payloads, raise the cap:
-`withETag(handler, { maxSizeBytes: 10 * 1024 * 1024 })`. Pass `0` or `Infinity` to disable
-the cap entirely.
-
-### Internal: per-(method, route) middleware stack is cached
-
-The assembled `Midware` for each `(method, route)` is now cached and reused across
-requests. The cache is invalidated whenever `app.use(...)` mutates the global stacks or a
-route is registered. This is a transparent perf change — no API change — but if you were
-relying on a per-request side effect inside the array assembly, that's no longer
-happening.
 
 ## Extra: Listen info logging
 
@@ -1286,6 +1214,17 @@ Unlike the human readable mode, JSON mode does not enumerate network interfaces 
 container local addresses are noise, and skipping it avoids the system-info permission some
 runtimes gate it behind (Deno's `--allow-sys`).
 
+## Upgrading
+
+The changes which alter behavior or break something are listed per release in
+[CHANGELOG.md](CHANGELOG.md). When coming from 1.x, see
+[docs/MIGRATION-2.0.md](docs/MIGRATION-2.0.md) - for a typical Deno app the migration is one
+`sed` and a look at your `app.static` options.
+
 ## About the name
 
 The name originally stood for "Deno minimal" - it has since grown beyond Deno.
+
+## License
+
+[MIT](LICENSE)
