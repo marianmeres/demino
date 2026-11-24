@@ -92,7 +92,7 @@
   },
   "dependencies": {
     "@marianmeres/clog": "^3.23.1",
-    "@marianmeres/http-utils": "^2.12.0",
+    "@marianmeres/http-utils": "^3.0.0",
     "@marianmeres/midware": "^2.0.0",
     "@marianmeres/simple-router": "^3.5.0",
     "mrmime": "^2.0.1"

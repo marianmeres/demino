@@ -16,7 +16,7 @@
   },
   "imports": {
     "@marianmeres/clog": "jsr:@marianmeres/clog@^3.23.1",
-    "@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^2.12.0",
+    "@marianmeres/http-utils": "jsr:@marianmeres/http-utils@^3.0.0",
     "@marianmeres/midware": "npm:@marianmeres/midware@^2.0.0",
     "@marianmeres/simple-router": "jsr:@marianmeres/simple-router@^3.5.0",
     "mrmime": "npm:mrmime@^2.0.1",

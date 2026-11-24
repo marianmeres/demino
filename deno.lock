@@ -2,12 +2,11 @@
   "version": "5",
   "specifiers": {
     "jsr:@marianmeres/clog@^3.23.1": "3.23.1",
-    "jsr:@marianmeres/http-utils@^2.12.0": "2.12.0",
+    "jsr:@marianmeres/http-utils@3": "3.0.0",
     "jsr:@marianmeres/mcp-server@^1.3.2": "1.3.2",
     "jsr:@marianmeres/pubsub@3": "3.1.0",
     "jsr:@marianmeres/release@*": "2.0.0",
     "jsr:@marianmeres/simple-router@^3.5.0": "3.5.0",
-    "npm:@marianmeres/http-utils@^2.12.0": "2.12.0",
     "npm:@marianmeres/midware@2": "2.0.0",
     "npm:mrmime@^2.0.1": "2.0.1",
     "npm:typescript@^7.0.2": "7.0.2",
@@ -19,8 +18,8 @@
     "@marianmeres/clog@3.23.1": {
       "integrity": "53d71800956e5f7f7ee5b8a7255b7097d027a731279da46c0548eb55f9c0a63f"
     },
-    "@marianmeres/http-utils@2.12.0": {
-      "integrity": "2e80298eb3a75a551aa27f16f34b53042dd6289d872b88abc350b434376bab3e"
+    "@marianmeres/http-utils@3.0.0": {
+      "integrity": "fe4c3d1d9fac5e218a85a6def824c26de76790584300429c8d939c65843935f6"
     },
     "@marianmeres/mcp-server@1.3.2": {
       "integrity": "44fb9c465ce57ec1762ca468463ce279d7c93edbfdc09255b4cb352aa0f59ebd",
@@ -42,9 +41,6 @@
     }
   },
   "npm": {
-    "@marianmeres/http-utils@2.12.0": {
-      "integrity": "sha512-qTId10xYZckGGBiSVdeQLbJYKQqAfWPeEtlgSNp9RQdd32SjFhcSLzTCaB0yXFA7P4Yuztn1iUbiYEyUBldK5w=="
-    },
     "@marianmeres/midware@2.0.0": {
       "integrity": "sha512-uMEsfjxzGr7HiaZHnl9C0UB6maPLtsTLenrV1PHJW6UY8A5kHnuLWwXBJfkPb3pvJjEeyNNe8KlxQSQ7VnWllQ=="
     },
@@ -187,7 +183,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@marianmeres/clog@^3.23.1",
-      "jsr:@marianmeres/http-utils@^2.12.0",
+      "jsr:@marianmeres/http-utils@3",
       "jsr:@marianmeres/mcp-server@^1.3.2",
       "jsr:@marianmeres/simple-router@^3.5.0",
       "npm:@marianmeres/midware@2",
@@ -198,7 +194,7 @@
       "dependencies": [
         "npm:@biomejs/biome@^2.6.8",
         "npm:@marianmeres/clog@^3.23.1",
-        "npm:@marianmeres/http-utils@^2.12.0",
+        "npm:@marianmeres/http-utils@3",
         "npm:@marianmeres/midware@2",
         "npm:@marianmeres/simple-router@^3.5.0",
         "npm:@types/node@^24.19.2",
