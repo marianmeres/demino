@@ -173,8 +173,8 @@ importers:
         specifier: ^2.12.0
         version: 2.12.0
       '@marianmeres/midware':
-        specifier: ^1.5.0
-        version: 1.5.0
+        specifier: ^2.0.0
+        version: 2.0.0
       '@marianmeres/simple-router':
         specifier: ^3.5.0
         version: 3.5.0
@@ -281,8 +281,8 @@ packages:
   '@marianmeres/http-utils@2.12.0':
     resolution: {integrity: sha512-qTId10xYZckGGBiSVdeQLbJYKQqAfWPeEtlgSNp9RQdd32SjFhcSLzTCaB0yXFA7P4Yuztn1iUbiYEyUBldK5w==}
 
-  '@marianmeres/midware@1.5.0':
-    resolution: {integrity: sha512-hZ6PgwHNfmWo7CeAt607xfTvlsK4mvaHuMdcFTvmVhGzs4bVEDVA2L4WaRjWHxWwEeO1/vMWJDkd0OArc2TyJQ==}
+  '@marianmeres/midware@2.0.0':
+    resolution: {integrity: sha512-uMEsfjxzGr7HiaZHnl9C0UB6maPLtsTLenrV1PHJW6UY8A5kHnuLWwXBJfkPb3pvJjEeyNNe8KlxQSQ7VnWllQ==}
 
   '@marianmeres/pubsub@3.1.0':
     resolution: {integrity: sha512-OBfz013de1eZihK6WWxTGd2qal/5GcLsaAsZs59L/sjyCgoRiHafb4s4WFvkFM/WdRWcpdp6U/RurLn+DL5mcA==}
@@ -489,7 +489,7 @@ snapshots:
 
   '@marianmeres/http-utils@2.12.0': {}
 
-  '@marianmeres/midware@1.5.0': {}
+  '@marianmeres/midware@2.0.0': {}
 
   '@marianmeres/pubsub@3.1.0': {}
 

@@ -118,7 +118,7 @@ scripts/
 └── smoke-npm.mjs             # `pnpm pack`s the root, installs the tarball in a temp project, imports every subpath, serves (Node)
 
 package.json                  # Manifest of record AND the published npm manifest: version, exports (-> dist/), scripts
-deno.json                     # JSR manifest: name, exports (-> src/), jsr: import map; no version, no tasks
+deno.json                     # JSR manifest: name, exports (-> src/), jsr:/npm: import map; no version, no tasks
 tsconfig.json                 # Type gate (`pnpm run typecheck`, src/ + tests/, no emit)
 tsconfig.build.json           # `pnpm run build`: src/ -> dist/ (JS + .d.ts), rewriteRelativeImportExtensions
 biome.json                    # Format + lint (`pnpm run lint` / `format`)
@@ -329,7 +329,8 @@ middleware), `HANDLER` (Infinity, final handler). Tag a middleware
 ### Runtime (same name + range in `deno.json` `imports` and `package.json`; `tests/manifest-sync.test.ts` enforces it)
 
 - @marianmeres/http-utils - HTTP errors/status codes
-- @marianmeres/midware - Middleware chaining
+- @marianmeres/midware - Middleware chaining (`npm:` in `deno.json` too: npm only since 2.0.0,
+  1.5.0 was its last JSR release)
 - @marianmeres/simple-router - Default router implementation
 - @marianmeres/clog - `createDeminoClog()` logger
 - mrmime - content types for static files
