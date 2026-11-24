@@ -449,7 +449,8 @@ pnpm run build            # tsc -p tsconfig.build.json -> dist/
 pnpm run smoke            # build + pnpm pack + install the tarball in a temp project + import + serve
 pnpm run ci               # typecheck + lint + test + smoke (what CI's Node job runs)
 pnpm run jsr:check        # deno publish --dry-run with the package.json version (clean tree)
-pnpm run release          # Bump package.json version, commit, tag, push (@marianmeres/release)
+pnpm run release          # ci, then bump package.json, commit, tag, push (@marianmeres/release)
+pnpm run rp / rpm         # patch / minor (human only): npm whoami, ci, bump, tag, publish:all, push
 pnpm run publish:all      # pnpm publish (prepublishOnly: ci + build), then publish:jsr
 pnpm run publish:next     # same, npm under the `next` dist-tag (prereleases, e.g. 2.0.0-rc.1)
 pnpm run publish:jsr      # test:deno, then deno publish --set-version <package.json version>
@@ -458,6 +459,11 @@ pnpm run publish:jsr      # test:deno, then deno publish --set-version <package.
 `package.json` is the only manifest with a `version`: `release` bumps the first manifest that
 has one, and JSR gets it via `--set-version`. No script may be named `publish` - that is an npm
 lifecycle hook `pnpm publish` would run.
+
+`rp` / `rpm` run `publish:all` from `--before-push`, between the tag and the push: a failed
+publish leaves the release commit and tag local and pushes nothing (the tool prints how to
+finish by hand). `release` runs `ci` from `--before-bump`: a failure there aborts before anything
+is written.
 
 ## Special Behaviors
 
