@@ -512,6 +512,50 @@ test("node adapter: a client that disconnects cancels the response stream and fi
 	}
 });
 
+test("node adapter: a client gone before the handler returns still gets the response stream cancelled", async () => {
+	// Regression: the response had closed before `writeResponse()` attached its
+	// 'close' listener, so the body was read once and then dropped uncancelled -
+	// a file behind it kept its descriptor open for good (one per such request).
+	let pulls = 0;
+	const cancelled = Promise.withResolvers<void>();
+	const srv = await serve(async (req) => {
+		// hold the answer back until the client is known to be gone
+		if (!req.signal.aborted) {
+			await new Promise<void>((resolve) =>
+				req.signal.addEventListener("abort", () => resolve(), { once: true }),
+			);
+		}
+		return new Response(
+			new ReadableStream<Uint8Array>(
+				{
+					pull(controller) {
+						pulls++;
+						controller.enqueue(new Uint8Array(1024));
+					},
+					cancel() {
+						cancelled.resolve();
+					},
+				},
+				{ highWaterMark: 0 },
+			),
+		);
+	}, silent);
+	try {
+		const sock = createConnection({ host: "127.0.0.1", port: srv.port }, () => {
+			// the request, then the connection is closed without waiting for an answer
+			sock.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${srv.port}\r\n\r\n`, () =>
+				sock.destroy(),
+			);
+		});
+		sock.on("error", () => {});
+
+		await timed(cancelled.promise, 3000, "the response stream to be cancelled");
+		assert.equal(pulls, 0, "nothing is read for a client that is gone");
+	} finally {
+		await srv.shutdown();
+	}
+});
+
 test("node adapter: large streamed response arrives whole (write backpressure)", async () => {
 	const chunk = new Uint8Array(64 * 1024).fill(0x61);
 	const chunks = 48; // 3 MiB

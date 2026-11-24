@@ -573,7 +573,8 @@ app.static("/assets", "./public", {
 
 What you get: `GET`/`HEAD` only (anything else is a 405 with `Allow`), content types via
 [`mrmime`](https://www.npmjs.com/package/mrmime) (`; charset=utf-8` on text-like types),
-`Content-Length`, `Accept-Ranges` and single-range `Range` requests (206/416), a weak `ETag`,
+`Content-Length`, `Accept-Ranges` and single-range `Range` requests (206/416, `If-Range`
+honoured), a weak `ETag`,
 301 redirects to the normalised path (`/a//b` → `/a/b`, a directory without a trailing slash →
 with it, a file with one → without), and 404 for anything outside the root, dot-segments (unless
 `showDotfiles`) and missing files. Filesystem errors other than "not found" are thrown, so they

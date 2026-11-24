@@ -3,6 +3,34 @@
 The changes that alter behavior or break something, newest first. Everything else is in the
 [commit history](https://github.com/marianmeres/demino/commits/master).
 
+## 2.1.2 (fixes)
+
+### Node adapter: a client that leaves early no longer leaks a file descriptor
+
+When a client disconnected before the handler had returned, the Node adapter
+(`@marianmeres/demino/node`) dropped the response body without cancelling it. Behind a static
+file of about 128 KB or more that left a file descriptor open for good, one per such request,
+until the process ran out of them. Any client could trigger it by sending a request and closing
+the connection at once. Affected: 2.0.0 to 2.1.1 on the Node adapter (a streamed body of any
+other kind was left uncancelled the same way). Now a body is always either read to its end or
+cancelled.
+
+### Static files
+
+- A file that exists but cannot be read (`EACCES`) is a thrown error: it reaches your error
+  handler and the log, as a 500 by default. It used to be an empty reply with nothing logged.
+- The body is exactly `Content-Length` bytes of the file the headers describe. A file that
+  grows while it is being served is not sent past them (extra bytes used to follow). One that
+  is truncated, or replaced by another file before the first byte is read, ends the response at
+  once (it used to stall until the keep-alive timeout).
+- `If-Range` is honoured: a `Range` request whose `If-Range` date does not equal the file's
+  `Last-Modified` gets the whole file with a 200, not a 206. An entity-tag in `If-Range` never
+  matches, because the `ETag`s are weak.
+- The 301 to a normalised path percent-encodes its `Location`. For a file name containing `%`
+  it used to point at a URL that answered 400, or at another file.
+- A path with an encoded backslash or NUL is a 404 before any redirect (`/a//b%5Cc` used to be
+  a 301 first).
+
 ## 2.1.0 (behavior changes)
 
 ### `ctx.headers` reach a returned `Response`

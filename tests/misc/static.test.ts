@@ -1,11 +1,61 @@
 import assert from "node:assert/strict";
-import { basename } from "node:path";
+import {
+	appendFileSync,
+	chmodSync,
+	mkdtempSync,
+	readdirSync,
+	renameSync,
+	rmSync,
+	truncateSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import process from "node:process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { type ServeStaticOptions, serveStatic } from "../../src/mod.ts";
 import { assertResp, header, runTestServerTests } from "../_utils.ts";
 
 const fsRoot = fileURLToPath(new URL("../static", import.meta.url));
+
+/**
+ * A throwaway root for the cases that change files or their permissions - the
+ * shared fixtures in `tests/static` stay read-only.
+ */
+async function withTmpRoot(
+	files: Record<string, string | Uint8Array>,
+	fn: (dir: string) => Promise<void>,
+): Promise<void> {
+	const dir = mkdtempSync(join(tmpdir(), "demino-static-"));
+	try {
+		for (const [name, content] of Object.entries(files)) {
+			writeFileSync(join(dir, name), content);
+		}
+		await fn(dir);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+/**
+ * Mode `000` denies nothing to root, and Windows has no such mode: the
+ * unreadable-file cases cannot be staged there.
+ */
+const cannotDenyRead = process.platform === "win32" || process.getuid?.() === 0;
+
+/** Several reads long (the body is read in 64 KiB chunks). */
+const BIG = new Uint8Array(300 * 1024).fill(0x61);
+
+/**
+ * A `headers` function runs after the file's `stat` and before the first read of
+ * its body, which makes it the place to stage "the file changed in between".
+ */
+const truncateTo =
+	(size: number) =>
+	(_req: Request, filePath: string): undefined => {
+		truncateSync(filePath, size);
+	};
 
 runTestServerTests([
 	{
@@ -150,6 +200,46 @@ runTestServerTests([
 			);
 			await assertResp(fetch(`${base}/files/.hidden.txt`), 200, "hidden");
 			await assertResp(fetch(`${base}/files/`), 404);
+		},
+	},
+	{
+		// Regression: the file was opened only once the response was under way, so
+		// the client got an empty reply and neither the error handler nor the log
+		// ever saw the EACCES.
+		name: "static: an unreadable file is a 500 through the error handler, not a dropped connection",
+		ignore: cannotDenyRead,
+		fn: async ({ base, app }) => {
+			await withTmpRoot({ "secret.txt": "nope" }, async (dir) => {
+				chmodSync(join(dir, "secret.txt"), 0o000);
+				const causes: unknown[] = [];
+				app.error((_req, _info, ctx) => {
+					causes.push(ctx.error?.cause);
+					return "handled";
+				});
+				app.static("/files", dir);
+
+				await assertResp(fetch(`${base}/files/secret.txt`), 500, "handled");
+				assert.equal(causes.length, 1);
+				assert.equal((causes[0] as { code?: string }).code, "EACCES");
+			});
+		},
+	},
+	{
+		// Regression: a body shorter than its Content-Length ended cleanly, and the
+		// client waited for the missing bytes until the keep-alive timeout.
+		name: "static: a file truncated while being served cuts the response off, it does not stall",
+		fn: async ({ base, app }) => {
+			await withTmpRoot({ "cut.bin": BIG }, async (dir) => {
+				app.static("/files", dir, { headers: truncateTo(100_000) });
+
+				const started = Date.now();
+				await assert.rejects(async () => {
+					const res = await fetch(`${base}/files/cut.bin`);
+					await res.arrayBuffer();
+				});
+				const took = Date.now() - started;
+				assert.ok(took < 3000, `the failure must be prompt, took ${took} ms`);
+			});
 		},
 	},
 ]);
@@ -523,4 +613,267 @@ test("static matrix: urlRoot - absent maps the whole pathname, slashes tolerated
 		call("/foo.txt", undefined, { urlRoot: "files" }),
 	);
 	assert.equal(outside.status, 404);
+});
+
+//
+// ---- the body: exact length, the file it was promised from, no descriptor left behind ----
+//
+
+test("static matrix: a multi-chunk file arrives whole, ranges cross chunk boundaries", async () => {
+	const data = Uint8Array.from({ length: 200 * 1024 + 123 }, (_, i) => i % 251);
+	await withTmpRoot({ "data.bin": data }, async (dir) => {
+		const whole = await call("/files/data.bin", undefined, { fsRoot: dir });
+		assert.equal(whole.status, 200);
+		assert.equal(whole.headers.get("content-length"), `${data.byteLength}`);
+		assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), data);
+
+		const last = data.byteLength - 1;
+		for (const [range, start, end] of [
+			["bytes=65535-65536", 65535, 65536], // the last byte of one chunk, the first of the next
+			["bytes=65530-131080", 65530, 131080], // more than one chunk, aligned to none
+			["bytes=100000-", 100000, last],
+			["bytes=-70000", data.byteLength - 70000, last],
+		] as const) {
+			const res = await call(
+				"/files/data.bin",
+				{ headers: { range } },
+				{ fsRoot: dir },
+			);
+			assert.equal(res.status, 206, range);
+			assert.equal(
+				res.headers.get("content-range"),
+				`bytes ${start}-${end}/${data.byteLength}`,
+				range,
+			);
+			assert.equal(res.headers.get("content-length"), `${end - start + 1}`, range);
+			assert.deepEqual(
+				new Uint8Array(await res.arrayBuffer()),
+				data.subarray(start, end + 1),
+				range,
+			);
+		}
+	});
+});
+
+test("static matrix: a file that grows meanwhile is not read past Content-Length", async () => {
+	await withTmpRoot({ "grow.txt": "A".repeat(100) }, async (dir) => {
+		const grow = (_req: Request, filePath: string): undefined => {
+			appendFileSync(filePath, "X".repeat(50));
+		};
+
+		const { res, text } = await drain(
+			call("/files/grow.txt", undefined, { fsRoot: dir, headers: grow }),
+		);
+		assert.equal(res.status, 200);
+		assert.equal(res.headers.get("content-length"), "100");
+		assert.equal(text, "A".repeat(100));
+
+		// a range of it likewise (the file is 150 bytes by now, 200 after this call)
+		const { res: partial, text: slice } = await drain(
+			call(
+				"/files/grow.txt",
+				{ headers: { range: "bytes=140-" } },
+				{ fsRoot: dir, headers: grow },
+			),
+		);
+		assert.equal(partial.status, 206);
+		assert.equal(partial.headers.get("content-range"), "bytes 140-149/150");
+		assert.equal(slice, "X".repeat(10));
+	});
+});
+
+test("static matrix: a file truncated while being served errors the body", async () => {
+	await withTmpRoot({ "cut.bin": BIG }, async (dir) => {
+		const res = await call("/files/cut.bin", undefined, {
+			fsRoot: dir,
+			headers: truncateTo(100_000),
+		});
+		// the headers were made for the file as it was
+		assert.equal(res.status, 200);
+		assert.equal(res.headers.get("content-length"), `${BIG.byteLength}`);
+		await assert.rejects(res.arrayBuffer(), /truncated while being served/);
+	});
+});
+
+test("static matrix: a file replaced before the first read errors the body", async () => {
+	await withTmpRoot({ "page.html": "old ".repeat(10), next: "new" }, async (dir) => {
+		// what a deploy does: another file is renamed onto the path
+		const replace = (_req: Request, filePath: string): undefined => {
+			renameSync(join(dir, "next"), filePath);
+		};
+
+		const res = await call("/files/page.html", undefined, {
+			fsRoot: dir,
+			headers: replace,
+		});
+		assert.equal(res.headers.get("content-length"), "40");
+		// never the new file's bytes under the old file's length and validators
+		await assert.rejects(res.text(), /replaced while being served/);
+
+		// the next request gets the new file, whole
+		const { res: next, text } = await drain(
+			call("/files/page.html", undefined, { fsRoot: dir }),
+		);
+		assert.equal(next.status, 200);
+		assert.equal(text, "new");
+	});
+});
+
+test("static matrix: an unreadable file is a thrown EACCES, an unreadable index.html too", {
+	skip: cannotDenyRead,
+}, async () => {
+	await withTmpRoot({ "secret.txt": "nope", "index.html": "nope" }, async (dir) => {
+		chmodSync(join(dir, "secret.txt"), 0o000);
+		chmodSync(join(dir, "index.html"), 0o000);
+
+		await assert.rejects(call("/files/secret.txt", undefined, { fsRoot: dir }), {
+			code: "EACCES",
+		});
+		await assert.rejects(call("/files/", undefined, { fsRoot: dir }), {
+			code: "EACCES",
+		});
+	});
+});
+
+test("static matrix: no descriptor stays open behind an unread, cancelled, failed or finished body", {
+	// the count comes from /dev/fd, which Windows does not have
+	skip: process.platform === "win32",
+}, async () => {
+	const openFds = () => readdirSync("/dev/fd").length;
+
+	await withTmpRoot({ "big.bin": BIG, "cut.bin": BIG }, async (dir) => {
+		const get = (name: string, opts?: Partial<ServeStaticOptions>) =>
+			call(`/files/${name}`, undefined, { fsRoot: dir, ...opts });
+
+		const rounds = 40;
+		const before = openFds();
+		for (let i = 0; i < rounds; i++) {
+			// never read: a dropped Response has not even opened the file
+			await get("big.bin");
+
+			// cancelled before the first read
+			await (await get("big.bin")).body?.cancel();
+
+			// cancelled mid-way
+			const body = (await get("big.bin")).body;
+			assert.ok(body);
+			const reader = body.getReader();
+			assert.equal((await reader.read()).done, false);
+			await reader.cancel();
+
+			// read to the end
+			await (await get("big.bin")).arrayBuffer();
+
+			// failed mid-way
+			writeFileSync(join(dir, "cut.bin"), BIG);
+			const cut = await get("cut.bin", { headers: truncateTo(100_000) });
+			await assert.rejects(cut.arrayBuffer(), /truncated/);
+		}
+		// every scenario that leaks, leaks once per round
+		const leaked = openFds() - before;
+		assert.ok(leaked < rounds / 2, `${leaked} descriptors left open`);
+	});
+});
+
+//
+// ---- conditional ranges, redirects of awkward names ----
+//
+
+test("static matrix: If-Range - the range applies only while Last-Modified still matches", async () => {
+	const { res: first } = await drain(call("/files/range.txt"));
+	const lastModified = header(first, "last-modified");
+	const etag = header(first, "etag");
+	const range = "bytes=0-2";
+
+	const { res: fresh, text: slice } = await drain(
+		call("/files/range.txt", { headers: { range, "if-range": lastModified } }),
+	);
+	assert.equal(fresh.status, 206);
+	assert.equal(fresh.headers.get("content-range"), "bytes 0-2/10");
+	assert.equal(slice, "012");
+
+	for (const ifRange of [
+		"Thu, 01 Jan 1970 00:00:00 GMT", // the client holds another version
+		etag, // weak: not usable for a range (RFC 9110 §13.1.5)
+		etag.slice(2), // the same tag dressed as a strong one - none was ever issued
+		"not a date",
+	]) {
+		const { res, text } = await drain(
+			call("/files/range.txt", { headers: { range, "if-range": ifRange } }),
+		);
+		assert.equal(res.status, 200, ifRange);
+		assert.equal(res.headers.get("content-range"), null, ifRange);
+		assert.equal(res.headers.get("content-length"), "10", ifRange);
+		assert.equal(text, "0123456789", ifRange);
+	}
+
+	// a stale validator wins over an unsatisfiable range too: the whole file, not a 416
+	const { res: stale } = await drain(
+		call("/files/range.txt", {
+			headers: { range: "bytes=99-", "if-range": "Thu, 01 Jan 1970 00:00:00 GMT" },
+		}),
+	);
+	assert.equal(stale.status, 200);
+
+	// no validators were ever sent → nothing an If-Range could match
+	const { res: bare } = await drain(
+		call(
+			"/files/range.txt",
+			{ headers: { range, "if-range": lastModified } },
+			{ etag: false },
+		),
+	);
+	assert.equal(bare.status, 200);
+
+	// without a Range the header means nothing
+	const { res: noRange } = await drain(
+		call("/files/range.txt", { headers: { "if-range": lastModified } }),
+	);
+	assert.equal(noRange.status, 200);
+});
+
+test("static matrix: a name with %, # or a space survives the normalisation redirect", async () => {
+	// `?` cannot be part of a file name on Windows
+	const names = ["100%.txt", "a#b c.txt", "50%25.txt"];
+	if (process.platform !== "win32") names.push("what?.txt");
+
+	await withTmpRoot(
+		Object.fromEntries(names.map((name) => [name, `content of ${name}`])),
+		async (dir) => {
+			for (const name of names) {
+				const encoded = encodeURIComponent(name);
+
+				const { res: direct, text } = await drain(
+					call(`/files/${encoded}`, undefined, { fsRoot: dir }),
+				);
+				assert.equal(direct.status, 200, name);
+				assert.equal(text, `content of ${name}`);
+
+				// Regression: the Location carried the `%` undecoded-and-unencoded, so
+				// following it was a 400 (and for `50%25.txt` it named another file).
+				const { res: moved } = await drain(
+					call(`/files//${encoded}?x=1`, undefined, { fsRoot: dir }),
+				);
+				assert.equal(moved.status, 301, name);
+				const location = header(moved, "location");
+				assert.equal(location, `/files/${encoded}?x=1`, name);
+
+				const { res: followed, text: again } = await drain(
+					call(location, undefined, { fsRoot: dir }),
+				);
+				assert.equal(followed.status, 200, name);
+				assert.equal(again, `content of ${name}`);
+			}
+		},
+	);
+});
+
+test("static matrix: a backslash or NUL is a 404 before any redirect", async () => {
+	// each of these also normalises differently (`//`), which used to win: the
+	// backslash then came back in the Location as a path separator
+	for (const path of ["/files//foo%5Cbar", "/files//foo.txt%00", "/files//%5C"]) {
+		const { res, text } = await drain(call(path));
+		assert.equal(res.status, 404, path);
+		assert.equal(text, "Not Found");
+	}
 });

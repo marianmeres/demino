@@ -265,7 +265,10 @@ function waitDrain(out: ServerResponse): Promise<void> {
  * `Set-Cookie` preserved), then the body with backpressure. `Content-Length` is
  * never invented - Node chunk-encodes when the `Response` carries none and
  * honours it when it does. For `HEAD` the body is cancelled, never read. A
- * client that disconnects mid-body cancels the body stream.
+ * client that is gone cancels the body stream, whether it left mid-body or
+ * before the handler had returned: a body is always either read to its end or
+ * cancelled, never dropped, since its source (a file, an upstream connection)
+ * is released by nothing else.
  *
  * Adapter-internal (not exported from the package root).
  */
@@ -312,8 +315,15 @@ export async function writeResponse(
 
 	try {
 		for (;;) {
+			// Checked before every read, the first one included: a client that left
+			// while the handler was still working closed `out` before the listener
+			// above existed, so nothing but this check would ever cancel the body.
+			if (out.destroyed) {
+				reader.cancel().catch(() => {});
+				break;
+			}
 			const { done, value } = await reader.read();
-			if (done || out.destroyed) break;
+			if (done) break;
 			if (!out.write(value)) await waitDrain(out);
 		}
 		out.end();

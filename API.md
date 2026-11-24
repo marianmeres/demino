@@ -745,18 +745,29 @@ function serveStatic(req: Request, opts: ServeStaticOptions): Promise<Response>;
 - a path that normalises differently (`/a//b`, `/a/./b`) → 301 to the normalised path; a file
   requested with a trailing slash → 301 without it; a directory without one → 301 with it (so
   relative links in `index.html` resolve). The `Location` is relative
-- a path outside `urlRoot`, a dot-segment (unless `showDotfiles`), anything that would resolve
-  outside `fsRoot`, and a missing file → 404
+- a path outside `urlRoot`, a dot-segment (unless `showDotfiles`), an encoded backslash or NUL,
+  anything that would resolve outside `fsRoot`, and a missing file → 404
 - a file → 200 with `Content-Type` (via `mrmime`, `application/octet-stream` fallback,
   `; charset=utf-8` for text-like types), `Content-Length`, `Accept-Ranges: bytes`, a weak
   `ETag` (`W/"<size>-<mtime>"`, hex) and `Last-Modified`; `If-None-Match` /
   `If-Modified-Since` → 304 without a body; a single `Range` → 206 with `Content-Range`
   (unparsable → the whole file with 200, unsatisfiable → 416, ignored on an empty file);
   `HEAD` → the same headers, no body
+- a `Range` sent with `If-Range` applies only while the `If-Range` date equals the file's
+  `Last-Modified`; otherwise the whole file is sent with 200, so a resumed download never mixes
+  two versions. An entity-tag in `If-Range` never matches: it would have to be a strong one,
+  and the `ETag`s are weak
 - a directory → its `index.html` when `showIndex` (default), else 404
 
-Filesystem errors other than "not found" (e.g. `EACCES`) are thrown, so a Demino app routes
-them through its error handler like any other handler error.
+The body is exactly `Content-Length` bytes of the file the headers describe. A file that grows
+while it is being served is not read past them. One that is truncated, or replaced by another
+file before the first byte is read, ends the response abruptly instead of sending a short or a
+mixed body. The file is opened when the body is first read and closed when it has been read to
+the end, cancelled or failed, so a `Response` whose body is never read holds no file descriptor.
+
+Filesystem errors other than "not found" are thrown, so a Demino app routes them through its
+error handler like any other handler error. That includes `EACCES` for a file that exists but
+cannot be read: it is checked before the response is created, and is a 500 by default.
 
 **Example:**
 

@@ -517,6 +517,13 @@ lifecycle hook `pnpm publish` would run.
     x-headers (`X-Powered-By`, `X-Response-Time`) are written to `ctx.headers` for every
     result, so they are on every response too (`noXPoweredBy` / `noXResponseTime` opt out).
     `ctx.status` is still not applied to a returned `Response`.
+13. **A response body is read to its end or cancelled, never dropped** (Node adapter,
+    `writeResponse()`): the source behind a body (a file, an upstream connection) is released
+    by nothing else. `out.destroyed` is checked before every read, the first included: a
+    client that left while the handler was still working closed the response before the
+    `'close'` listener was attached. Until 2.1.2 that case left the body uncancelled, which
+    leaked one file descriptor per request for a static file ≥ 128 KB. Any new code that
+    replaces or discards a `Response` must cancel its body the same way.
 
 ## Common Modifications
 
@@ -583,6 +590,24 @@ form, 404 outside root / dot-segments / missing, weak `ETag` `W/"<size>-<mtime>"
 are thrown (reach the error handler). CORS is not a static option: put `cors()` in front
 (since 2.1.0 `ctx.headers` reach the file responses), or set a fixed header with
 `headers: { "access-control-allow-origin": "*" }`.
+
+Invariants of the file body (since 2.1.2, each pinned in `tests/misc/static.test.ts`):
+
+- **Exact length.** `fileBody()` is a pull-based web stream (`highWaterMark: 0`) delivering
+  exactly `Content-Length` bytes of the file the headers describe: growth is not read past
+  them; truncation, or a file opened with another `dev`/`ino` than the `stat` saw (path
+  replaced, e.g. a deploy), errors the stream → a cut-off response, never a short or mixed one.
+- **Lazy open, plain descriptors.** The file is opened on the first read and closed on
+  end/cancel/error, so an unread (dropped) `Response` holds nothing. It uses `fs.open/read/close`
+  with numeric descriptors on purpose: an `fs/promises` `FileHandle` garbage-collected while
+  open is a process-level error on current Node. Do not switch it to `FileHandle` or to an
+  eager open.
+- **`EACCES` is thrown, not streamed.** Readability is checked with `access(R_OK)` before the
+  response is created; a failure after the status line can only cut the connection.
+- **`If-Range`.** A `Range` applies only while the `If-Range` date equals `Last-Modified`,
+  else the whole file (200). An entity-tag never matches (the ETags are weak).
+- **Redirect `Location`** to a normalised path is percent-encoded per segment (`encodePath`),
+  so names with `%`, `?`, `#` round-trip; a backslash or NUL is a 404 before any redirect.
 
 ## Rate Limiting
 
