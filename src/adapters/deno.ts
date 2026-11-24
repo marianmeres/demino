@@ -70,7 +70,8 @@ const D = (globalThis as unknown as { Deno?: DenoRuntime }).Deno;
  *
  * Defaults follow `Deno.serve`: `0.0.0.0:8000`, `onListen` prints the listen
  * info (see `logListenInfo`). `info.upgradeWebSocket` is `Deno.upgradeWebSocket`.
- * `options.webSockets` is ignored (Deno always has the capability).
+ * `options.webSockets` is ignored (Deno always has the capability), and so is
+ * `options.requestTimeout` (`Deno.serve` has no such option).
  *
  * @param handler - The app or composed handler
  * @param options - Listen options (see {@linkcode ServeOptions})

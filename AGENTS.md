@@ -185,6 +185,7 @@ interface ServeOptions {
 	onListen?: (addr: DeminoListenAddr) => void; // default logListenInfo
 	onError?: (error: unknown) => Response | Promise<Response>; // adapter failures only
 	webSockets?: boolean; // Node only: lazily import `ws`; default true
+	requestTimeout?: number; // Node only: ms for one whole request before a 408; 0 = off; default Node's 300_000
 }
 interface ServeHandle {
 	readonly hostname: string;
@@ -531,6 +532,18 @@ is written.
     `'close'` listener was attached. Until 2.1.2 that case left the body uncancelled, which
     leaked one file descriptor per request for a static file ≥ 128 KB. Any new code that
     replaces or discards a `Response` must cancel its body the same way.
+14. **Node's whole-request limit** (Node adapter): `node:http` answers `408` and closes the
+    connection when a request, body included, has not fully arrived within
+    `server.requestTimeout` (300 s by default). It is not an idle timeout (a steady upload is
+    cut too) and Node checks only every ~30 s. `ServeOptions.requestTimeout` (since 2.2.0)
+    sets it; left out, Node's default stays. Two measured traps shape the code in `serve()`,
+    keep both branches: (a) `createServer({ requestTimeout: 0 })` also sets
+    `headersTimeout` to `0` (Node derives it as `min(60 s, requestTimeout)`), which leaves a
+    connection that never finishes its headers open for good, so `0` is assigned on the
+    instance instead; (b) a `requestTimeout` assigned on the instance below `headersTimeout`
+    is not enforced on the body, so every other value goes through `createServer()`, which
+    also validates it. Tests read the limits through the undocumented `socket.server` link
+    (a real 408 needs ≥ 30 s). The Deno adapter ignores the option.
 
 ## Common Modifications
 
@@ -735,6 +748,13 @@ const app2 = demino("", [], {
 ---
 
 ## Recent Additions
+
+### 2.2.0 (additive, no breaking change)
+
+- **`ServeOptions.requestTimeout`** (Node only): the whole-request limit of `node:http`, in
+  ms; `0` turns it off, left out keeps Node's 300 s. For apps that take uploads longer than
+  5 minutes. The header limit (`headersTimeout`) is never switched off by it. See Special
+  Behaviors #14. Tests in `tests/adapters/node.test.ts` (`requestTimeout`).
 
 ### 2.1.0 (one addition, one behavior change)
 

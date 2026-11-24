@@ -57,6 +57,9 @@ serve(app)   ← @marianmeres/demino/deno | /node
 - **One signature**: `serve(handler, options?) => Promise<ServeHandle>`; defaults
   `0.0.0.0:8000`, `onListen: logListenInfo`. `signal` abort = forceful close of listener and
   every connection; `shutdown()` = graceful, Node forces after 5 s.
+- **Node's whole-request limit**: `node:http` cuts a request that has not fully arrived in
+  300 s with a `408`; `ServeOptions.requestTimeout` (Node only) changes it. How it is applied,
+  and why `0` is handled apart, is in [AGENTS.md](../AGENTS.md#special-behaviors) #14.
 - **WebSocket contract**: `upgradeWebSocket(req, { protocol? })` returns `{ socket, response }`;
   the socket is CONNECTING until the handler has returned the 101, then fires `open`. Node
   (`ws` sockets are born open) holds frames back until then, so the same handler code works on

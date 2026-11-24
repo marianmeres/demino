@@ -400,10 +400,15 @@ function defaultOnError(error: unknown): Response {
  * optional `ws` package unless `webSockets: false` (or the loaded `ws` is not
  * usable, see {@linkcode wsEngineUsable}).
  *
+ * One limit is Node's own and not `Deno.serve`'s: a request has 5 minutes to
+ * arrive, body included, then it is answered `408`. `requestTimeout` changes
+ * that (see {@linkcode ServeOptions.requestTimeout}).
+ *
  * @param handler - The app or composed handler
  * @param options - Listen options (see {@linkcode ServeOptions})
  * @returns The running server's {@linkcode ServeHandle}
- * @throws Error when the port cannot be bound (e.g. `EADDRINUSE`)
+ * @throws Error when the port cannot be bound (e.g. `EADDRINUSE`), or when
+ * `requestTimeout` is not a non-negative integer
  */
 export const serve: ServeFn = async (
 	handler: DeminoServeHandler,
@@ -570,7 +575,20 @@ export const serve: ServeFn = async (
 	};
 
 	// --- server ----------------------------------------------------------------
-	const server: Server = createServer();
+	// `requestTimeout` given to createServer() also sets Node's `headersTimeout`,
+	// to the lesser of 60 s and it. For `0` that switches the header limit off as
+	// well, and a connection that never finishes its headers then stays open for
+	// good, where no handler can bound it. So `0` goes on the instance, which
+	// leaves the header limit alone. Every other value goes through
+	// createServer(): Node validates it there and brings the header limit down
+	// with it, which it needs (a request limit set on the instance below the
+	// header limit is not enforced on the body). Left out, Node's default stays
+	// Node's to define.
+	const { requestTimeout } = options;
+	const server: Server = createServer(
+		requestTimeout === undefined || requestTimeout === 0 ? {} : { requestTimeout },
+	);
+	if (requestTimeout === 0) server.requestTimeout = 0;
 	server.on("request", (req, res) => {
 		onRequest(req, res).catch(() => res.destroy());
 	});

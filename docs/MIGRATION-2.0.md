@@ -96,8 +96,8 @@ await server.shutdown();
 
 Differences from `Deno.serve` worth knowing: `serve()` returns a `Promise`; `shutdown()` is
 graceful while aborting `signal` closes every connection at once; the options are `port`,
-`hostname`, `signal`, `onListen`, `onError` (and `webSockets` on Node) - no TLS, no
-`reusePort`. If you need those, keep `Deno.serve` and hand over the upgrade capability
+`hostname`, `signal`, `onListen`, `onError` (and `webSockets`, `requestTimeout` on Node) - no
+TLS, no `reusePort`. If you need those, keep `Deno.serve` and hand over the upgrade capability
 yourself; per request this is all the Deno adapter does:
 
 ```ts

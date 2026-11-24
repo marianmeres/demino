@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { IncomingMessage } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { createConnection } from "node:net";
 import { test } from "node:test";
 import { WebSocketServer } from "ws";
@@ -153,6 +153,105 @@ test("node adapter: a port in use rejects instead of throwing synchronously", as
 		);
 	} finally {
 		await first.shutdown();
+	}
+});
+
+// ---------------------------------------------------------------------------
+// requestTimeout
+// ---------------------------------------------------------------------------
+
+interface Limits {
+	requestTimeout: number;
+	headersTimeout: number;
+}
+
+/** What `node:http` gives a server nobody configured. */
+const nodeDefaults = (): Limits => {
+	const { requestTimeout, headersTimeout } = createServer();
+	return { requestTimeout, headersTimeout };
+};
+
+/**
+ * The two limits of the `node:http` server that `serve()` started, read from a
+ * request. Node links the server from every socket it accepts
+ * (`socket.server`); the link is not documented and only this test reads it,
+ * so a runtime without it fails here instead of being skipped. Watching a real
+ * 408 is no alternative: Node looks for expired requests every 30 s and
+ * `serve()` does not change that.
+ */
+async function limitsBehindServe(requestTimeout?: number): Promise<Limits> {
+	let seen: Partial<Limits> | undefined;
+	const srv = await serve(
+		(_req, info) => {
+			const server = (info?.raw as { socket?: { server?: Partial<Limits> } })
+				?.socket?.server;
+			seen = {
+				requestTimeout: server?.requestTimeout,
+				headersTimeout: server?.headersTimeout,
+			};
+			return new Response("x");
+		},
+		{ ...silent, webSockets: false, requestTimeout },
+	);
+	try {
+		await (await fetch(srv.url)).text();
+	} finally {
+		await srv.shutdown();
+	}
+	assert.equal(
+		typeof seen?.requestTimeout,
+		"number",
+		"the server is not reachable from the request (socket.server): find another way to read its limits",
+	);
+	return seen as Limits;
+}
+
+test("node adapter: requestTimeout left out keeps both of Node's limits as Node defines them", async () => {
+	assert.deepEqual(await limitsBehindServe(), nodeDefaults());
+});
+
+test("node adapter: requestTimeout reaches the node:http server", async () => {
+	const defaults = nodeDefaults();
+
+	// above the header limit: that one is untouched
+	assert.deepEqual(await limitsBehindServe(1_234_000), {
+		requestTimeout: 1_234_000,
+		headersTimeout: defaults.headersTimeout,
+	});
+
+	// below it: the header limit comes down with it. Node does not enforce a
+	// request limit on the body while the header limit is the larger of the two
+	const low = await limitsBehindServe(2_000);
+	assert.equal(low.requestTimeout, 2_000);
+	assert.ok(
+		low.headersTimeout > 0 && low.headersTimeout <= 2_000,
+		`expected the header limit within 2000, got ${low.headersTimeout}`,
+	);
+});
+
+test("node adapter: requestTimeout 0 turns the request limit off and keeps the header limit", async () => {
+	const defaults = nodeDefaults();
+	assert.ok(defaults.headersTimeout > 0, "Node has a header limit by default");
+
+	// `createServer({ requestTimeout: 0 })` would give `headersTimeout: 0` as
+	// well: no limit at all on a connection that never finishes its headers
+	assert.deepEqual(await limitsBehindServe(0), {
+		requestTimeout: 0,
+		headersTimeout: defaults.headersTimeout,
+	});
+});
+
+test("node adapter: a requestTimeout that is not a non-negative integer rejects", async () => {
+	for (const bad of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+		await assert.rejects(
+			serve(() => new Response("x"), {
+				...silent,
+				webSockets: false,
+				requestTimeout: bad,
+			}),
+			(e: unknown) => (e as { code?: string }).code === "ERR_OUT_OF_RANGE",
+			`requestTimeout: ${bad}`,
+		);
 	}
 });
 

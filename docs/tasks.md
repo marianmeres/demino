@@ -26,6 +26,8 @@ const server = await serve(app, { port: 8000 }); // defaults: 0.0.0.0:8000, logL
 
 - [ ] Same code on every runtime except the adapter import line
 - [ ] Node: `ws` installed if `info.upgradeWebSocket` (WebSocket tunneling) is needed
+- [ ] Node: uploads that can take over 5 minutes need `requestTimeout` (raise it, or `0` and
+      bound them in the app) - `node:http` answers `408` at 300 s otherwise
 - [ ] No `Deno.*` in app code that must run elsewhere — read `info` instead
 
 ---

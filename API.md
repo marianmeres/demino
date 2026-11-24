@@ -659,6 +659,7 @@ interface ServeOptions {
 	onListen?: (addr: DeminoListenAddr) => void; // default logListenInfo; () => {} to silence
 	onError?: (error: unknown) => Response | Promise<Response>; // adapter failures only; default plain-text 500
 	webSockets?: boolean; // Node only: provide info.upgradeWebSocket via a lazily imported `ws`. Default true
+	requestTimeout?: number; // Node only: ms for one whole request (headers + body) before a 408; 0 = off. Default Node's 300_000
 }
 ```
 
@@ -668,6 +669,27 @@ handler answers), so this only sees the adapter's own failures. On Node, when `w
 loaded the adapter warns once and serves HTTP only; `webSockets: false` skips the import and the
 warning. If the loaded `ws` is not the real package (a runtime substitute), upgrades are disabled
 with one warning, as if `webSockets: false` had been passed.
+
+**`requestTimeout` (Node only, since 2.2.0).** One default is Node's and not Deno's: `node:http`
+gives a request 5 minutes to arrive, headers and body, then answers `408 Request Timeout` and
+closes the connection. The clock runs from the start of the request whether or not bytes are
+still arriving, so a healthy upload that takes longer is cut. It matters when request bodies
+reach the app slowly: clients connect to it directly, or the reverse proxy streams bodies
+through (nginx with `proxy_request_buffering off`). Such an app raises the limit, or turns it
+off and bounds its uploads itself (a size cap, an idle timeout on the body):
+
+```ts
+await serve(app, { requestTimeout: 30 * 60_000 }); // 30 minutes
+await serve(app, { requestTimeout: 0 }); // no limit on the whole request
+```
+
+- Left out, Node's default applies (300 000 ms).
+- Node looks for expired requests about every 30 s, so a small value fires late (a 1 s limit
+  can take 30 s).
+- The limit on the headers alone (Node's `headersTimeout`, 60 s) is never switched off by this
+  option: `0` leaves it as it is, and a value below 60 s lowers it to the same value.
+- Anything but a non-negative integer makes `serve()` reject.
+- The Deno adapter ignores the option: `Deno.serve` has none like it, and no such limit.
 
 ---
 

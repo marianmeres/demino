@@ -59,6 +59,26 @@ export interface ServeOptions {
 	 * @default true
 	 */
 	webSockets?: boolean;
+	/**
+	 * Node only: how long, in milliseconds, the server waits for one whole
+	 * request, headers and body, before it answers `408` and closes the
+	 * connection (`node:http`'s `server.requestTimeout`). The clock runs from
+	 * the start of the request whether or not bytes are still arriving, so an
+	 * app that takes long uploads (a slow link, a proxy that streams request
+	 * bodies through) has to raise it, or turn it off with `0` and bound such
+	 * requests itself. Node looks for expired requests only about every 30 s, so
+	 * a small value fires late.
+	 *
+	 * The limit on the headers alone (Node's `headersTimeout`, 60 s) is never
+	 * switched off by this option: `0` leaves it as it is, and a value below it
+	 * lowers it to the same value.
+	 *
+	 * Anything but a non-negative integer makes `serve()` reject. Ignored by
+	 * the Deno adapter: `Deno.serve` has no such option.
+	 *
+	 * @default 300_000 (Node's own)
+	 */
+	requestTimeout?: number;
 }
 
 /** The running server, as returned by every runtime adapter's `serve()`. */

@@ -627,9 +627,13 @@ await server.shutdown(); // graceful; Node force-closes after 5 s
 
 `ServeOptions`: `port`, `hostname`, `signal` (aborting closes the server and every connection
 at once), `onListen`, `onError` (for the adapter's own failures - a Demino app never throws) and,
-on Node only, `webSockets` (default `true`; lazily imports `ws`). `ServeHandle`: `hostname`,
-`port`, `url`, `finished`, `shutdown()`, `ref()`, `unref()`. See
+on Node only, `webSockets` (default `true`; lazily imports `ws`) and `requestTimeout`.
+`ServeHandle`: `hostname`, `port`, `url`, `finished`, `shutdown()`, `ref()`, `unref()`. See
 [API.md](API.md#runtime-adapters).
+
+On Node a request has 5 minutes to arrive, body included, before the server answers `408`
+(the default of `node:http`); on Deno there is no such limit. An app that takes longer uploads
+raises it or turns it off with `requestTimeout`, see [API.md](API.md#serveoptions).
 
 What the adapter puts on the handler's `info` argument (a `DeminoServeInfo`):
 
